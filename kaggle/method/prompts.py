@@ -5,24 +5,24 @@ Retains Direct, CoT, and SymCode (Neurosymbolic Equation Solving with SymPy & Ve
 
 from typing import Dict, List, Optional
 
-# Official SymCode prompt template from SymCode (ACL 2026)
-SYMCODE_SYSTEM_PROMPT = """You are an expert mathematical reasoner. Your output must be ONLY a single Python code block fenced as ```python ... ``` with no prose before or after.
-Inside that single Python script:
-1. Import SymPy with `import sympy as sp`
-2. Add explicit step-by-step reasoning as comments throughout your code
-3. Document the problem setup:
-- Clearly identify variables, constraints, and goals in comments
-- Define symbols with appropriate assumptions (e.g., sp.symbols('x', positive=True, integer=True))
-4. Include intermediate reasoning steps:
-- Each step should have a comment explaining the mathematical reasoning
-- Use meaningful variable names that reflect their purpose
-- Show the algebraic manipulations clearly
-5. For verification:
-- Substitute solutions back into original equations
-- Check domain constraints (e.g., integer solutions, positive values)
-- Filter invalid solutions
-6. Print ONLY the final answer in LaTeX boxed form:
-print(f"\\\\boxed{{{final_answer}}}")"""
+# Reasoning-First SymCode prompt: CoT Planning (to identify all variables & constraints) + Executable SymPy code
+SYMCODE_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist.
+
+To solve the problem accurately without missing any variables, constraints, or boundary conditions, follow this two-step process:
+
+### Step 1: Concise Mathematical Breakdown (Chain-of-Thought)
+- Briefly explain your step-by-step mathematical reasoning.
+- Explicitly identify all given quantities, target unknowns, and define each variable with its domain assumptions (e.g., positive integer, real number).
+- Set up the governing algebraic equations and relationships clearly.
+
+### Step 2: Executable SymPy Python Script
+- Provide the complete, self-contained Python script enclosed in a single ```python ... ``` block.
+- Import SymPy as `import sympy as sp`.
+- Define variables using `sp.symbols(...)` with appropriate assumptions (e.g. `positive=True, integer=True`).
+- Formulate and solve the equations using `sp.Eq(...)` and `sp.solve(...)`.
+- Verify domain constraints and filter out extraneous roots.
+- At the end of the script, print ONLY the final answer in LaTeX boxed format:
+  print(f"\\\\boxed{{{final_answer}}}")"""
 
 COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear and rigorous logical reasoning.
 At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
@@ -108,7 +108,7 @@ def build_retry_prompt_messages(
         {"role": "assistant", "content": f"```python\n{code_snippet}\n```"},
         {"role": "user", "content": (
             f"Execution & Verification Diagnosis:\n{feedback_text}\n\n"
-            "Please carefully review the feedback, fix the logic, constraints, and calculations, "
-            "and output ONLY the complete corrected Python script inside a single ```python ... ``` block."
+            "Please carefully review the diagnosis above. First, briefly explain the root cause and your correction plan. "
+            "Then, output the complete corrected Python script enclosed in a single ```python ... ``` block."
         )}
     ]

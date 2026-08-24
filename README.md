@@ -1,6 +1,6 @@
-# Kaggle LLM Reasoning Benchmark Suite (Qwen2.5-7B-Instruct)
+# Kaggle LLM Reasoning Benchmark Suite (Qwen2.5-Coder-7B-Instruct)
 
-Bộ thử nghiệm đánh giá năng lực suy luận toán học chuẩn hóa (Reasoning Benchmark) cho mô hình ngôn ngữ lớn **Qwen2.5-7B-Instruct** trên các tập dữ liệu **MATH-500** và **GSM8K** với 3 phương pháp cốt lõi:
+Bộ thử nghiệm đánh giá năng lực suy luận toán học chuẩn hóa (Reasoning Benchmark) cho mô hình ngôn ngữ lớn **Qwen2.5-Coder-7B-Instruct** trên các tập dữ liệu **MATH-500** và **GSM8K** với 3 phương pháp cốt lõi:
 
 1. **Direct**: Zero-shot Direct Answering.
 2. **CoT (Chain-of-Thought)**: Zero-shot Step-by-Step Natural Language Reasoning (Wei et al., NeurIPS 2022).
@@ -21,7 +21,7 @@ kaggle/
 │   ├── extractor.py            # Regex trích xuất \boxed{}, code python, chuẩn hóa LaTeX
 │   ├── sandbox.py              # In-memory fast sandbox (bảo vệ timeout, thực thi SymPy an toàn)
 │   ├── verifier.py             # Bộ kiểm chứng toán học độc lập (không dùng ground truth)
-│   ├── model.py                # LLMRunner (Load Qwen2.5-7B-Instruct 4-bit qua bitsandbytes)
+│   ├── model.py                # LLMRunner (Load Qwen2.5-Coder-7B-Instruct 4-bit qua bitsandbytes)
 │   └── evaluator.py            # Runner cho các baselines & tổng hợp metrics theo Subject × Difficulty
 ├── inference.ipynb             # Notebook chính để chạy benchmark trên Kaggle GPU
 ├── requirements.txt            # Thư viện phụ thuộc (transformers, accelerate, bitsandbytes, sympy, ...)
@@ -34,7 +34,7 @@ kaggle/
 
 | Tiêu chí | Quy chuẩn thực nghiệm |
 | :--- | :--- |
-| **Model** | `Qwen/Qwen2.5-7B-Instruct` (Quantization: 4-bit NF4 via `bitsandbytes`, `bfloat16`/`float16`) |
+| **Model** | `Qwen/Qwen2.5-Coder-7B-Instruct` (Quantization: 4-bit NF4 via `bitsandbytes`, `bfloat16`/`float16`) |
 | **Decoding** | `temperature = 0.0` (Greedy Search), `max_new_tokens = 1024` |
 | **Dữ liệu & Thứ tự** | Giữ nguyên thứ tự câu hỏi gốc giữa tất cả các phương pháp |
 | **Tool Access SymCode** | Python + `sympy` (Symbolic Algebra, Calculus, Number Theory, Geometry). |

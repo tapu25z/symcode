@@ -14,7 +14,7 @@ class LLMRunner:
     """
     def __init__(
         self,
-        model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+        model_id: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
         load_in_4bit: bool = True,
         max_new_tokens: int = 1024,
         temperature: float = 0.0,
