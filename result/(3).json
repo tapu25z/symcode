@@ -1,0 +1,393 @@
+{
+  "config": {
+    "model_id": "Qwen/Qwen2.5-7B-Instruct",
+    "load_in_4bit": true,
+    "max_new_tokens": 1024,
+    "temperature": 0.0,
+    "dataset_name": "math500",
+    "dataset_path": "/kaggle/input/datasets/huynhtaybui/symcode/kaggle/data/math500/test.jsonl",
+    "hf_fallback": "HuggingFaceH4/MATH-500",
+    "filter_levels": [
+      1,
+      2,
+      3
+    ],
+    "num_samples": 5,
+    "methods_to_run": [
+      "Direct",
+      "CoT",
+      "PAL",
+      "SymCode",
+      "SymCode+"
+    ],
+    "code_exec_timeout": 15,
+    "max_symcode_retries": 2,
+    "output_file": "/kaggle/working/math500_lvl1_3_results.json",
+    "save_every": 1
+  },
+  "timestamp": "2026-08-23 07:09:14",
+  "results": {
+    "Direct": [
+      {
+        "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.  Enter your answer in the form $(r,\\theta),$ where $r > 0$ and $0 \\le \\theta < 2 \\pi.$",
+        "ground_truth": "\\left( 3, \\frac{\\pi}{2} \\right)",
+        "predicted": "(3,\\frac{\\pi}{2})",
+        "is_correct": true,
+        "generated_tokens": 13,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "\\boxed{(3,\\frac{\\pi}{2})}"
+      },
+      {
+        "problem": "If $f(x) = \\frac{3x-2}{x-2}$, what is the value of $f(-2) +f(-1)+f(0)$? Express your answer as a common fraction.",
+        "ground_truth": "\\frac{14}{3}",
+        "predicted": "\\frac{15}{4}",
+        "is_correct": false,
+        "generated_tokens": 11,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "\\boxed{\\frac{15}{4}}"
+      },
+      {
+        "problem": "How many positive whole-number divisors does 196 have?",
+        "ground_truth": "9",
+        "predicted": "9",
+        "is_correct": true,
+        "generated_tokens": 6,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "\\boxed{9}"
+      },
+      {
+        "problem": "The results of a cross-country team's training run are graphed below. Which student has the greatest average speed? [asy]\nfor ( int i = 1; i <= 7; ++i )\n{\n\ndraw((i,0)--(i,6));\n}\n\nfor ( int i = 1; i <= 5; ++i )\n{\n\ndraw((0,i)--(8,i));\n}\ndraw((-0.5,0)--(8,0), linewidth(1));\ndraw((0,-0.5)--(0,6), linewidth(1));\nlabel(\"$O$\", (0,0), SW);\nlabel(scale(.85)*rotate(90)*\"distance\", (0, 3), W);\nlabel(scale(.85)*\"time\", (4, 0), S);\ndot((1.25, 4.5));\nlabel(scale(.85)*\"Evelyn\", (1.25, 4.8), N);\ndot((2.5, 2.2));\nlabel(scale(.85)*\"Briana\", (2.5, 2.2), S);\ndot((4.25,5.2));\nlabel(scale(.85)*\"Carla\", (4.25, 5.2), SE);\ndot((5.6, 2.8));\nlabel(scale(.85)*\"Debra\", (5.6, 2.8), N);\ndot((6.8, 1.4));\nlabel(scale(.85)*\"Angela\", (6.8, 1.4), E);\n[/asy]",
+        "ground_truth": "\\text{Evelyn}",
+        "predicted": "Angela",
+        "is_correct": false,
+        "generated_tokens": 7,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "\\boxed{Angela}"
+      },
+      {
+        "problem": "A regular hexagon can be divided into six equilateral triangles. If the perimeter of one of the triangles is 21 inches, what is the perimeter, in inches, of the regular hexagon?",
+        "ground_truth": "42",
+        "predicted": "42",
+        "is_correct": true,
+        "generated_tokens": 7,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "\\boxed{42}"
+      }
+    ],
+    "CoT": [
+      {
+        "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.  Enter your answer in the form $(r,\\theta),$ where $r > 0$ and $0 \\le \\theta < 2 \\pi.$",
+        "ground_truth": "\\left( 3, \\frac{\\pi}{2} \\right)",
+        "predicted": "(3, \\frac{\\pi}{2})",
+        "is_correct": true,
+        "generated_tokens": 384,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "To convert the point \\((0,3)\\) from rectangular (Cartesian) coordinates to polar coordinates, we need to find the values of \\(r\\) and \\(\\theta\\).\n\n1. **Calculate \\(r\\):**\n   The distance \\(r\\) from the origin to the point \\((x, y)\\) is given by the formula:\n   \\[\n   r = \\sqrt{x^2 + y^2}\n   \\]\n   For the point \\((0, 3)\\):\n   \\[\n   r = \\sqrt{0^2 + 3^2} = \\sqrt{9} = 3\n   \\]\n\n2. **Determine \\(\\theta\\):**\n   The angle \\(\\theta\\) is found using the arctangent function:\n   \\[\n   \\theta = \\tan^{-1}\\left(\\frac{y}{x}\\right)\n   \\]\n   For the point \\((0, 3)\\):\n   \\[\n   \\theta = \\tan^{-1}\\left(\\frac{3}{0}\\right)\n   \\]\n   Since \\(x = 0\\) and \\(y = 3\\), this corresponds to a vertical line along the positive \\(y\\)-axis. In polar coordinates, this corresponds to \\(\\theta = \\frac{\\pi}{2}\\).\n\n3. **Verify the range for \\(\\theta\\):**\n   We need \\(\\theta\\) to be within the range \\(0 \\leq \\theta < 2\\pi\\). The value \\(\\frac{\\pi}{2}\\) is already within this range.\n\nThus, the polar coordinates for the point \\((0, 3)\\) are:\n\\[\n(r, \\theta) = (3, \\frac{\\pi}{2})\n\\]\n\n\\[\n\\boxed{(3, \\frac{\\pi}{2})}\n\\]"
+      },
+      {
+        "problem": "If $f(x) = \\frac{3x-2}{x-2}$, what is the value of $f(-2) +f(-1)+f(0)$? Express your answer as a common fraction.",
+        "ground_truth": "\\frac{14}{3}",
+        "predicted": "\\frac{14}{3}",
+        "is_correct": true,
+        "generated_tokens": 434,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "To solve for \\( f(-2) + f(-1) + f(0) \\) where \\( f(x) = \\frac{3x-2}{x-2} \\), we will evaluate each function separately and then sum the results.\n\nFirst, let's find \\( f(-2) \\):\n\\[\nf(-2) = \\frac{3(-2) - 2}{-2 - 2} = \\frac{-6 - 2}{-4} = \\frac{-8}{-4} = 2\n\\]\n\nNext, let's find \\( f(-1) \\):\n\\[\nf(-1) = \\frac{3(-1) - 2}{-1 - 2} = \\frac{-3 - 2}{-3} = \\frac{-5}{-3} = \\frac{5}{3}\n\\]\n\nFinally, let's find \\( f(0) \\):\n\\[\nf(0) = \\frac{3(0) - 2}{0 - 2} = \\frac{-2}{-2} = 1\n\\]\n\nNow, we sum these values:\n\\[\nf(-2) + f(-1) + f(0) = 2 + \\frac{5}{3} + 1\n\\]\n\nTo add these, we need a common denominator. The common denominator for 2, \\(\\frac{5}{3}\\), and 1 is 3:\n\\[\n2 = \\frac{6}{3}, \\quad 1 = \\frac{3}{3}\n\\]\n\nThus,\n\\[\n2 + \\frac{5}{3} + 1 = \\frac{6}{3} + \\frac{5}{3} + \\frac{3}{3} = \\frac{6 + 5 + 3}{3} = \\frac{14}{3}\n\\]\n\nTherefore, the value of \\( f(-2) + f(-1) + f(0) \\) is:\n\\[\n\\boxed{\\frac{14}{3}}\n\\]"
+      },
+      {
+        "problem": "How many positive whole-number divisors does 196 have?",
+        "ground_truth": "9",
+        "predicted": "9",
+        "is_correct": true,
+        "generated_tokens": 452,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "To determine how many positive whole-number divisors the number 196 has, we start by finding its prime factorization.\n\nStep 1: Factorize 196.\n- First, check if 196 is divisible by the smallest prime number, 2.\n  \\[\n  196 \\div 2 = 98\n  \\]\n  So, \\( 196 = 2 \\times 98 \\).\n\n- Next, factorize 98.\n  \\[\n  98 \\div 2 = 49\n  \\]\n  So, \\( 98 = 2 \\times 49 \\), and thus \\( 196 = 2^2 \\times 49 \\).\n\n- Now, factorize 49.\n  \\[\n  49 = 7 \\times 7\n  \\]\n  So, \\( 49 = 7^2 \\), and thus \\( 196 = 2^2 \\times 7^2 \\).\n\nThe prime factorization of 196 is \\( 2^2 \\times 7^2 \\).\n\nStep 2: Use the formula for finding the number of divisors from the prime factorization.\nIf a number \\( n \\) has a prime factorization of \\( p_1^{e_1} \\times p_2^{e_2} \\times \\cdots \\times p_k^{e_k} \\), then the number of positive divisors of \\( n \\) is given by:\n\\[\n(e_1 + 1)(e_2 + 1) \\cdots (e_k + 1)\n\\]\n\nFor \\( 196 = 2^2 \\times 7^2 \\):\n- The exponent of 2 is 2.\n- The exponent of 7 is 2.\n\nThus, the number of divisors is:\n\\[\n(2 + 1)(2 + 1) = 3 \\times 3 = 9\n\\]\n\nTherefore, the number of positive whole-number divisors of 196 is \\(\\boxed{9}\\)."
+      },
+      {
+        "problem": "The results of a cross-country team's training run are graphed below. Which student has the greatest average speed? [asy]\nfor ( int i = 1; i <= 7; ++i )\n{\n\ndraw((i,0)--(i,6));\n}\n\nfor ( int i = 1; i <= 5; ++i )\n{\n\ndraw((0,i)--(8,i));\n}\ndraw((-0.5,0)--(8,0), linewidth(1));\ndraw((0,-0.5)--(0,6), linewidth(1));\nlabel(\"$O$\", (0,0), SW);\nlabel(scale(.85)*rotate(90)*\"distance\", (0, 3), W);\nlabel(scale(.85)*\"time\", (4, 0), S);\ndot((1.25, 4.5));\nlabel(scale(.85)*\"Evelyn\", (1.25, 4.8), N);\ndot((2.5, 2.2));\nlabel(scale(.85)*\"Briana\", (2.5, 2.2), S);\ndot((4.25,5.2));\nlabel(scale(.85)*\"Carla\", (4.25, 5.2), SE);\ndot((5.6, 2.8));\nlabel(scale(.85)*\"Debra\", (5.6, 2.8), N);\ndot((6.8, 1.4));\nlabel(scale(.85)*\"Angela\", (6.8, 1.4), E);\n[/asy]",
+        "ground_truth": "\\text{Evelyn}",
+        "predicted": "\\text{Evelyn}",
+        "is_correct": true,
+        "generated_tokens": 516,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "To determine which student has the greatest average speed, we need to calculate the average speed for each student using the formula:\n\n\\[\n\\text{Average Speed} = \\frac{\\text{Total Distance}}{\\text{Total Time}}\n\\]\n\nFrom the graph, we can extract the total distance and time for each student.\n\n1. **Evelyn:**\n   - Distance: 4.5 units\n   - Time: 1.25 units\n   \\[\n   \\text{Average Speed} = \\frac{4.5}{1.25} = 3.6 \\text{ units per unit time}\n   \\]\n\n2. **Briana:**\n   - Distance: 2.2 units\n   - Time: 2.5 units\n   \\[\n   \\text{Average Speed} = \\frac{2.2}{2.5} = 0.88 \\text{ units per unit time}\n   \\]\n\n3. **Carla:**\n   - Distance: 5.2 units\n   - Time: 4.25 units\n   \\[\n   \\text{Average Speed} = \\frac{5.2}{4.25} \\approx 1.22 \\text{ units per unit time}\n   \\]\n\n4. **Debra:**\n   - Distance: 2.8 units\n   - Time: 5.6 units\n   \\[\n   \\text{Average Speed} = \\frac{2.8}{5.6} = 0.5 \\text{ units per unit time}\n   \\]\n\n5. **Angela:**\n   - Distance: 1.4 units\n   - Time: 6.8 units\n   \\[\n   \\text{Average Speed} = \\frac{1.4}{6.8} \\approx 0.206 \\text{ units per unit time}\n   \\]\n\nComparing the calculated average speeds:\n- Evelyn: 3.6 units per unit time\n- Briana: 0.88 units per unit time\n- Carla: 1.22 units per unit time\n- Debra: 0.5 units per unit time\n- Angela: 0.206 units per unit time\n\nClearly, Evelyn has the greatest average speed at 3.6 units per unit time.\n\nThus, the student with the greatest average speed is \\(\\boxed{\\text{Evelyn}}\\)."
+      },
+      {
+        "problem": "A regular hexagon can be divided into six equilateral triangles. If the perimeter of one of the triangles is 21 inches, what is the perimeter, in inches, of the regular hexagon?",
+        "ground_truth": "42",
+        "predicted": "42",
+        "is_correct": true,
+        "generated_tokens": 300,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "raw_output": "To solve this problem, we need to understand the relationship between the side length of the equilateral triangle and the side length of the regular hexagon.\n\nStep 1: Determine the side length of the equilateral triangle.\n- The perimeter of an equilateral triangle is given by \\(3 \\times \\text{side length}\\).\n- We know the perimeter of one of these triangles is 21 inches.\n- Therefore, we can set up the equation: \n  \\[\n  3 \\times \\text{side length} = 21\n  \\]\n- Solving for the side length, we get:\n  \\[\n  \\text{side length} = \\frac{21}{3} = 7 \\text{ inches}\n  \\]\n\nStep 2: Understand the structure of the hexagon.\n- A regular hexagon can be divided into six equilateral triangles.\n- Each side of the hexagon corresponds to one side of one of these triangles.\n\nStep 3: Calculate the perimeter of the hexagon.\n- Since each side of the hexagon is equal to the side length of the equilateral triangle (which we found to be 7 inches), and a hexagon has 6 sides, the perimeter of the hexagon is:\n  \\[\n  6 \\times 7 = 42 \\text{ inches}\n  \\]\n\nThus, the perimeter of the regular hexagon is \\(\\boxed{42}\\) inches."
+      }
+    ],
+    "PAL": [
+      {
+        "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.  Enter your answer in the form $(r,\\theta),$ where $r > 0$ and $0 \\le \\theta < 2 \\pi.$",
+        "ground_truth": "\\left( 3, \\frac{\\pi}{2} \\right)",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 150,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import math\n\n# Rectangular coordinates\nx = 0\ny = 3\n\n# Calculate r\nr = math.sqrt(x**2 + y**2)\n\n# Calculate theta\ntheta = math.atan2(y, x)\n\n# Ensure r > 0 and 0 <= theta < 2*pi\nif r == 0:\n    r = 0.0000001  # Avoid division by zero\nif theta < 0:\n    theta += 2 * math.pi\nelif theta >= 2 * math.pi:\n    theta -= 2 * math.pi\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r, theta))",
+        "raw_output": "```python\nimport math\n\n# Rectangular coordinates\nx = 0\ny = 3\n\n# Calculate r\nr = math.sqrt(x**2 + y**2)\n\n# Calculate theta\ntheta = math.atan2(y, x)\n\n# Ensure r > 0 and 0 <= theta < 2*pi\nif r == 0:\n    r = 0.0000001  # Avoid division by zero\nif theta < 0:\n    theta += 2 * math.pi\nelif theta >= 2 * math.pi:\n    theta -= 2 * math.pi\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r, theta))\n```"
+      },
+      {
+        "problem": "If $f(x) = \\frac{3x-2}{x-2}$, what is the value of $f(-2) +f(-1)+f(0)$? Express your answer as a common fraction.",
+        "ground_truth": "\\frac{14}{3}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 113,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "from fractions import Fraction\n\n# Define the function f(x)\ndef f(x):\n    return Fraction(3*x - 2, x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f(-2)\nf_neg1 = f(-1)\nf_0 = f(0)\n\n# Sum the values\nresult = f_neg2 + f_neg1 + f_0\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(result))",
+        "raw_output": "```python\nfrom fractions import Fraction\n\n# Define the function f(x)\ndef f(x):\n    return Fraction(3*x - 2, x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f(-2)\nf_neg1 = f(-1)\nf_0 = f(0)\n\n# Sum the values\nresult = f_neg2 + f_neg1 + f_0\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(result))\n```"
+      },
+      {
+        "problem": "How many positive whole-number divisors does 196 have?",
+        "ground_truth": "9",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 94,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import math\n\nn = 196\nsqrt_n = int(math.sqrt(n))\ndivisors = set()\n\nfor i in range(1, sqrt_n + 1):\n    if n % i == 0:\n        divisors.add(i)\n        divisors.add(n // i)\n\nif sqrt_n * sqrt_n == n:\n    divisors.discard(sqrt_n)\n\nresult = len(divisors)\nprint(r\"\\boxed{6}\")",
+        "raw_output": "```python\nimport math\n\nn = 196\nsqrt_n = int(math.sqrt(n))\ndivisors = set()\n\nfor i in range(1, sqrt_n + 1):\n    if n % i == 0:\n        divisors.add(i)\n        divisors.add(n // i)\n\nif sqrt_n * sqrt_n == n:\n    divisors.discard(sqrt_n)\n\nresult = len(divisors)\nprint(r\"\\boxed{6}\")\n```"
+      },
+      {
+        "problem": "The results of a cross-country team's training run are graphed below. Which student has the greatest average speed? [asy]\nfor ( int i = 1; i <= 7; ++i )\n{\n\ndraw((i,0)--(i,6));\n}\n\nfor ( int i = 1; i <= 5; ++i )\n{\n\ndraw((0,i)--(8,i));\n}\ndraw((-0.5,0)--(8,0), linewidth(1));\ndraw((0,-0.5)--(0,6), linewidth(1));\nlabel(\"$O$\", (0,0), SW);\nlabel(scale(.85)*rotate(90)*\"distance\", (0, 3), W);\nlabel(scale(.85)*\"time\", (4, 0), S);\ndot((1.25, 4.5));\nlabel(scale(.85)*\"Evelyn\", (1.25, 4.8), N);\ndot((2.5, 2.2));\nlabel(scale(.85)*\"Briana\", (2.5, 2.2), S);\ndot((4.25,5.2));\nlabel(scale(.85)*\"Carla\", (4.25, 5.2), SE);\ndot((5.6, 2.8));\nlabel(scale(.85)*\"Debra\", (5.6, 2.8), N);\ndot((6.8, 1.4));\nlabel(scale(.85)*\"Angela\", (6.8, 1.4), E);\n[/asy]",
+        "ground_truth": "\\text{Evelyn}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 183,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "# Define the time and distance for each student\ntimes = [1.25, 2.5, 4.25, 5.6, 6.8]\ndistances = [4.5, 2.2, 5.2, 2.8, 1.4]\n\n# Calculate the average speed for each student\naverage_speeds = [distance / time for distance, time in zip(distances, times)]\n\n# Find the student with the greatest average speed\nmax_speed_index = average_speeds.index(max(average_speeds))\nstudents = [\"Evelyn\", \"Briana\", \"Carla\", \"Debra\", \"Angela\"]\ngreatest_average_speed_student = students[max_speed_index]\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(greatest_average_speed_student))",
+        "raw_output": "```python\n# Define the time and distance for each student\ntimes = [1.25, 2.5, 4.25, 5.6, 6.8]\ndistances = [4.5, 2.2, 5.2, 2.8, 1.4]\n\n# Calculate the average speed for each student\naverage_speeds = [distance / time for distance, time in zip(distances, times)]\n\n# Find the student with the greatest average speed\nmax_speed_index = average_speeds.index(max(average_speeds))\nstudents = [\"Evelyn\", \"Briana\", \"Carla\", \"Debra\", \"Angela\"]\ngreatest_average_speed_student = students[max_speed_index]\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(greatest_average_speed_student))\n```"
+      },
+      {
+        "problem": "A regular hexagon can be divided into six equilateral triangles. If the perimeter of one of the triangles is 21 inches, what is the perimeter, in inches, of the regular hexagon?",
+        "ground_truth": "42",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 117,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "# Given that the perimeter of one of the equilateral triangles is 21 inches\nperimeter_triangle = 21\n\n# Since a regular hexagon can be divided into six equilateral triangles,\n# the side length of each triangle is equal to the side length of the hexagon\nside_length = perimeter_triangle / 3\n\n# The perimeter of the hexagon is 6 times the side length\nperimeter_hexagon = 6 * side_length\n\nprint(r\"\\boxed{42}\")  # The result is 42 inches",
+        "raw_output": "```python\n# Given that the perimeter of one of the equilateral triangles is 21 inches\nperimeter_triangle = 21\n\n# Since a regular hexagon can be divided into six equilateral triangles,\n# the side length of each triangle is equal to the side length of the hexagon\nside_length = perimeter_triangle / 3\n\n# The perimeter of the hexagon is 6 times the side length\nperimeter_hexagon = 6 * side_length\n\nprint(r\"\\boxed{42}\")  # The result is 42 inches\n```"
+      }
+    ],
+    "SymCode": [
+      {
+        "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.  Enter your answer in the form $(r,\\theta),$ where $r > 0$ and $0 \\le \\theta < 2 \\pi.$",
+        "ground_truth": "\\left( 3, \\frac{\\pi}{2} \\right)",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 253,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Step 4: Ensure r > 0 and theta is in the specified range\n# r is already positive since it's a square root of sum of squares\n# theta is already in the correct range\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Step 4: Ensure r > 0 and theta is in the specified range\n# r is already positive since it's a square root of sum of squares\n# theta is already in the correct range\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))\n```"
+      },
+      {
+        "problem": "If $f(x) = \\frac{3x-2}{x-2}$, what is the value of $f(-2) +f(-1)+f(0)$? Express your answer as a common fraction.",
+        "ground_truth": "\\frac{14}{3}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 153,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))\n```"
+      },
+      {
+        "problem": "How many positive whole-number divisors does 196 have?",
+        "ground_truth": "9",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 216,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))\n```"
+      },
+      {
+        "problem": "The results of a cross-country team's training run are graphed below. Which student has the greatest average speed? [asy]\nfor ( int i = 1; i <= 7; ++i )\n{\n\ndraw((i,0)--(i,6));\n}\n\nfor ( int i = 1; i <= 5; ++i )\n{\n\ndraw((0,i)--(8,i));\n}\ndraw((-0.5,0)--(8,0), linewidth(1));\ndraw((0,-0.5)--(0,6), linewidth(1));\nlabel(\"$O$\", (0,0), SW);\nlabel(scale(.85)*rotate(90)*\"distance\", (0, 3), W);\nlabel(scale(.85)*\"time\", (4, 0), S);\ndot((1.25, 4.5));\nlabel(scale(.85)*\"Evelyn\", (1.25, 4.8), N);\ndot((2.5, 2.2));\nlabel(scale(.85)*\"Briana\", (2.5, 2.2), S);\ndot((4.25,5.2));\nlabel(scale(.85)*\"Carla\", (4.25, 5.2), SE);\ndot((5.6, 2.8));\nlabel(scale(.85)*\"Debra\", (5.6, 2.8), N);\ndot((6.8, 1.4));\nlabel(scale(.85)*\"Angela\", (6.8, 1.4), E);\n[/asy]",
+        "ground_truth": "\\text{Evelyn}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 502,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))\n```"
+      },
+      {
+        "problem": "A regular hexagon can be divided into six equilateral triangles. If the perimeter of one of the triangles is 21 inches, what is the perimeter, in inches, of the regular hexagon?",
+        "ground_truth": "42",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 195,
+        "attempts": 1,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")\n```"
+      }
+    ],
+    "SymCode+": [
+      {
+        "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.  Enter your answer in the form $(r,\\theta),$ where $r > 0$ and $0 \\le \\theta < 2 \\pi.$",
+        "ground_truth": "\\left( 3, \\frac{\\pi}{2} \\right)",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 673,
+        "attempts": 3,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))",
+        "raw_output": [
+          "```python\nimport sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Step 4: Ensure r > 0 and theta is in the specified range\n# r is already positive since it's a square root of sum of squares\n# theta is already in the correct range\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))\n```",
+          "```python\nimport sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))\n```",
+          "```python\nimport sympy as sp\n\n# Define symbols for polar coordinates\nr, theta = sp.symbols('r theta')\n\n# Given point in rectangular coordinates\nx = 0\ny = 3\n\n# Step 1: Calculate r using the formula r = sqrt(x^2 + y^2)\nr_value = sp.sqrt(x**2 + y**2)\n\n# Step 2: Calculate theta using atan2(y, x) which accounts for the correct quadrant\ntheta_value = sp.atan2(y, x)\n\n# Step 3: Simplify theta to ensure it is within the range [0, 2*pi)\n# Since x=0 and y>0, the point is on the positive y-axis, so theta should be pi/2\ntheta_value = sp.pi / 2\n\n# Final polar coordinates\nfinal_answer = (r_value, theta_value)\n\n# Print the final answer in LaTeX boxed format\nprint(r\"\\boxed{({},{})}\".format(r_value, theta_value))\n```"
+        ]
+      },
+      {
+        "problem": "If $f(x) = \\frac{3x-2}{x-2}$, what is the value of $f(-2) +f(-1)+f(0)$? Express your answer as a common fraction.",
+        "ground_truth": "\\frac{14}{3}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 459,
+        "attempts": 3,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))",
+        "raw_output": [
+          "```python\nimport sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))\n```",
+          "```python\nimport sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))\n```",
+          "```python\nimport sympy as sp\n\n# Define the function f(x)\nx = sp.symbols('x')\nf = (3*x - 2) / (x - 2)\n\n# Calculate f(-2), f(-1), and f(0)\nf_neg2 = f.subs(x, -2)\nf_neg1 = f.subs(x, -1)\nf_0 = f.subs(x, 0)\n\n# Sum the values\nsum_f = f_neg2 + f_neg1 + f_0\n\n# Simplify the sum\nsum_f_simplified = sp.simplify(sum_f)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{} }}\".format(sum_f_simplified))\n```"
+        ]
+      },
+      {
+        "problem": "How many positive whole-number divisors does 196 have?",
+        "ground_truth": "9",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 648,
+        "attempts": 3,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))",
+        "raw_output": [
+          "```python\nimport sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))\n```",
+          "```python\nimport sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))\n```",
+          "```python\nimport sympy as sp\n\n# Define the number we want to find the divisors for\nn = 196\n\n# Factorize the number to understand its prime factorization\nfactors = sp.factorint(n)\n\n# The prime factorization of 196 is 2^2 * 7^2\n# This means 196 = 2^2 * 7^2\n# To find the number of divisors, use the formula (e1 + 1)(e2 + 1)...(en + 1)\n# where e1, e2, ..., en are the exponents in the prime factorization\n\n# Extract the exponents from the factorization\nexponents = list(factors.values())\n\n# Calculate the number of divisors using the formula\nnum_divisors = 1\nfor exponent in exponents:\n    num_divisors *= (exponent + 1)\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{{{}}}\".format(num_divisors))\n```"
+        ]
+      },
+      {
+        "problem": "The results of a cross-country team's training run are graphed below. Which student has the greatest average speed? [asy]\nfor ( int i = 1; i <= 7; ++i )\n{\n\ndraw((i,0)--(i,6));\n}\n\nfor ( int i = 1; i <= 5; ++i )\n{\n\ndraw((0,i)--(8,i));\n}\ndraw((-0.5,0)--(8,0), linewidth(1));\ndraw((0,-0.5)--(0,6), linewidth(1));\nlabel(\"$O$\", (0,0), SW);\nlabel(scale(.85)*rotate(90)*\"distance\", (0, 3), W);\nlabel(scale(.85)*\"time\", (4, 0), S);\ndot((1.25, 4.5));\nlabel(scale(.85)*\"Evelyn\", (1.25, 4.8), N);\ndot((2.5, 2.2));\nlabel(scale(.85)*\"Briana\", (2.5, 2.2), S);\ndot((4.25,5.2));\nlabel(scale(.85)*\"Carla\", (4.25, 5.2), SE);\ndot((5.6, 2.8));\nlabel(scale(.85)*\"Debra\", (5.6, 2.8), N);\ndot((6.8, 1.4));\nlabel(scale(.85)*\"Angela\", (6.8, 1.4), E);\n[/asy]",
+        "ground_truth": "\\text{Evelyn}",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 1506,
+        "attempts": 3,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))",
+        "raw_output": [
+          "```python\nimport sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))\n```",
+          "```python\nimport sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))\n```",
+          "```python\nimport sympy as sp\n\n# Define symbols for time and distance\nt, d = sp.symbols('t d')\n\n# Assume the points on the graph represent the following students and their positions\n# Evelyn: (1.25, 4.5)\n# Briana: (2.5, 2.2)\n# Carla: (4.25, 5.2)\n# Debra: (5.6, 2.8)\n# Angela: (6.8, 1.4)\n\n# Calculate the average speed for each student using the formula: speed = distance / time\n# Speed = d / t\n\n# Evelyn's speed\nspeed_evelyn = 4.5 / 1.25\n# Briana's speed\nspeed_briana = 2.2 / 2.5\n# Carla's speed\nspeed_carla = 5.2 / 4.25\n# Debra's speed\nspeed_debra = 2.8 / 5.6\n# Angela's speed\nspeed_angela = 1.4 / 6.8\n\n# Evaluate the speeds to get numerical values\nspeed_evelyn = sp.N(speed_evelyn)\nspeed_briana = sp.N(speed_briana)\nspeed_carla = sp.N(speed_carla)\nspeed_debra = sp.N(speed_debra)\nspeed_angela = sp.N(speed_angela)\n\n# Print the speeds\nprint(\"Evelyn's speed:\", speed_evelyn)\nprint(\"Briana's speed:\", speed_briana)\nprint(\"Carla's speed:\", speed_carla)\nprint(\"Debra's speed:\", speed_debra)\nprint(\"Angela's speed:\", speed_angela)\n\n# Determine which student has the greatest average speed\nmax_speed = max(speed_evelyn, speed_briana, speed_carla, speed_debra, speed_angela)\nif max_speed == speed_evelyn:\n    student = \"Evelyn\"\nelif max_speed == speed_briana:\n    student = \"Briana\"\nelif max_speed == speed_carla:\n    student = \"Carla\"\nelif max_speed == speed_debra:\n    student = \"Debra\"\nelse:\n    student = \"Angela\"\n\n# Print the student with the greatest average speed\nprint(r\"\\boxed{{{} has the greatest average speed}}\".format(student))\n```"
+        ]
+      },
+      {
+        "problem": "A regular hexagon can be divided into six equilateral triangles. If the perimeter of one of the triangles is 21 inches, what is the perimeter, in inches, of the regular hexagon?",
+        "ground_truth": "42",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 585,
+        "attempts": 3,
+        "execution_status": "timeout",
+        "stdout": "",
+        "traceback": "Execution timed out after 5 seconds.",
+        "extracted_code": "import sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")",
+        "raw_output": [
+          "```python\nimport sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")\n```",
+          "```python\nimport sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")\n```",
+          "```python\nimport sympy as sp\n\n# Define the side length of the equilateral triangle as a symbol\ns = sp.symbols('s')\n\n# The perimeter of an equilateral triangle is 3 times its side length\nperimeter_triangle = 3 * s\n\n# Given the perimeter of one of the triangles is 21 inches\ngiven_perimeter = 21\n\n# Solve for the side length of the triangle\nside_length = sp.solve(perimeter_triangle - given_perimeter, s)[0]\n\n# A regular hexagon can be divided into six equilateral triangles\n# Therefore, the side length of the hexagon is equal to the side length of the triangle\nside_length_hexagon = side_length\n\n# The perimeter of the hexagon is 6 times its side length\nperimeter_hexagon = 6 * side_length_hexagon\n\n# Print the result in LaTeX boxed format\nprint(r\"\\boxed{42}\")\n```"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "Direct": {
+      "accuracy_percent": 60.0,
+      "exact_match_count": 3,
+      "total_samples": 5,
+      "avg_generated_tokens": 8.8,
+      "execution_success_rate": "N/A"
+    },
+    "CoT": {
+      "accuracy_percent": 100.0,
+      "exact_match_count": 5,
+      "total_samples": 5,
+      "avg_generated_tokens": 417.2,
+      "execution_success_rate": "N/A"
+    },
+    "PAL": {
+      "accuracy_percent": 0.0,
+      "exact_match_count": 0,
+      "total_samples": 5,
+      "avg_generated_tokens": 131.4,
+      "execution_success_rate": "0.00%"
+    },
+    "SymCode": {
+      "accuracy_percent": 0.0,
+      "exact_match_count": 0,
+      "total_samples": 5,
+      "avg_generated_tokens": 263.8,
+      "execution_success_rate": "0.00%"
+    },
+    "SymCode+": {
+      "accuracy_percent": 0.0,
+      "exact_match_count": 0,
+      "total_samples": 5,
+      "avg_generated_tokens": 774.2,
+      "execution_success_rate": "0.00%"
+    }
+  }
+}
