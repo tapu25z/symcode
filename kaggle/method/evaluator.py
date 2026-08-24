@@ -1,13 +1,23 @@
 """
 Benchmark evaluation routines, dataset loading, metric calculations, and JSON result saving.
-Includes subject x difficulty multi-dimensional metrics, SymCode+ verifier loop, and auto-resume checkpointing.
+Includes subject x difficulty multi-dimensional metrics, SymCode verifier loop, and auto-resume checkpointing.
 """
 
 import os
+import gc
 import json
 import time
 from typing import Dict, Any, List, Optional
-from tqdm import tqdm
+try:
+    import torch
+except ImportError:
+    torch = None
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 from .prompts import build_prompt_messages, build_retry_prompt_messages
 from .extractor import (
@@ -206,83 +216,11 @@ def evaluate_direct_or_cot(
         completed_problems.add(question)
         new_evaluated += 1
         
-        if checkpoint_file and (new_evaluated % save_every == 0):
-            _save_intermediate_checkpoint(checkpoint_file, method_name, results)
-
-    if checkpoint_file:
-        _save_intermediate_checkpoint(checkpoint_file, method_name, results)
-        
-    return results
-
-
-def evaluate_code_baseline(
-    method_name: str,
-    dataset: List[Dict[str, Any]],
-    llm: LLMRunner,
-    timeout: int = 15,
-    checkpoint_file: Optional[str] = None,
-    save_every: int = 5
-) -> List[Dict[str, Any]]:
-    """
-    Runs PAL (standard Python) or SymCode (Python + SymPy) code baseline.
-    Enforces tool access isolation in execution sandbox.
-    """
-    sandbox_mode = "pal" if method_name.upper() == "PAL" else "symcode"
-    
-    ckpt = _load_existing_checkpoint(checkpoint_file, method_name)
-    results = ckpt["method_results"]
-    completed_problems = {r["problem"] for r in results}
-    
-    if completed_problems:
-        print(f"[*] Resuming {method_name}: {len(completed_problems)}/{len(dataset)} samples already done.")
-
-    print(f"\n==================== Running Baseline: {method_name} (Sandbox: {sandbox_mode}) ====================")
-    
-    new_evaluated = 0
-    for item in tqdm(dataset, desc=f"Evaluating {method_name}"):
-        question = item["question"]
-        if question in completed_problems:
-            continue
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
             
-        gt = extract_ground_truth(item.get("raw") or item["answer"])
-        messages = build_prompt_messages(method_name, question)
-        
-        raw_output, token_count = llm.generate_chat(messages)
-        extracted_code = extract_python_code(raw_output)
-        
-        # Execute code in isolated toolchain
-        exec_res = execute_code_safely(extracted_code, mode=sandbox_mode, timeout=timeout)
-        predicted_ans = exec_res.get("extracted_answer")
-        
-        # Run independent verification (for metric tracking, without GT)
-        verif_status, verif_feedback = verify_candidate_answer(
-            question, predicted_ans, extracted_code, exec_res.get("stdout")
-        )
-        
-        is_correct = check_exact_match(predicted_ans, gt)
-
-        results.append({
-            "problem": question,
-            "subject": item.get("subject", "unknown"),
-            "level": item.get("level"),
-            "level_label": item.get("level_label", "N/A"),
-            "ground_truth": gt,
-            "predicted": predicted_ans,
-            "is_correct": is_correct,
-            "generated_tokens": token_count,
-            "attempts": 1,
-            "execution_status": exec_res["status"],
-            "verification_status": verif_status,
-            "verification_feedback": verif_feedback,
-            "stdout": exec_res["stdout"],
-            "traceback": exec_res["traceback"],
-            "extracted_code": extracted_code,
-            "raw_output": raw_output
-        })
-        completed_problems.add(question)
-        new_evaluated += 1
-        
         if checkpoint_file and (new_evaluated % save_every == 0):
+            gc.collect()
             _save_intermediate_checkpoint(checkpoint_file, method_name, results)
 
     if checkpoint_file:
@@ -291,7 +229,7 @@ def evaluate_code_baseline(
     return results
 
 
-def evaluate_symcode_plus(
+def evaluate_symcode(
     dataset: List[Dict[str, Any]],
     llm: LLMRunner,
     timeout: int = 15,
@@ -300,20 +238,21 @@ def evaluate_symcode_plus(
     save_every: int = 5
 ) -> List[Dict[str, Any]]:
     """
-    Runs SymCode+ with iterative feedback on execution errors AND verification failures.
+    Runs SymCode (Neurosymbolic Equation Solving with SymPy & Verification Loop)
+    with iterative feedback on execution errors and independent verification failures.
     Verifier operates 100% independently without accessing ground truth.
     """
-    ckpt = _load_existing_checkpoint(checkpoint_file, "SymCode+")
+    ckpt = _load_existing_checkpoint(checkpoint_file, "SymCode")
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     
     if completed_problems:
-        print(f"[*] Resuming SymCode+: {len(completed_problems)}/{len(dataset)} samples already done.")
+        print(f"[*] Resuming SymCode: {len(completed_problems)}/{len(dataset)} samples already done.")
 
-    print(f"\n==================== Running Baseline: SymCode+ (Max Retries: {max_retries}) ====================")
+    print(f"\n==================== Running Method: SymCode (Max Retries: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Evaluating SymCode+"):
+    for item in tqdm(dataset, desc="Evaluating SymCode"):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -410,11 +349,15 @@ def evaluate_symcode_plus(
         completed_problems.add(question)
         new_evaluated += 1
         
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
         if checkpoint_file and (new_evaluated % save_every == 0):
-            _save_intermediate_checkpoint(checkpoint_file, "SymCode+", results)
+            gc.collect()
+            _save_intermediate_checkpoint(checkpoint_file, "SymCode", results)
 
     if checkpoint_file:
-        _save_intermediate_checkpoint(checkpoint_file, "SymCode+", results)
+        _save_intermediate_checkpoint(checkpoint_file, "SymCode", results)
         
     return results
 

@@ -1,11 +1,11 @@
 """
 Method package for reasoning benchmark baselines.
+Retains Direct, CoT, and SymCode.
 """
 
 from .prompts import (
     SYSTEM_PROMPTS,
     SYMCODE_SYSTEM_PROMPT,
-    PAL_SYSTEM_PROMPT,
     COT_SYSTEM_PROMPT,
     DIRECT_SYSTEM_PROMPT,
     build_prompt_messages,
@@ -33,8 +33,7 @@ except ImportError:
 from .evaluator import (
     load_dataset_file,
     evaluate_direct_or_cot,
-    evaluate_code_baseline,
-    evaluate_symcode_plus,
+    evaluate_symcode,
     compute_metrics_table,
     save_benchmark_results
 )
@@ -52,7 +51,6 @@ except ImportError:
 __all__ = [
     "SYSTEM_PROMPTS",
     "SYMCODE_SYSTEM_PROMPT",
-    "PAL_SYSTEM_PROMPT",
     "COT_SYSTEM_PROMPT",
     "DIRECT_SYSTEM_PROMPT",
     "build_prompt_messages",
@@ -68,8 +66,7 @@ __all__ = [
     "LLMRunner",
     "load_dataset_file",
     "evaluate_direct_or_cot",
-    "evaluate_code_baseline",
-    "evaluate_symcode_plus",
+    "evaluate_symcode",
     "compute_metrics_table",
     "save_benchmark_results",
     "prompts",
