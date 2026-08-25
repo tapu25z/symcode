@@ -1,10 +1,6 @@
 """
-Execution sandbox with distinct tool environments for PAL and SymCode.
-Uses ThreadPoolExecutor for sub-second execution speed and strict timeout protection.
-
-Tool Access Specification:
-- PAL (Program-Aided Language): Standard Python only (math, fractions, itertools, random). SymPy is excluded.
-- SymCode (Symbolic Reasoning): Python + SymPy symbolic mathematics suite.
+Module Sandbox thực thi mã nguồn Python/SymPy cách ly và an toàn.
+Sử dụng ThreadPoolExecutor để đảm bảo tốc độ thực thi nhanh dưới 0.05 giây và bảo vệ chống treo (timeout).
 """
 
 import io
@@ -15,15 +11,21 @@ import traceback
 import contextlib
 import concurrent.futures
 from typing import Dict, Any, Optional
+
 from .extractor import extract_boxed_content
 
-# Pre-import standard scientific & symbolic math libraries in host process
+# Tải trước các thư viện khoa học và toán biểu tượng
 try:
     import sympy
     import sympy as sp
     from sympy import (
-        symbols, Eq, solve, simplify, Rational, Integer, Float,
-        sympify, factorint, pi, sqrt, atan2, Matrix, Point, Line
+        symbols, Symbol, Eq, solve, solveset, linsolve, nonlinsolve,
+        simplify, expand, factor, Rational, Integer, Float,
+        sympify, factorint, primefactors, isprime, nextprime,
+        pi, sqrt, root, sin, cos, tan, atan2, Matrix,
+        Point, Line, Circle, Polygon, Segment, Ray,
+        binomial, factorial, fibonacci, Sum, Product, limit, diff, integrate,
+        zoo, oo, nan
     )
 except ImportError:
     sympy = None
@@ -41,15 +43,41 @@ try:
 except ImportError:
     itertools = None
 
+try:
+    import collections
+except ImportError:
+    collections = None
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+
+def _clean_traceback_str(tb_str: str) -> str:
+    """
+    Lọc bỏ các frame nội bộ của sandbox, chỉ giữ lại các dòng liên quan trực tiếp đến script của mô hình.
+    """
+    lines = tb_str.strip().split("\n")
+    relevant_lines = []
+    capture = False
+    for line in lines:
+        if 'File "<string>"' in line:
+            capture = True
+        if capture:
+            relevant_lines.append(line)
+            
+    if relevant_lines:
+        return "\n".join(relevant_lines)
+    return "\n".join(lines[-5:]) if len(lines) > 5 else tb_str
+
 
 def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
     """
-    Executes Python/SymPy code in an isolated scope with stdout/traceback capture.
-    Enforces tool access boundaries between PAL (standard Python) and SymCode (SymPy).
+    Thực thi mã nguồn Python/SymPy trong phạm vi biến cô lập và thu thập stdout / traceback.
     """
     stdout_capture = io.StringIO()
     
-    # Base Python environment for all methods
     exec_globals = {
         "__builtins__": __builtins__,
         "math": math,
@@ -57,32 +85,60 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
     }
     
     if fractions is not None:
-        exec_globals.update({
-            "fractions": fractions,
-            "Fraction": Fraction,
-        })
+        exec_globals["fractions"] = fractions
+        exec_globals["Fraction"] = Fraction
         
     if itertools is not None:
         exec_globals["itertools"] = itertools
 
-    # SymCode specific toolchain: SymPy symbolic mathematics
+    if collections is not None:
+        exec_globals["collections"] = collections
+
+    if np is not None:
+        exec_globals["np"] = np
+        exec_globals["numpy"] = np
+
     if mode == "symcode" and sympy is not None:
         exec_globals.update({
             "sympy": sympy,
             "sp": sympy,
             "symbols": symbols,
+            "Symbol": Symbol,
             "Eq": Eq,
             "solve": solve,
+            "solveset": solveset,
+            "linsolve": linsolve,
+            "nonlinsolve": nonlinsolve,
             "simplify": simplify,
+            "expand": expand,
+            "factor": factor,
             "Rational": Rational,
             "Integer": Integer,
             "Float": Float,
             "sympify": sympify,
             "factorint": factorint,
+            "primefactors": primefactors,
+            "isprime": isprime,
+            "nextprime": nextprime,
             "pi": pi,
             "sqrt": sqrt,
+            "root": root,
+            "sin": sin,
+            "cos": cos,
+            "tan": tan,
             "atan2": atan2,
             "Matrix": Matrix,
+            "binomial": binomial,
+            "factorial": factorial,
+            "fibonacci": fibonacci,
+            "Sum": Sum,
+            "Product": Product,
+            "limit": limit,
+            "diff": diff,
+            "integrate": integrate,
+            "zoo": zoo,
+            "oo": oo,
+            "nan": nan
         })
 
     try:
@@ -91,27 +147,35 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
         stdout_val = stdout_capture.getvalue()
         return {"status": "success", "stdout": stdout_val, "traceback": None}
     except Exception:
-        tb_str = traceback.format_exc()
-        return {"status": "error", "stdout": stdout_capture.getvalue(), "traceback": tb_str}
+        tb_raw = traceback.format_exc()
+        tb_clean = _clean_traceback_str(tb_raw)
+        return {"status": "error", "stdout": stdout_capture.getvalue(), "traceback": tb_clean}
 
 
 def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> Dict[str, Any]:
     """
-    Executes code safely with a strict timeout, environment isolation, and output extraction.
+    Thực thi mã nguồn an toàn với cơ chế timeout nghiêm ngặt, cô lập môi trường và trích xuất kết quả.
 
     Args:
-        code: The Python code string to execute.
-        mode: "symcode" (allows SymPy) or "pal" (standard Python only).
-        timeout: Maximum execution time in seconds.
+        code: Chuỗi mã nguồn Python cần chạy.
+        mode: "symcode" (hỗ trợ toán biểu tượng SymPy) hoặc "pal" (chỉ Python chuẩn).
+        timeout: Thời gian thực thi tối đa tính bằng giây.
 
     Returns:
-        {
-            "status": "success" | "error" | "timeout",
-            "stdout": str,
-            "traceback": Optional[str],
-            "extracted_answer": Optional[str]
-        }
+        Dict gồm các trường:
+            - "status": "success" | "error" | "timeout"
+            - "stdout": chuỗi đầu ra tiêu chuẩn
+            - "traceback": thông báo lỗi chi tiết (nếu có)
+            - "extracted_answer": đáp án trích xuất được từ stdout
     """
+    if not code or not code.strip():
+        return {
+            "status": "error",
+            "stdout": "",
+            "traceback": "Lỗi: Không tìm thấy đoạn mã Python hợp lệ để thực thi.",
+            "extracted_answer": None
+        }
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(_run_code_in_scope, code, mode)
         try:
@@ -120,7 +184,7 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
             return {
                 "status": "timeout",
                 "stdout": "",
-                "traceback": f"Execution timed out after {timeout} seconds.",
+                "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây).",
                 "extracted_answer": None
             }
         except Exception as e:
@@ -131,7 +195,6 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
                 "extracted_answer": None
             }
 
-    # Extract answer from stdout (prefer \boxed{...} or fallback to last line)
     stdout = res.get("stdout", "")
     boxed_ans = extract_boxed_content(stdout)
     if boxed_ans is not None:

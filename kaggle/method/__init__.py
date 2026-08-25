@@ -1,6 +1,5 @@
 """
-Method package for reasoning benchmark baselines.
-Retains Direct, CoT, and SymCode.
+Gói module phương pháp benchmark cho các baseline suy luận: Direct, CoT và SymCode.
 """
 
 from .prompts import (

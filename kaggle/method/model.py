@@ -1,16 +1,21 @@
+"""
+Module quản lý mô hình ngôn ngữ lớn (LLMRunner) với cơ chế lượng tử hóa 4-bit (bitsandbytes),
+tối ưu bộ nhớ qua cơ chế SDPA (Scaled Dot-Product Attention) và giải phóng VRAM an toàn.
+"""
+
 import os
+import gc
 from typing import Dict, Any, List, Tuple, Optional
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-# Prevent CUDA memory fragmentation on long benchmark runs
+# Thiết lập quản lý phân mảnh bộ nhớ GPU cho các phiên chạy benchmark dài
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 class LLMRunner:
     """
-    Manages model initialization, 4-bit quantization, and chat-based inference
-    with memory-efficient SDPA attention and strict VRAM deallocation.
+    Quản lý khởi tạo mô hình, cấu hình lượng tử hóa và thực hiện sinh văn bản theo cấu trúc ChatML.
     """
     def __init__(
         self,
@@ -28,12 +33,19 @@ class LLMRunner:
         self.top_p = top_p
         
         token = hf_token or os.environ.get("HF_TOKEN") or None
-        compute_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
+        cuda_avail = torch.cuda.is_available()
         
-        print(f"[*] Initializing model: {model_id} (4-bit: {load_in_4bit}, dtype: {compute_dtype})...")
+        if cuda_avail:
+            compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        else:
+            compute_dtype = torch.float32
+            load_in_4bit = False
+            device_map = "cpu"
+        
+        print(f"[INFO] Khoi tao mo hinh: {model_id} (4-bit: {load_in_4bit}, dtype: {compute_dtype}, device: {device_map})")
         
         bnb_config = None
-        if load_in_4bit:
+        if load_in_4bit and cuda_avail:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
@@ -50,28 +62,39 @@ class LLMRunner:
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        if torch.cuda.is_available():
-            import gc
+        if cuda_avail:
             gc.collect()
             torch.cuda.empty_cache()
 
-        # Load with SDPA (Scaled Dot-Product Attention) for O(1) memory per token
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            token=token,
-            quantization_config=bnb_config,
-            device_map=device_map,
-            low_cpu_mem_usage=True,
-            trust_remote_code=True,
-            torch_dtype=compute_dtype,
-            attn_implementation="sdpa"
-        )
+        model_kwargs = {
+            "token": token,
+            "device_map": device_map,
+            "low_cpu_mem_usage": True,
+            "trust_remote_code": True,
+            "torch_dtype": compute_dtype
+        }
+        
+        if bnb_config is not None:
+            model_kwargs["quantization_config"] = bnb_config
+            
+        if cuda_avail:
+            model_kwargs["attn_implementation"] = "sdpa"
+
+        try:
+            self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+        except Exception:
+            # Fallback nếu SDPA không tương thích với một số phiên bản PyTorch cũ
+            if "attn_implementation" in model_kwargs:
+                del model_kwargs["attn_implementation"]
+            self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+
         self.model.eval()
-        print(f"[*] Model successfully loaded on device: {self.model.device} with SDPA attention!")
+        print(f"[INFO] Mo hinh da duoc tai thanh cong tren thiet bi: {self.model.device}")
 
     def generate_chat(self, messages: List[Dict[str, str]]) -> Tuple[str, int]:
         """
-        Runs generation for a ChatML message list with memory-safe tensor handling.
+        Sinh câu trả lời từ danh sách thông điệp ChatML với cơ chế thu hồi bộ nhớ tensor nghiêm ngặt.
+        
         Returns:
             (generated_text, generated_token_count)
         """
@@ -82,7 +105,6 @@ class LLMRunner:
                 add_generation_prompt=True
             )
         except Exception:
-            # Fallback formatting if model does not have a chat_template
             formatted = []
             for m in messages:
                 role = m.get("role", "user").capitalize()
@@ -91,7 +113,6 @@ class LLMRunner:
             formatted.append("<|im_start|>assistant\n")
             prompt = "\n".join(formatted)
 
-        # Truncate prompt if context grows excessively large to prevent OOM
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
@@ -116,7 +137,7 @@ class LLMRunner:
         num_generated_tokens = len(gen_tokens)
         generated_text = self.tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
 
-        # Explicitly release GPU tensor allocations to avoid memory buildup
+        # Giải phóng biến tensor để tránh tích lũy bộ nhớ GPU
         del inputs
         del outputs
         del gen_tokens

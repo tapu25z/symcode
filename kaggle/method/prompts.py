@@ -1,11 +1,11 @@
 """
-Prompt definitions and message builders for reasoning baselines.
-Retains Direct, CoT, and SymCode (Neurosymbolic Equation Solving with SymPy & Verification Loop).
+Định nghĩa hệ thống prompt và bộ tạo thông điệp ChatML cho các phương pháp benchmark:
+Direct, CoT và SymCode (Neurosymbolic Equation Solving với SymPy và vòng lặp Verifier).
 """
 
 from typing import Dict, List, Optional
 
-# Reasoning-First SymCode prompt: CoT Planning (to identify all variables & constraints) + Executable SymPy code
+# Prompt cho phương pháp SymCode: Lập kế hoạch CoT + Mã nguồn SymPy thực thi
 SYMCODE_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist.
 
 To solve the problem accurately without missing any variables, constraints, or boundary conditions, follow this two-step process:
@@ -24,9 +24,11 @@ To solve the problem accurately without missing any variables, constraints, or b
 - At the end of the script, print ONLY the final answer in LaTeX boxed format:
   print(f"\\\\boxed{{{final_answer}}}")"""
 
+# Prompt cho Chain-of-Thought (CoT)
 COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear and rigorous logical reasoning.
 At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
 
+# Prompt cho Zero-shot Direct
 DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
 Do not provide long explanations. Put only the final answer inside \\boxed{answer}."""
 
@@ -39,7 +41,7 @@ SYSTEM_PROMPTS = {
 
 def build_prompt_messages(method: str, question: str) -> List[Dict[str, str]]:
     """
-    Constructs ChatML messages for the specified baseline method.
+    Xây dựng danh sách thông điệp ChatML cho phương pháp benchmark tương ứng.
     """
     if method == "SymCode":
         system_content = SYMCODE_SYSTEM_PROMPT
@@ -51,7 +53,6 @@ def build_prompt_messages(method: str, question: str) -> List[Dict[str, str]]:
         system_content = DIRECT_SYSTEM_PROMPT
         user_content = f"Problem:\n{question}"
     else:
-        # Fallback to Direct
         system_content = DIRECT_SYSTEM_PROMPT
         user_content = f"Problem:\n{question}"
 
@@ -71,16 +72,14 @@ def build_retry_prompt_messages(
     verification_feedback: Optional[str] = None
 ) -> List[Dict[str, str]]:
     """
-    Constructs self-debugging ChatML messages with rich feedback for SymCode.
-    Feedback includes execution error traceback (if any), candidate answer,
-    and mathematical verification diagnosis (without ground truth leakage).
+    Xây dựng thông điệp tự sửa lỗi (Self-Debugging) cho SymCode với phản hồi chi tiết:
+    Traceback thực thi lỗi, đáp án ứng viên trích xuất được và chẩn đoán từ bộ kiểm chứng toán học độc lập.
     """
     feedback_lines = []
     
     if execution_status != "success":
         feedback_lines.append(f"### Execution Status: {execution_status.upper()}")
         if error_tb:
-            # Keep only the relevant end of traceback (max 800 chars)
             clean_tb = str(error_tb).strip()
             if len(clean_tb) > 800:
                 clean_tb = clean_tb[-800:]
