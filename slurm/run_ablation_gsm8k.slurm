@@ -24,6 +24,9 @@ elif [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
+# Cài đặt / Cập nhật các thư viện phụ thuộc cho môi trường mới
+pip install -r kaggle/requirements.txt
+
 # Xóa biến môi trường Slurm để tự chọn GPU
 unset CUDA_VISIBLE_DEVICES
 # --- GỌI HELPER --- (Quan trọng, cần gọi hàm này (có sẵn) để tìm GPU có vRAM trống >= REQUIRED_VRAM)
