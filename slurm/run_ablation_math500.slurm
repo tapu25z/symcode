@@ -4,7 +4,7 @@
 #SBATCH --error=logs/err_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=2
 #SBATCH --gres=mps:l40:8
 #SBATCH --mem=16G
 #SBATCH --time=72:00:00
