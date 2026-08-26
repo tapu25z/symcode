@@ -15,6 +15,8 @@ from method import (
     load_dataset_file,
     evaluate_direct_or_cot,
     evaluate_symcode,
+    evaluate_symextract,
+    evaluate_symplan,
     evaluate_symplanner,
     compute_metrics_table,
     save_benchmark_results
@@ -23,7 +25,7 @@ from method import (
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="LLM Reasoning Benchmark Suite (Direct, CoT, SymCode, SymPlanner)"
+        description="LLM Reasoning Benchmark Suite (Direct, CoT, SymCode, SymExtract, SymPlan, SymPlanner)"
     )
     parser.add_argument(
         "--dataset",
@@ -41,8 +43,8 @@ def parse_args():
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["Direct", "CoT", "SymCode", "SymPlanner"],
-        choices=["Direct", "CoT", "SymCode", "SymPlanner"],
+        default=["Direct", "CoT", "SymCode", "SymExtract", "SymPlan", "SymPlanner"],
+        choices=["Direct", "CoT", "SymCode", "SymExtract", "SymPlan", "SymPlanner"],
         help="Danh sach cac phuong phap can danh gia."
     )
     parser.add_argument(
@@ -200,6 +202,14 @@ def main():
             )
         elif method == "SymCode":
             benchmark_data["results"]["SymCode"] = evaluate_symcode(
+                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+            )
+        elif method == "SymExtract":
+            benchmark_data["results"]["SymExtract"] = evaluate_symextract(
+                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+            )
+        elif method == "SymPlan":
+            benchmark_data["results"]["SymPlan"] = evaluate_symplan(
                 dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
             )
         elif method == "SymPlanner":

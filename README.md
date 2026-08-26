@@ -1,11 +1,13 @@
 # LLM Reasoning Benchmark Suite: Qwen2.5-Coder-7B-Instruct
 
-Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 4 phương pháp:
+Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 6 phương pháp / biến thể thực nghiệm:
 
 1. **Direct**: Zero-shot Direct Answering (dự đoán đáp án trực tiếp).
 2. **CoT (Chain-of-Thought)**: Zero-shot Step-by-Step Natural Language Reasoning (suy luận từng bước bằng ngôn ngữ tự nhiên theo Wei et al., NeurIPS 2022).
 3. **SymCode**: Neurosymbolic Equation Solving với SymPy (ACL 2026) tích hợp vòng lặp tự sửa lỗi (Self-Debugging Loop) dựa trên Traceback thực thi và Bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier).
-4. **SymPlanner**: Divide-and-Plan Neurosymbolic Program Synthesis (Stage 1 Divide -> Stage 2 Plan -> Stage 3 SymCode Execution -> Guarded Repair).
+4. **SymExtract** *(Ablation 1)*: Single-Stage Neurosymbolic Program Synthesis — Chỉ kích hoạt **Stage 1 (DIVIDE / State Extraction)** để đo lường đóng góp độc lập của việc phân rã mục tiêu và ràng buộc miền xác định.
+5. **SymPlan** *(Ablation 2)*: Single-Stage Neurosymbolic Program Synthesis — Chỉ kích hoạt **Stage 2 (PLAN / Algorithmic Strategy)** để đo lường đóng góp độc lập của việc lập kế hoạch đại số biểu tượng.
+6. **SymPlanner** *(Full Proposed)*: Divide-and-Plan Neurosymbolic Program Synthesis (Stage 1 Divide -> Stage 2 Plan -> Stage 3 SymCode Execution -> Guarded Repair).
 
 ---
 

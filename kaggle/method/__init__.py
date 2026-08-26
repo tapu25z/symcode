@@ -7,10 +7,14 @@ from .prompts import (
     DIRECT_SYSTEM_PROMPT,
     COT_SYSTEM_PROMPT,
     SYMCODE_SYSTEM_PROMPT,
+    SYMEXTRACT_SYSTEM_PROMPT,
+    SYMPLAN_SYSTEM_PROMPT,
     SYMPLANNER_SYSTEM_PROMPT,
     build_prompt_messages,
     build_retry_prompt_messages,
-    build_symplanner_retry_prompt_messages
+    build_symplanner_retry_prompt_messages,
+    build_symextract_retry_prompt_messages,
+    build_symplan_retry_prompt_messages
 )
 from .extractor import (
     extract_boxed_content,
@@ -36,6 +40,8 @@ from .evaluator import (
     load_dataset_file,
     evaluate_direct_or_cot,
     evaluate_symcode,
+    evaluate_symextract,
+    evaluate_symplan,
     evaluate_symplanner,
     compute_metrics_table,
     save_benchmark_results
@@ -56,10 +62,14 @@ __all__ = [
     "DIRECT_SYSTEM_PROMPT",
     "COT_SYSTEM_PROMPT",
     "SYMCODE_SYSTEM_PROMPT",
+    "SYMEXTRACT_SYSTEM_PROMPT",
+    "SYMPLAN_SYSTEM_PROMPT",
     "SYMPLANNER_SYSTEM_PROMPT",
     "build_prompt_messages",
     "build_retry_prompt_messages",
     "build_symplanner_retry_prompt_messages",
+    "build_symextract_retry_prompt_messages",
+    "build_symplan_retry_prompt_messages",
     "extract_boxed_content",
     "extract_python_code",
     "extract_symplanner_code",
@@ -73,6 +83,8 @@ __all__ = [
     "load_dataset_file",
     "evaluate_direct_or_cot",
     "evaluate_symcode",
+    "evaluate_symextract",
+    "evaluate_symplan",
     "evaluate_symplanner",
     "compute_metrics_table",
     "save_benchmark_results",

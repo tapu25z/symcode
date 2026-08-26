@@ -53,6 +53,46 @@ Translate your plan into a complete, self-contained Python script enclosed in a 
 6. Print ONLY the final validated answer in LaTeX boxed format:
    print(f"\\\\boxed{{{final_answer}}}")"""
 
+# Prompt cho Ablation 1 - SymExtract: Only Stage 1 DIVIDE (State Extraction) -> Stage 3 EXECUTE
+SYMEXTRACT_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist applying the Divide-and-Plan Neurosymbolic framework (Ablation Study: State Extraction Only).
+
+To solve the problem accurately, follow these two structured steps:
+
+### Stage 1: DIVIDE (Problem State & Constraint Extraction)
+Deconstruct the problem into explicit state components:
+- Target Unknown: The exact quantity, value, or simplified algebraic expression to compute.
+- Given Quantities: Known constants, given parameters, and relationships.
+- Domain Constraints: Explicit mathematical and physical boundaries (e.g., positive real numbers, integer constraints, non-zero denominators).
+
+### Stage 2: EXECUTE (Guarded SymCode Generation)
+Translate the extracted state components into a complete, self-contained Python script enclosed in a single ```python ... ``` block:
+1. Import SymPy as `import sympy as sp`.
+2. Define variables with appropriate assumptions based on Stage 1 constraints (e.g., `sp.symbols('x', positive=True, real=True)`).
+3. Formulate and solve the equations symbolically using `sp.solve(...)` or direct computation.
+4. Filter extraneous roots using Stage 1 constraints.
+5. Print ONLY the final validated answer in LaTeX boxed format:
+   print(f"\\\\boxed{{{final_answer}}}")"""
+
+# Prompt cho Ablation 2 - SymPlan: Only Stage 2 PLAN (Strategy Formulation) -> Stage 3 EXECUTE
+SYMPLAN_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist applying the Divide-and-Plan Neurosymbolic framework (Ablation Study: Planner Only).
+
+To solve the problem accurately, follow these two structured steps:
+
+### Stage 1: PLAN (Algorithmic Solution Strategy)
+Outline the step-by-step symbolic derivation procedure:
+1. Define the system of algebraic/symbolic equations.
+2. Specify the exact solving strategy (e.g., substitution, matrix reduction, `sp.solve`, or direct algebraic simplification).
+3. Plan how to validate candidate solutions to eliminate extraneous roots.
+
+### Stage 2: EXECUTE (Guarded SymCode Generation)
+Translate your plan into a complete, self-contained Python script enclosed in a single ```python ... ``` block:
+1. Import SymPy as `import sympy as sp`.
+2. Define variables with appropriate assumptions (e.g., `sp.symbols('x', positive=True, real=True)`).
+3. Formulate and solve the equations symbolically using `sp.solve(...)` or direct computation.
+4. Filter extraneous roots based on your plan.
+5. Print ONLY the final validated answer in LaTeX boxed format:
+   print(f"\\\\boxed{{{final_answer}}}")"""
+
 # Prompt cho Chain-of-Thought (CoT)
 COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear and rigorous logical reasoning.
 At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
@@ -65,6 +105,8 @@ SYSTEM_PROMPTS = {
     "Direct": DIRECT_SYSTEM_PROMPT,
     "CoT": COT_SYSTEM_PROMPT,
     "SymCode": SYMCODE_SYSTEM_PROMPT,
+    "SymExtract": SYMEXTRACT_SYSTEM_PROMPT,
+    "SymPlan": SYMPLAN_SYSTEM_PROMPT,
     "SymPlanner": SYMPLANNER_SYSTEM_PROMPT,
 }
 
@@ -75,6 +117,12 @@ def build_prompt_messages(method: str, question: str) -> List[Dict[str, str]]:
     """
     if method == "SymPlanner":
         system_content = SYMPLANNER_SYSTEM_PROMPT
+        user_content = f"# PROBLEM\n{question}\n# END PROBLEM"
+    elif method == "SymExtract":
+        system_content = SYMEXTRACT_SYSTEM_PROMPT
+        user_content = f"# PROBLEM\n{question}\n# END PROBLEM"
+    elif method == "SymPlan":
+        system_content = SYMPLAN_SYSTEM_PROMPT
         user_content = f"# PROBLEM\n{question}\n# END PROBLEM"
     elif method == "SymCode":
         system_content = SYMCODE_SYSTEM_PROMPT
@@ -202,6 +250,107 @@ def build_symplanner_retry_prompt_messages(
             "Then, output the complete corrected Python script enclosed in a single ```python ... ``` block."
         )}
     ]
+
+
+def build_symextract_retry_prompt_messages(
+    question: str,
+    prev_code: str,
+    execution_status: str = "error",
+    error_tb: Optional[str] = None,
+    candidate_answer: Optional[str] = None,
+    verification_status: str = "fail",
+    verification_feedback: Optional[str] = None
+) -> List[Dict[str, str]]:
+    """
+    Xây dựng thông điệp tự sửa lỗi cho SymExtract (Ablation Study: State Extraction Only).
+    """
+    feedback_lines = []
+    
+    if execution_status != "success":
+        feedback_lines.append(f"### Execution Status: {execution_status.upper()}")
+        if error_tb:
+            clean_tb = str(error_tb).strip()
+            if len(clean_tb) > 800:
+                clean_tb = clean_tb[-800:]
+            feedback_lines.append(f"Traceback:\n```\n{clean_tb}\n```")
+    else:
+        feedback_lines.append("### Execution Status: SUCCESS (Code executed without crash)")
+        
+    if candidate_answer is not None:
+        cand_short = str(candidate_answer)[:200]
+        feedback_lines.append(f"Candidate Answer extracted: `{cand_short}`")
+        
+    if verification_feedback:
+        verif_short = str(verification_feedback)[:800]
+        feedback_lines.append(f"Verification Feedback ({verification_status.upper()}):\n{verif_short}")
+
+    feedback_text = "\n\n".join(feedback_lines)
+
+    code_snippet = str(prev_code).strip()
+    if len(code_snippet) > 1500:
+        code_snippet = code_snippet[:1500]
+
+    return [
+        {"role": "system", "content": SYMEXTRACT_SYSTEM_PROMPT},
+        {"role": "user", "content": f"# PROBLEM\n{question}\n# END PROBLEM"},
+        {"role": "assistant", "content": f"```python\n{code_snippet}\n```"},
+        {"role": "user", "content": (
+            f"Execution & Verification Diagnosis:\n{feedback_text}\n\n"
+            "Review your Stage 1 extracted state components and domain constraints. "
+            "Fix any errors in your Stage 2 Python script, ensure extraneous roots are filtered, and print the result in \\boxed{}."
+        )}
+    ]
+
+
+def build_symplan_retry_prompt_messages(
+    question: str,
+    prev_code: str,
+    execution_status: str = "error",
+    error_tb: Optional[str] = None,
+    candidate_answer: Optional[str] = None,
+    verification_status: str = "fail",
+    verification_feedback: Optional[str] = None
+) -> List[Dict[str, str]]:
+    """
+    Xây dựng thông điệp tự sửa lỗi cho SymPlan (Ablation Study: Planner Only).
+    """
+    feedback_lines = []
+    
+    if execution_status != "success":
+        feedback_lines.append(f"### Execution Status: {execution_status.upper()}")
+        if error_tb:
+            clean_tb = str(error_tb).strip()
+            if len(clean_tb) > 800:
+                clean_tb = clean_tb[-800:]
+            feedback_lines.append(f"Traceback:\n```\n{clean_tb}\n```")
+    else:
+        feedback_lines.append("### Execution Status: SUCCESS (Code executed without crash)")
+        
+    if candidate_answer is not None:
+        cand_short = str(candidate_answer)[:200]
+        feedback_lines.append(f"Candidate Answer extracted: `{cand_short}`")
+        
+    if verification_feedback:
+        verif_short = str(verification_feedback)[:800]
+        feedback_lines.append(f"Verification Feedback ({verification_status.upper()}):\n{verif_short}")
+
+    feedback_text = "\n\n".join(feedback_lines)
+
+    code_snippet = str(prev_code).strip()
+    if len(code_snippet) > 1500:
+        code_snippet = code_snippet[:1500]
+
+    return [
+        {"role": "system", "content": SYMPLAN_SYSTEM_PROMPT},
+        {"role": "user", "content": f"# PROBLEM\n{question}\n# END PROBLEM"},
+        {"role": "assistant", "content": f"```python\n{code_snippet}\n```"},
+        {"role": "user", "content": (
+            f"Execution & Verification Diagnosis:\n{feedback_text}\n\n"
+            "Review your Stage 1 strategy plan. Fix any errors in your Stage 2 Python script, "
+            "ensure equations are correctly formulated and solved, and print the result in \\boxed{}."
+        )}
+    ]
+
 
 
 
