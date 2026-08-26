@@ -1,12 +1,11 @@
 # LLM Reasoning Benchmark Suite: Qwen2.5-Coder-7B-Instruct
 
-Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 5 phương pháp:
+Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 4 phương pháp:
 
 1. **Direct**: Zero-shot Direct Answering (dự đoán đáp án trực tiếp).
 2. **CoT (Chain-of-Thought)**: Zero-shot Step-by-Step Natural Language Reasoning (suy luận từng bước bằng ngôn ngữ tự nhiên theo Wei et al., NeurIPS 2022).
 3. **SymCode**: Neurosymbolic Equation Solving với SymPy (ACL 2026) tích hợp vòng lặp tự sửa lỗi (Self-Debugging Loop) dựa trên Traceback thực thi và Bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier).
-4. **SymReasoner**: Constraint-Grounded Synthesis (CGS) với bộ làm sạch mã nguồn dựa trên AST (AST-based Code Cleaner) và cơ chế kiểm chứng ràng buộc nội sinh `check_constraints` giúp triệt tiêu nghiệm ngoại lai.
-5. **DAPPER**: Divide-and-Plan Pedagogical Reasoning (Type 2 Pipeline: Divide -> Plan -> SymCode Execution -> Guarded Repair).
+4. **SymPlanner**: Divide-and-Plan Neurosymbolic Program Synthesis (Stage 1 Divide -> Stage 2 Plan -> Stage 3 SymCode Execution -> Guarded Repair).
 
 ---
 
@@ -23,14 +22,14 @@ symcode/
 │   │   └── math500/            # MATH-500 (500 mẫu test gồm 7 chủ đề và độ khó Level 1-5)
 │   │       └── test.jsonl
 │   ├── method/                 # Các module xử lý cốt lõi
-│   │   ├── __init__.py         # Package exports cho hệ thống (Direct, CoT, SymCode, SymReasoner, DAPPER)
-│   │   ├── prompts.py          # Định nghĩa ChatML prompts và message builders (bao gồm CGS, DAPPER & retry)
-│   │   ├── extractor.py        # Trích xuất \boxed{}, làm sạch mã nguồn AST (extract_dapper_code) và so khớp Exact Match
+│   │   ├── __init__.py         # Package exports cho hệ thống (Direct, CoT, SymCode, SymPlanner)
+│   │   ├── prompts.py          # Định nghĩa ChatML prompts và message builders (Direct, CoT, SymCode, SymPlanner)
+│   │   ├── extractor.py        # Trích xuất \boxed{}, làm sạch mã nguồn AST (extract_symplanner_code) và so khớp Exact Match
 │   │   ├── sandbox.py          # In-Memory Fast Sandbox thực thi code cách ly với bảo vệ timeout
 │   │   ├── verifier.py         # Bộ kiểm chứng toán học độc lập (không sử dụng ground truth)
 │   │   ├── model.py            # LLMRunner với lượng tử hóa 4-bit (bitsandbytes) và SDPA attention
-│   │   └── evaluator.py        # Engine đánh giá benchmark (evaluate_direct_or_cot, evaluate_symcode, evaluate_symreasoner, evaluate_dapper)
-│   ├── inference.ipynb         # Jupyter Notebook thực thi benchmark trực quan trên Kaggle GPU (hỗ trợ cả 5 phương pháp)
+│   │   └── evaluator.py        # Engine đánh giá benchmark (evaluate_direct_or_cot, evaluate_symcode, evaluate_symplanner)
+│   ├── inference.ipynb         # Jupyter Notebook thực thi benchmark trực quan trên Kaggle GPU (hỗ trợ cả 4 phương pháp)
 │   ├── run_benchmark.py        # Script thực thi benchmark qua giao diện dòng lệnh (CLI)
 │   └── requirements.txt        # Danh sách thư viện phụ thuộc
 ├── paper/                      # Các tài liệu nghiên cứu tham khảo (CoT, PAL, SymCode)
@@ -39,7 +38,55 @@ symcode/
 
 ---
 
-## 2. Quy chuẩn thực nghiệm và tính khách quan (Fairness & Protocol)
+## 2. Kiến trúc Phương pháp Đề xuất: SymPlanner (Divide-and-Plan Pipeline)
+
+**SymPlanner** (*Divide-and-Plan Neurosymbolic Program Synthesis*) là kiến trúc suy luận toán học 4 giai đoạn được thiết kế nhằm khắc phục triệt để hiện tượng ảo giác, tính nhẩm sai và bỏ sót điều kiện biên của các mô hình LLM cỡ nhỏ (7B):
+
+```mermaid
+flowchart TD
+    subgraph S1["Stage 1: DIVIDE (State & Constraint Parsing)"]
+        A[Problem Word Description] --> B[Target Unknown: Quantity to compute]
+        A --> C[Given Quantities: Constants & Relations]
+        A --> D[Domain Constraints: x > 0, Integers, Denom != 0]
+    end
+
+    subgraph S2["Stage 2: PLAN (Symbolic Strategy)"]
+        B & C & D --> E[Formulate Equation System]
+        E --> F[Select SymPy Solving Method]
+        F --> G[Design Root Filtering Logic]
+    end
+
+    subgraph S3["Stage 3: EXECUTE (Guarded Code Synthesis)"]
+        G --> H["Self-Contained Python Script (import sympy as sp)"]
+        H --> I["AST-based Code Cleaner & Sanitizer"]
+        I --> J["In-Memory Fast Sandbox Execution"]
+    end
+
+    subgraph S4["Stage 4: GUARDED REPAIR & VERIFICATION"]
+        J --> K{Execution Success & Verifier Pass?}
+        K -- "Yes" --> L["Final Answer in LaTeX \\boxed{}"]
+        K -- "No (Runtime Crash / Verifier Fail)" --> M["Guarded Repair Diagnostic Feedback"]
+        M -->|Retry Loop <= 2| H
+        K -- "Crash Fallback" --> N["Fallback: Step 1/2 CoT Boxed Extraction"]
+    end
+```
+
+### Chi tiết các giai đoạn cốt lõi:
+
+1. **Stage 1 — DIVIDE (Phân rã trạng thái & Khóa mục tiêu)**:
+   - Chuyển đổi đề bài từ văn bản tự nhiên lộn xộn thành 3 trường dữ liệu tường minh: `Target Unknown` (khóa chặt mục tiêu cần tìm, tránh nhầm lẫn đại lượng), `Given Quantities` (hằng số, mối quan hệ đã cho) và `Domain Constraints` (ràng buộc miền xác định: số dương, nghiệm nguyên, xác suất $[0, 1]$, mẫu số $\neq 0$).
+2. **Stage 2 — PLAN (Lập kế hoạch thuật toán biểu tượng)**:
+   - Dựa trên dữ liệu từ Stage 1 để vạch ra hệ phương trình đại số, chiến lược áp dụng các hàm của SymPy (`sp.solve`, `sp.simplify`, `sp.summation`), và quy trình lọc nghiệm ngoại lai (*extraneous roots*) mà không thực hiện tính nhẩm vội vàng.
+3. **Stage 3 — EXECUTE (Sinh mã nguồn SymPy an toàn)**:
+   - Chuyển kế hoạch thành script Python độc lập. Định nghĩa biến với các giả định toán học (`sp.symbols('x', positive=True, real=True)`).
+   - Bộ làm sạch **AST-based Sanitizer** tự động bóc tách các tiêu đề Markdown hoặc văn bản rò rỉ từ Stage 1/2, đảm bảo mã nguồn đạt 100% tính hợp lệ cú pháp trước khi nạp vào **In-Memory Fast Sandbox**.
+4. **Stage 4 — GUARDED REPAIR & INDEPENDENT VERIFIER (Tự sửa lỗi & Kiểm chứng độc lập)**:
+   - Nếu code gặp lỗi runtime hoặc in ra kết quả rỗng, hệ thống tổng hợp Traceback + phản hồi từ **Independent Mathematical Verifier** để LLM sửa lại mã nguồn (tối đa 2 lần).
+   - Tích hợp cơ chế **Safe Fallback**: nếu thực thi code không cho ra đáp án hợp lệ, hệ thống tự động bóc tách kết quả từ phần phân tích bước giải ở Stage 1/2 để cứu điểm.
+
+---
+
+## 3. Quy chuẩn thực nghiệm và tính khách quan (Fairness & Protocol)
 
 Hệ thống tuân thủ nghiêm ngặt các quy chuẩn đánh giá benchmark khoa học để đảm bảo tính công bằng giữa các phương pháp:
 
@@ -53,10 +100,9 @@ Hệ thống tuân thủ nghiêm ngặt các quy chuẩn đánh giá benchmark k
 | Giới hạn độ dài sinh | max_new_tokens = 1024 |
 | Tập dữ liệu & Thứ tự | Giữ nguyên 100% thứ tự câu hỏi gốc giữa tất cả các phương pháp |
 | Công cụ của SymCode | Python chuẩn + SymPy (Symbolic Algebra, Calculus, Number Theory, Geometry) |
-| Công cụ của SymReasoner | SymPy + Constraint-Grounded Synthesis (`check_constraints`) + AST Code Cleaner |
-| Công cụ của DAPPER | Divide (JSON state) -> Plan (Strategy) -> SymCode (Guarded Execution) + AST Sanitizer |
+| Công cụ của SymPlanner | Divide (State Extraction) -> Plan (Strategy) -> SymCode (Guarded Execution) + AST Sanitizer |
 | Bộ kiểm chứng Verifier | Kiểm tra tính nhất quán đại số, miền xác định, không truy cập ground truth |
-| Giới hạn thử lại (Retry) | Tối đa 2 lần thử lại (max_retries = 2) cho SymCode, SymReasoner và DAPPER |
+| Giới hạn thử lại (Retry) | Tối đa 2 lần thử lại (max_retries = 2) cho SymCode và SymPlanner |
 | Đánh giá đáp án (Metrics)| Exact Match (EM) trên \boxed{...}, hỗ trợ tương đương đại số qua SymPy |
 
 ---
@@ -86,7 +132,7 @@ Kaggle cung cấp GPU miễn phí (NVIDIA T4 x2 hoặc P100). Quy trình thực 
 1. Mở file `kaggle/inference.ipynb` và copy toàn bộ nội dung vào Notebook trên Kaggle (hoặc import trực tiếp file `.ipynb`).
 2. Tại **Cell 3 (Bảng điều khiển cấu hình)**, tùy chỉnh các thông số theo nhu cầu:
    - `DATASET_CHOICE`: Chọn `"math500"` hoặc `"gsm8k"`.
-   - `METHODS_TO_RUN`: Danh sách phương pháp cần chạy, ví dụ `["Direct", "CoT", "SymCode", "SymReasoner", "DAPPER"]`.
+   - `METHODS_TO_RUN`: Danh sách phương pháp cần chạy, ví dụ `["Direct", "CoT", "SymCode", "SymPlanner"]`.
    - `NUM_SAMPLES`: Số lượng mẫu đánh giá (đặt `5` để test nhanh, hoặc `None` để chạy toàn bộ tập dữ liệu).
    - `FILTER_LEVELS`: Đặt `[1, 2, 3]` để chỉ đánh giá mức độ mong muốn (hỗ trợ phân loại Level 1-5 cho cả MATH-500 và GSM8K), hoặc `None` để đánh giá tất cả các Level 1-5.
 3. Chọn **Run All** (hoặc bấm Shift + Enter từng cell theo thứ tự).
@@ -121,19 +167,19 @@ pip install -r kaggle/requirements.txt
 
 ### Các lệnh thực thi mẫu
 
-**1. Chạy test nhanh 5 mẫu trên MATH-500 (Level 1 đến 3) với cả 5 phương pháp:**
+**1. Chạy test nhanh 5 mẫu trên MATH-500 (Level 1 đến 3) với cả 4 phương pháp:**
 ```bash
-python kaggle/run_benchmark.py --dataset math500 --num-samples 5 --filter-levels 1 2 3 --methods Direct CoT SymCode SymReasoner DAPPER
+python kaggle/run_benchmark.py --dataset math500 --num-samples 5 --filter-levels 1 2 3 --methods Direct CoT SymCode SymPlanner
 ```
 
-**2. Chạy toàn bộ tập dữ liệu GSM8K với cả 5 phương pháp:**
+**2. Chạy toàn bộ tập dữ liệu GSM8K với cả 4 phương pháp:**
 ```bash
-python kaggle/run_benchmark.py --dataset gsm8k --methods Direct CoT SymCode SymReasoner DAPPER
+python kaggle/run_benchmark.py --dataset gsm8k --methods Direct CoT SymCode SymPlanner
 ```
 
-**3. Chạy đánh giá riêng phương pháp DAPPER (hoặc SymCode) trên MATH-500:**
+**3. Chạy đánh giá riêng phương pháp SymPlanner (hoặc SymCode) trên MATH-500:**
 ```bash
-python kaggle/run_benchmark.py --dataset math500 --methods DAPPER --output-file result_dapper_full.json
+python kaggle/run_benchmark.py --dataset math500 --methods SymPlanner --output-file result_symplanner_full.json
 ```
 
 **4. Danh sách đầy đủ các tham số hỗ trợ:**
@@ -142,7 +188,7 @@ python kaggle/run_benchmark.py --dataset math500 --methods DAPPER --output-file 
 | :--- | :--- | :--- | :--- |
 | `--dataset` | str | `math500` | Chọn tập dữ liệu: `math500` hoặc `gsm8k` |
 | `--dataset-path` | str | `None` | Đường dẫn tùy biến tới file `.jsonl` |
-| `--methods` | list | `Direct CoT SymCode SymReasoner DAPPER` | Danh sách các phương pháp cần đánh giá |
+| `--methods` | list | `Direct CoT SymCode SymPlanner` | Danh sách các phương pháp cần đánh giá |
 | `--num-samples` | int | `None` | Giới hạn số mẫu cần đánh giá (`None` = toàn bộ) |
 | `--filter-levels` | list | `None` | Lọc theo mức độ khó (ví dụ: `--filter-levels 1 2 3`) |
 | `--model-id` | str | `Qwen/Qwen2.5-Coder-7B-Instruct` | ID mô hình Hugging Face |
@@ -150,27 +196,7 @@ python kaggle/run_benchmark.py --dataset math500 --methods DAPPER --output-file 
 | `--no-4bit` | flag | - | Tắt 4-bit, sử dụng float16/bfloat16 |
 | `--max-new-tokens` | int | `1024` | Số lượng token sinh tối đa mỗi lượt |
 | `--temperature` | float | `0.0` | Nhiệt độ giải mã (0.0 = Greedy Search) |
-| `--max-retries` | int | `2` | Số lần retry tối đa cho SymCode / SymReasoner / DAPPER |
-| `--timeout` | int | `15` | Thời gian timeout cho sandbox thực thi code (giây) |
-| `--output-file` | str | `None` | Đường dẫn file kết quả JSON đầu ra |
-| `--save-every` | int | `5` | Tần suất lưu checkpoint trung gian |ggle/run_benchmark.py --dataset math500 --methods SymCode --output-file result_symcode_full.json
-```
-
-**4. Danh sách đầy đủ các tham số hỗ trợ:**
-
-| Tham số | Kiểu | Mặc định | Mô tả |
-| :--- | :--- | :--- | :--- |
-| `--dataset` | str | `math500` | Chọn tập dữ liệu: `math500` hoặc `gsm8k` |
-| `--dataset-path` | str | `None` | Đường dẫn tùy biến tới file `.jsonl` |
-| `--methods` | list | `Direct CoT SymCode` | Danh sách các phương pháp cần đánh giá |
-| `--num-samples` | int | `None` | Giới hạn số mẫu cần đánh giá (`None` = toàn bộ) |
-| `--filter-levels` | list | `None` | Lọc theo mức độ khó (ví dụ: `--filter-levels 1 2 3`) |
-| `--model-id` | str | `Qwen/Qwen2.5-Coder-7B-Instruct` | ID mô hình Hugging Face |
-| `--load-in-4bit` | flag | `True` | Bật lượng tử hóa 4-bit NF4 qua bitsandbytes |
-| `--no-4bit` | flag | - | Tắt 4-bit, sử dụng float16/bfloat16 |
-| `--max-new-tokens` | int | `1024` | Số lượng token sinh tối đa mỗi lượt |
-| `--temperature` | float | `0.0` | Nhiệt độ giải mã (0.0 = Greedy Search) |
-| `--max-retries` | int | `2` | Số lần retry tối đa cho SymCode Verifier loop |
+| `--max-retries` | int | `2` | Số lần retry tối đa cho SymCode / SymPlanner |
 | `--timeout` | int | `15` | Thời gian timeout cho sandbox thực thi code (giây) |
 | `--output-file` | str | `None` | Đường dẫn file kết quả JSON đầu ra |
 | `--save-every` | int | `5` | Tần suất lưu checkpoint trung gian |
@@ -213,7 +239,7 @@ File kết quả JSON được lưu với cấu trúc chuẩn:
     "dataset_name": "math500",
     "filter_levels": [1, 2, 3],
     "num_samples": 5,
-    "methods_to_run": ["Direct", "CoT", "SymCode", "SymReasoner", "SymPlanner"]
+    "methods_to_run": ["Direct", "CoT", "SymCode", "SymPlanner"]
   },
   "timestamp": "2026-08-25 00:00:00",
   "results": {
