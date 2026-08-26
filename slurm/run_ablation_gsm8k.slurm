@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ablation_gsm8k
+#SBATCH --chdir=/datastore/uitchain/PNGH/symcode
 #SBATCH --output=slurm/logs/ablation_gsm8k_%j.out
 #SBATCH --error=slurm/logs/ablation_gsm8k_%j.err
 #SBATCH --nodes=1

@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ablation_math500
+#SBATCH --chdir=/datastore/uitchain/PNGH/symcode
 #SBATCH --output=slurm/logs/ablation_math500_%j.out
 #SBATCH --error=slurm/logs/ablation_math500_%j.err
 #SBATCH --nodes=1
@@ -19,7 +20,6 @@ module clear -f
 module load shared python312
 
 # Kích hoạt venv (Cấu hình theo đường dẫn /datastore/uitchain/...)
-# Thay đổi đường dẫn bên dưới nếu venv nằm ở vị trí khác
 if [ -d "/datastore/uitchain/venv" ]; then
     source /datastore/uitchain/venv/bin/activate
 elif [ -d "venv" ]; then
