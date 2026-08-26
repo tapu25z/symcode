@@ -4,6 +4,7 @@ Hỗ trợ biểu thức số học, phân số LaTeX lồng nhau, tọa độ, 
 """
 
 import re
+import ast
 from typing import Optional, Any, Union, List, Dict
 from fractions import Fraction
 
@@ -79,6 +80,224 @@ def extract_python_code(text: str) -> str:
         return text.strip()
         
     return text.strip()
+
+
+def extract_python_code_ast(text: str) -> str:
+    """
+    Trích xuất và làm sạch mã nguồn Python dựa trên AST (Abstract Syntax Tree) cho SymReasoner.
+    Thực hiện quy trình 3 giai đoạn:
+    1. Trích xuất code thô từ markdown code block (```python ... ```) hoặc text.
+    2. Kiểm tra tính hợp lệ cú pháp với ast.parse(). Nếu thành công, trả về ngay.
+    3. Nếu gặp SyntaxError: Làm sạch mạnh tay loại bỏ các dòng tiêu đề Markdown (#, ###, *, Step) hoặc LaTeX (\\[, \\]).
+    4. Nếu vẫn không hợp lệ: Dùng phương án dự phòng (fallback) lọc các dòng chứa từ khóa / cú pháp Python hợp lệ.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+
+    # 1. Trích xuất code thô bằng regex
+    pattern = r"```(?:python|py)?\s*(.*?)\s*```"
+    matches = re.findall(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+    if matches:
+        candidate_code = ""
+        for m in reversed(matches):
+            c_str = m.strip()
+            if any(k in c_str for k in ["sympy", "sp.", "print(", "solve(", "symbols(", "check_constraints"]):
+                candidate_code = c_str
+                break
+        if not candidate_code:
+            candidate_code = matches[-1].strip()
+    else:
+        candidate_code = text.strip()
+
+    if not candidate_code:
+        return ""
+
+    # 2. Thử chạy ast.parse trực tiếp
+    try:
+        ast.parse(candidate_code)
+        return candidate_code
+    except SyntaxError:
+        pass
+
+    # 3. Làm sạch mạnh tay (Aggressive Cleaning)
+    lines = candidate_code.split("\n")
+    cleaned_lines = []
+    
+    # Regex nhận diện tiêu đề Markdown (#, ###, *, Step) và công thức LaTeX (\[, \])
+    md_header_or_latex_pattern = re.compile(
+        r"^(?:\s*[*+-]\s+|#{1,6}\s+|Step\s*\d+\s*:|Step\s*:|\\\[|\\\]|\$\$|\\\(|\\\))",
+        re.IGNORECASE
+    )
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            cleaned_lines.append(line)
+            continue
+        
+        # Xóa các dòng bắt đầu bằng tiêu đề Markdown hoặc khối công thức LaTeX
+        if md_header_or_latex_pattern.match(stripped):
+            continue
+        if stripped.startswith(("\\[", "\\]", "$$", "\\(", "\\)")) or stripped.endswith(("\\]", "$$", "\\)")):
+            continue
+        # Xóa các dòng văn bản giải thích không phải code (ví dụ: "Output:", "Explanation:")
+        if re.match(r"^(?:Output|Explanation|Note|Answer)\s*:", stripped, re.IGNORECASE):
+            continue
+
+        cleaned_lines.append(line)
+
+    cleaned_code = "\n".join(cleaned_lines).strip()
+
+    # Thử chạy ast.parse lại
+    try:
+        if cleaned_code:
+            ast.parse(cleaned_code)
+            return cleaned_code
+    except SyntaxError:
+        pass
+
+    # 4. Phương án dự phòng (Fallback): Chỉ giữ lại các dòng chứa từ khóa / cấu trúc Python hợp lệ
+    valid_python_keywords = [
+        "import ", "from ", "def ", "return", "for ", "while ", "if ", "elif ",
+        "else:", "try:", "except", "finally:", "with ", "class ", "print(",
+        "pass", "break", "continue", "raise ", "assert ", "lambda ", "sp.", "sympy."
+    ]
+
+    fallback_lines = []
+    for line in cleaned_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        is_keyword = any(kw in stripped for kw in valid_python_keywords)
+        is_assignment = bool(re.match(r"^[a-zA-Z_][a-zA-Z0-9_,\s\(\)]*\s*=\s*.+", stripped))
+        is_comment = stripped.startswith("#")
+        is_func_call = bool(re.match(r"^[a-zA-Z_][a-zA-Z0-9_\.]*\s*\(.*\)", stripped))
+
+        if is_keyword or is_assignment or is_comment or is_func_call:
+            fallback_lines.append(line)
+
+    fallback_code = "\n".join(fallback_lines).strip()
+    try:
+        if fallback_code:
+            ast.parse(fallback_code)
+            return fallback_code
+    except SyntaxError:
+        pass
+
+    # Tinh chỉnh dòng theo dòng nếu fallback vẫn lỗi cú pháp
+    valid_reconstructed = []
+    for line in (fallback_lines if fallback_lines else cleaned_lines):
+        valid_reconstructed.append(line)
+        try:
+            ast.parse("\n".join(valid_reconstructed))
+        except SyntaxError:
+            valid_reconstructed.pop()
+
+    final_cleaned = "\n".join(valid_reconstructed).strip()
+    if final_cleaned:
+        return final_cleaned
+
+    return candidate_code
+
+
+def extract_symplanner_code(text: str) -> str:
+    """
+    Trích xuất và làm sạch mã nguồn Python dựa trên AST cho phương pháp SymPlanner (Divide-and-Plan).
+    1. Trích xuất code thô bằng regex ```python ... ```.
+    2. Thử ast.parse(candidate_code), nếu thành công trả về ngay.
+    3. Nếu SyntaxError: Loại bỏ các dòng bắt đầu bằng Markdown headers (# Stage, ###, *),
+       dòng tiêu đề hoặc văn bản rò rỉ từ Stage 1 (DIVIDE) / Stage 2 (PLAN).
+    4. Thử ast.parse lại. Nếu vẫn lỗi, fallback về các dòng chứa từ khóa Python hợp lệ.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+
+    # 1. Trích xuất code thô bằng regex
+    pattern = r"```(?:python|py)?\s*(.*?)\s*```"
+    matches = re.findall(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+    if matches:
+        candidate_code = ""
+        for m in reversed(matches):
+            c_str = m.strip()
+            if any(k in c_str for k in ["sympy", "sp.", "print(", "solve(", "symbols("]):
+                candidate_code = c_str
+                break
+        if not candidate_code:
+            candidate_code = matches[-1].strip()
+    else:
+        candidate_code = text.strip()
+
+    if not candidate_code:
+        return ""
+
+    # 2. Thử ast.parse trực tiếp
+    try:
+        ast.parse(candidate_code)
+        return candidate_code
+    except SyntaxError:
+        pass
+
+    # 3. Làm sạch mạnh tay (Aggressive Sanitization)
+    lines = candidate_code.split("\n")
+    cleaned_lines = []
+    
+    # Regex nhận diện tiêu đề Markdown (# Stage, ###, *, Step) và công thức LaTeX (\[, \])
+    md_header_or_stage_pattern = re.compile(
+        r"^(?:\s*[*+-]\s+|#{1,6}\s*Stage|#{1,6}\s*Phase|#{1,6}\s+|Step\s*\d+\s*:|\\\[|\\\]|\$\$|\\\(|\\\))",
+        re.IGNORECASE
+    )
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            cleaned_lines.append(line)
+            continue
+        
+        # Loại bỏ các dòng bắt đầu bằng Markdown headers hoặc rò rỉ Stage 1/2
+        if md_header_or_stage_pattern.match(stripped):
+            continue
+        if stripped.startswith(("\\[", "\\]", "$$", "\\(", "\\)")) or stripped.endswith(("\\]", "$$", "\\)")):
+            continue
+        if re.match(r"^(?:Stage\s*\d+|Phase\s*\d+|DIVIDE|PLAN|EXECUTE|Target\s*Unknown|Given\s*Quantities|Domain\s*Constraints)\s*:", stripped, re.IGNORECASE):
+            continue
+        if stripped in ["{", "}", "```", "```json", "```python"]:
+            continue
+
+        cleaned_lines.append(line)
+
+    cleaned_code = "\n".join(cleaned_lines).strip()
+    
+    # 4. Thử ast.parse lại
+    try:
+        ast.parse(cleaned_code)
+        return cleaned_code
+    except SyntaxError:
+        pass
+
+    # 5. Fallback: Lọc các dòng chứa từ khóa / cấu trúc Python hợp lệ
+    python_keywords = {
+        "import ", "from ", "def ", "return ", "if ", "elif ", "else:",
+        "for ", "while ", "try:", "except", "with ", "class ", "print(",
+        "sp.", "sympy", " = ", "+=", "-=", "*=", "/=", "=="
+    }
+    fallback_lines = [
+        l for l in cleaned_lines 
+        if any(kw in l for kw in python_keywords) or l.strip().startswith("#")
+    ]
+    fallback_code = "\n".join(fallback_lines).strip()
+
+    try:
+        if fallback_code:
+            ast.parse(fallback_code)
+            return fallback_code
+    except SyntaxError:
+        pass
+
+    return cleaned_code or candidate_code
+
+
+# Alias tương thích ngược nếu cần
+extract_dapper_code = extract_symplanner_code
 
 
 def extract_gsm8k_ground_truth(answer_str: str) -> str:

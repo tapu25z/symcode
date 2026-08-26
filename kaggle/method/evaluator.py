@@ -20,10 +20,17 @@ except ImportError:
     def tqdm(iterable, *args, **kwargs):
         return iterable
 
-from .prompts import build_prompt_messages, build_retry_prompt_messages
+from .prompts import (
+    build_prompt_messages,
+    build_retry_prompt_messages,
+    build_symreasoner_retry_prompt_messages,
+    build_symplanner_retry_prompt_messages
+)
 from .extractor import (
     extract_boxed_content,
     extract_python_code,
+    extract_python_code_ast,
+    extract_symplanner_code,
     extract_ground_truth,
     check_exact_match
 )
@@ -359,6 +366,301 @@ def evaluate_symcode(
         _save_intermediate_checkpoint(checkpoint_file, "SymCode", results)
         
     return results
+
+
+def evaluate_symreasoner(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 2,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Thực thi đánh giá phương pháp SymReasoner (Constraint-Grounded Synthesis với AST Code Cleaner & check_constraints).
+    Cung cấp phản hồi lỗi thực thi (Traceback) và chẩn đoán toán học độc lập (Verifier Diagnosis).
+    Bộ kiểm chứng hoạt động độc lập 100%, không sử dụng ground truth.
+    """
+    ckpt = _load_existing_checkpoint(checkpoint_file, "SymReasoner")
+    results = ckpt["method_results"]
+    completed_problems = {r["problem"] for r in results}
+    
+    if completed_problems:
+        print(f"[INFO] Tiep tuc phuong phap SymReasoner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+
+    print(f"\n==================== Bat dau danh gia Phuong phap: SymReasoner (So lan retry toi da: {max_retries}) ====================")
+    
+    new_evaluated = 0
+    for item in tqdm(dataset, desc="Danh gia SymReasoner"):
+        question = item["question"]
+        if question in completed_problems:
+            continue
+            
+        gt = extract_ground_truth(item.get("raw") or item["answer"])
+        
+        total_tokens = 0
+        attempt = 0
+        prev_code = ""
+        error_tb = None
+        candidate_ans = None
+        verif_status = "unknown"
+        verif_feedback = None
+        exec_res = {}
+        raw_outputs = []
+        attempt_history = []
+        
+        while attempt <= max_retries:
+            attempt += 1
+            if attempt == 1:
+                messages = build_prompt_messages("SymReasoner", question)
+            else:
+                messages = build_symreasoner_retry_prompt_messages(
+                    question=question,
+                    prev_code=prev_code,
+                    execution_status=exec_res.get("status", "error"),
+                    error_tb=error_tb,
+                    candidate_answer=candidate_ans,
+                    verification_status=verif_status,
+                    verification_feedback=verif_feedback
+                )
+            
+            raw_output, token_count = llm.generate_chat(messages)
+            total_tokens += token_count
+            raw_outputs.append(raw_output)
+            
+            extracted_code = extract_python_code_ast(raw_output)
+            exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+            candidate_ans = exec_res.get("extracted_answer")
+            
+            # Xử lý trường hợp code in ra None/Invalid/rỗng
+            if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+                candidate_ans = None
+
+            # Kiểm chứng độc lập không dùng ground truth
+            if exec_res["status"] == "success" and candidate_ans is not None:
+                verif_status, verif_feedback = verify_candidate_answer(
+                    question, candidate_ans, extracted_code, exec_res.get("stdout")
+                )
+            else:
+                verif_status = "fail"
+                verif_feedback = exec_res.get("traceback") or "Mã nguồn in ra 'None'/'Invalid' hoặc không in ra kết quả định dạng \\boxed{}."
+                
+            attempt_record = {
+                "attempt": attempt,
+                "code": extracted_code,
+                "generated_tokens": token_count,
+                "execution_status": exec_res.get("status"),
+                "candidate_answer": candidate_ans,
+                "verification_status": verif_status,
+                "verification_feedback": verif_feedback,
+                "stdout": exec_res.get("stdout", ""),
+                "traceback": exec_res.get("traceback")
+            }
+            attempt_history.append(attempt_record)
+            
+            # Dừng nếu code chạy thành công VÀ vượt qua kiểm chứng (không bị fail)
+            if exec_res["status"] == "success" and candidate_ans is not None and verif_status != "fail":
+                break
+                
+            prev_code = extracted_code
+            error_tb = exec_res.get("traceback")
+
+        final_predicted = candidate_ans
+        # Cơ chế Fallback cứu cánh: nếu code execution không cho ra đáp án hợp lệ, lấy từ khối \boxed{} của bước phân tích CoT
+        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+            for out in reversed(raw_outputs):
+                cot_boxed = extract_boxed_content(out)
+                if cot_boxed is not None and cot_boxed.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                    final_predicted = cot_boxed.strip()
+                    break
+
+        is_correct = check_exact_match(final_predicted, gt)
+
+        results.append({
+            "problem": question,
+            "subject": item.get("subject", "unknown"),
+            "level": item.get("level"),
+            "level_label": item.get("level_label", "N/A"),
+            "ground_truth": gt,
+            "predicted": final_predicted,
+            "is_correct": is_correct,
+            "generated_tokens": total_tokens,
+            "attempts": attempt,
+            "execution_status": exec_res.get("status", "unknown"),
+            "verification_status": verif_status,
+            "verification_feedback": verif_feedback,
+            "stdout": exec_res.get("stdout", ""),
+            "traceback": exec_res.get("traceback"),
+            "extracted_code": extracted_code,
+            "raw_output": raw_outputs[-1] if raw_outputs else "",
+            "raw_outputs": raw_outputs,
+            "attempt_history": attempt_history
+        })
+        completed_problems.add(question)
+        new_evaluated += 1
+        
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        if checkpoint_file and (new_evaluated % save_every == 0):
+            gc.collect()
+            _save_intermediate_checkpoint(checkpoint_file, "SymReasoner", results)
+
+    if checkpoint_file:
+        _save_intermediate_checkpoint(checkpoint_file, "SymReasoner", results)
+        
+    return results
+
+
+def evaluate_symplanner(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 2,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Thực thi đánh giá phương pháp SymPlanner (Divide-and-Plan Neurosymbolic Synthesis với Guarded Repair & AST Sanitizer).
+    Quy trình 3 giai đoạn: Stage 1 (DIVIDE) -> Stage 2 (PLAN) -> Stage 3 (EXECUTE) -> Guarded Repair.
+    Cung cấp phản hồi lỗi thực thi (Traceback) và chẩn đoán toán học độc lập (Verifier Diagnosis).
+    Bộ kiểm chứng hoạt động độc lập 100%, không sử dụng ground truth.
+    """
+    ckpt = _load_existing_checkpoint(checkpoint_file, "SymPlanner")
+    results = ckpt["method_results"]
+    completed_problems = {r["problem"] for r in results}
+    
+    if completed_problems:
+        print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+
+    print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (So lan retry toi da: {max_retries}) ====================")
+    
+    new_evaluated = 0
+    for item in tqdm(dataset, desc="Danh gia SymPlanner"):
+        question = item["question"]
+        if question in completed_problems:
+            continue
+            
+        gt = extract_ground_truth(item.get("raw") or item["answer"])
+        
+        total_tokens = 0
+        attempt = 0
+        attempt_history = []
+        raw_outputs = []
+        
+        prev_code = ""
+        error_tb = None
+        candidate_ans = None
+        verif_status = "fail"
+        verif_feedback = None
+        exec_res = {"status": "error", "traceback": None, "extracted_answer": None, "stdout": ""}
+        extracted_code = ""
+
+        while attempt <= max_retries:
+            attempt += 1
+            if attempt == 1:
+                messages = build_prompt_messages("SymPlanner", question)
+            else:
+                messages = build_symplanner_retry_prompt_messages(
+                    question=question,
+                    prev_code=prev_code,
+                    execution_status=exec_res.get("status", "error"),
+                    error_tb=error_tb,
+                    candidate_answer=candidate_ans,
+                    verification_status=verif_status,
+                    verification_feedback=verif_feedback
+                )
+            
+            raw_output, token_count = llm.generate_chat(messages)
+            total_tokens += token_count
+            raw_outputs.append(raw_output)
+            
+            extracted_code = extract_symplanner_code(raw_output)
+            exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+            candidate_ans = exec_res.get("extracted_answer")
+            
+            # Xử lý trường hợp code in ra None/Invalid/rỗng
+            if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+                candidate_ans = None
+
+            # Kiểm chứng độc lập không dùng ground truth
+            if exec_res["status"] == "success" and candidate_ans is not None:
+                verif_status, verif_feedback = verify_candidate_answer(
+                    question, candidate_ans, extracted_code, exec_res.get("stdout")
+                )
+            else:
+                verif_status = "fail"
+                verif_feedback = exec_res.get("traceback") or "Mã nguồn in ra 'None'/'Invalid' hoặc không in ra kết quả định dạng \\boxed{}."
+                
+            attempt_record = {
+                "attempt": attempt,
+                "code": extracted_code,
+                "generated_tokens": token_count,
+                "execution_status": exec_res.get("status"),
+                "candidate_answer": candidate_ans,
+                "verification_status": verif_status,
+                "verification_feedback": verif_feedback,
+                "stdout": exec_res.get("stdout", ""),
+                "traceback": exec_res.get("traceback")
+            }
+            attempt_history.append(attempt_record)
+            
+            # Dừng nếu code chạy thành công VÀ vượt qua kiểm chứng (không bị fail)
+            if exec_res["status"] == "success" and candidate_ans is not None and verif_status != "fail":
+                break
+                
+            prev_code = extracted_code
+            error_tb = exec_res.get("traceback")
+
+        final_predicted = candidate_ans
+        # Cơ chế Fallback cứu cánh: nếu code execution không cho ra đáp án hợp lệ, lấy từ khối \boxed{} của bước phân tích CoT
+        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+            for out in reversed(raw_outputs):
+                cot_boxed = extract_boxed_content(out)
+                if cot_boxed is not None and cot_boxed.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                    final_predicted = cot_boxed.strip()
+                    break
+
+        is_correct = check_exact_match(final_predicted, gt)
+
+        results.append({
+            "problem": question,
+            "subject": item.get("subject", "unknown"),
+            "level": item.get("level"),
+            "level_label": item.get("level_label", "N/A"),
+            "ground_truth": gt,
+            "predicted": final_predicted,
+            "is_correct": is_correct,
+            "generated_tokens": total_tokens,
+            "attempts": attempt,
+            "execution_status": exec_res.get("status", "unknown"),
+            "verification_status": verif_status,
+            "verification_feedback": verif_feedback,
+            "stdout": exec_res.get("stdout", ""),
+            "traceback": exec_res.get("traceback"),
+            "extracted_code": extracted_code,
+            "raw_output": raw_outputs[-1] if raw_outputs else "",
+            "raw_outputs": raw_outputs,
+            "attempt_history": attempt_history
+        })
+        completed_problems.add(question)
+        new_evaluated += 1
+        
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
+        if checkpoint_file and (new_evaluated % save_every == 0):
+            gc.collect()
+            _save_intermediate_checkpoint(checkpoint_file, "SymPlanner", results)
+
+    if checkpoint_file:
+        _save_intermediate_checkpoint(checkpoint_file, "SymPlanner", results)
+        
+    return results
+
+
+# Alias tương thích ngược nếu cần
+evaluate_dapper = evaluate_symplanner
 
 
 def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:

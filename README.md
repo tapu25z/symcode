@@ -1,10 +1,12 @@
 # LLM Reasoning Benchmark Suite: Qwen2.5-Coder-7B-Instruct
 
-Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 3 phương pháp cốt lõi:
+Hệ thống benchmark đánh giá năng lực suy luận toán học chuẩn hóa cho mô hình ngôn ngữ lớn Qwen2.5-Coder-7B-Instruct trên các tập dữ liệu benchmark tiêu chuẩn MATH-500 và GSM8K với 5 phương pháp:
 
-1. Direct: Zero-shot Direct Answering (dự đoán đáp án trực tiếp).
-2. CoT (Chain-of-Thought): Zero-shot Step-by-Step Natural Language Reasoning (suy luận từng bước bằng ngôn ngữ tự nhiên theo Wei et al., NeurIPS 2022).
-3. SymCode: Neurosymbolic Equation Solving với SymPy (ACL 2026) tích hợp vòng lặp tự sửa lỗi (Self-Debugging Loop) dựa trên Traceback thực thi và Bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier).
+1. **Direct**: Zero-shot Direct Answering (dự đoán đáp án trực tiếp).
+2. **CoT (Chain-of-Thought)**: Zero-shot Step-by-Step Natural Language Reasoning (suy luận từng bước bằng ngôn ngữ tự nhiên theo Wei et al., NeurIPS 2022).
+3. **SymCode**: Neurosymbolic Equation Solving với SymPy (ACL 2026) tích hợp vòng lặp tự sửa lỗi (Self-Debugging Loop) dựa trên Traceback thực thi và Bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier).
+4. **SymReasoner**: Constraint-Grounded Synthesis (CGS) với bộ làm sạch mã nguồn dựa trên AST (AST-based Code Cleaner) và cơ chế kiểm chứng ràng buộc nội sinh `check_constraints` giúp triệt tiêu nghiệm ngoại lai.
+5. **DAPPER**: Divide-and-Plan Pedagogical Reasoning (Type 2 Pipeline: Divide -> Plan -> SymCode Execution -> Guarded Repair).
 
 ---
 
@@ -21,14 +23,14 @@ symcode/
 │   │   └── math500/            # MATH-500 (500 mẫu test gồm 7 chủ đề và độ khó Level 1-5)
 │   │       └── test.jsonl
 │   ├── method/                 # Các module xử lý cốt lõi
-│   │   ├── __init__.py         # Package exports cho hệ thống
-│   │   ├── prompts.py          # Định nghĩa ChatML system prompts và message builders
-│   │   ├── extractor.py        # Trích xuất \boxed{}, phân số LaTeX lồng nhau và so khớp Exact Match
+│   │   ├── __init__.py         # Package exports cho hệ thống (Direct, CoT, SymCode, SymReasoner, DAPPER)
+│   │   ├── prompts.py          # Định nghĩa ChatML prompts và message builders (bao gồm CGS, DAPPER & retry)
+│   │   ├── extractor.py        # Trích xuất \boxed{}, làm sạch mã nguồn AST (extract_dapper_code) và so khớp Exact Match
 │   │   ├── sandbox.py          # In-Memory Fast Sandbox thực thi code cách ly với bảo vệ timeout
 │   │   ├── verifier.py         # Bộ kiểm chứng toán học độc lập (không sử dụng ground truth)
 │   │   ├── model.py            # LLMRunner với lượng tử hóa 4-bit (bitsandbytes) và SDPA attention
-│   │   └── evaluator.py        # Engine đánh giá benchmark, checkpoint tự động và tổng hợp metrics
-│   ├── inference.ipynb         # Jupyter Notebook thực thi benchmark trực quan trên Kaggle GPU
+│   │   └── evaluator.py        # Engine đánh giá benchmark (evaluate_direct_or_cot, evaluate_symcode, evaluate_symreasoner, evaluate_dapper)
+│   ├── inference.ipynb         # Jupyter Notebook thực thi benchmark trực quan trên Kaggle GPU (hỗ trợ cả 5 phương pháp)
 │   ├── run_benchmark.py        # Script thực thi benchmark qua giao diện dòng lệnh (CLI)
 │   └── requirements.txt        # Danh sách thư viện phụ thuộc
 ├── paper/                      # Các tài liệu nghiên cứu tham khảo (CoT, PAL, SymCode)
@@ -51,8 +53,10 @@ Hệ thống tuân thủ nghiêm ngặt các quy chuẩn đánh giá benchmark k
 | Giới hạn độ dài sinh | max_new_tokens = 1024 |
 | Tập dữ liệu & Thứ tự | Giữ nguyên 100% thứ tự câu hỏi gốc giữa tất cả các phương pháp |
 | Công cụ của SymCode | Python chuẩn + SymPy (Symbolic Algebra, Calculus, Number Theory, Geometry) |
+| Công cụ của SymReasoner | SymPy + Constraint-Grounded Synthesis (`check_constraints`) + AST Code Cleaner |
+| Công cụ của DAPPER | Divide (JSON state) -> Plan (Strategy) -> SymCode (Guarded Execution) + AST Sanitizer |
 | Bộ kiểm chứng Verifier | Kiểm tra tính nhất quán đại số, miền xác định, không truy cập ground truth |
-| Giới hạn thử lại (Retry) | Tối đa 2 lần thử lại (max_retries = 2) cho SymCode |
+| Giới hạn thử lại (Retry) | Tối đa 2 lần thử lại (max_retries = 2) cho SymCode, SymReasoner và DAPPER |
 | Đánh giá đáp án (Metrics)| Exact Match (EM) trên \boxed{...}, hỗ trợ tương đương đại số qua SymPy |
 
 ---
@@ -82,7 +86,7 @@ Kaggle cung cấp GPU miễn phí (NVIDIA T4 x2 hoặc P100). Quy trình thực 
 1. Mở file `kaggle/inference.ipynb` và copy toàn bộ nội dung vào Notebook trên Kaggle (hoặc import trực tiếp file `.ipynb`).
 2. Tại **Cell 3 (Bảng điều khiển cấu hình)**, tùy chỉnh các thông số theo nhu cầu:
    - `DATASET_CHOICE`: Chọn `"math500"` hoặc `"gsm8k"`.
-   - `METHODS_TO_RUN`: Danh sách phương pháp cần chạy, ví dụ `["Direct", "CoT", "SymCode"]`.
+   - `METHODS_TO_RUN`: Danh sách phương pháp cần chạy, ví dụ `["Direct", "CoT", "SymCode", "SymReasoner", "DAPPER"]`.
    - `NUM_SAMPLES`: Số lượng mẫu đánh giá (đặt `5` để test nhanh, hoặc `None` để chạy toàn bộ tập dữ liệu).
    - `FILTER_LEVELS`: Đặt `[1, 2, 3]` để chỉ đánh giá mức độ mong muốn (hỗ trợ phân loại Level 1-5 cho cả MATH-500 và GSM8K), hoặc `None` để đánh giá tất cả các Level 1-5.
 3. Chọn **Run All** (hoặc bấm Shift + Enter từng cell theo thứ tự).
@@ -117,19 +121,39 @@ pip install -r kaggle/requirements.txt
 
 ### Các lệnh thực thi mẫu
 
-**1. Chạy test nhanh 5 mẫu trên MATH-500 (Level 1 đến 3):**
+**1. Chạy test nhanh 5 mẫu trên MATH-500 (Level 1 đến 3) với cả 5 phương pháp:**
 ```bash
-python kaggle/run_benchmark.py --dataset math500 --num-samples 5 --filter-levels 1 2 3
+python kaggle/run_benchmark.py --dataset math500 --num-samples 5 --filter-levels 1 2 3 --methods Direct CoT SymCode SymReasoner DAPPER
 ```
 
-**2. Chạy toàn bộ tập dữ liệu GSM8K với cả 3 phương pháp:**
+**2. Chạy toàn bộ tập dữ liệu GSM8K với cả 5 phương pháp:**
 ```bash
-python kaggle/run_benchmark.py --dataset gsm8k --methods Direct CoT SymCode
+python kaggle/run_benchmark.py --dataset gsm8k --methods Direct CoT SymCode SymReasoner DAPPER
 ```
 
-**3. Chạy đánh giá riêng phương pháp SymCode trên MATH-500 toàn bộ Level 1-5:**
+**3. Chạy đánh giá riêng phương pháp DAPPER (hoặc SymCode) trên MATH-500:**
 ```bash
-python kaggle/run_benchmark.py --dataset math500 --methods SymCode --output-file result_symcode_full.json
+python kaggle/run_benchmark.py --dataset math500 --methods DAPPER --output-file result_dapper_full.json
+```
+
+**4. Danh sách đầy đủ các tham số hỗ trợ:**
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `--dataset` | str | `math500` | Chọn tập dữ liệu: `math500` hoặc `gsm8k` |
+| `--dataset-path` | str | `None` | Đường dẫn tùy biến tới file `.jsonl` |
+| `--methods` | list | `Direct CoT SymCode SymReasoner DAPPER` | Danh sách các phương pháp cần đánh giá |
+| `--num-samples` | int | `None` | Giới hạn số mẫu cần đánh giá (`None` = toàn bộ) |
+| `--filter-levels` | list | `None` | Lọc theo mức độ khó (ví dụ: `--filter-levels 1 2 3`) |
+| `--model-id` | str | `Qwen/Qwen2.5-Coder-7B-Instruct` | ID mô hình Hugging Face |
+| `--load-in-4bit` | flag | `True` | Bật lượng tử hóa 4-bit NF4 qua bitsandbytes |
+| `--no-4bit` | flag | - | Tắt 4-bit, sử dụng float16/bfloat16 |
+| `--max-new-tokens` | int | `1024` | Số lượng token sinh tối đa mỗi lượt |
+| `--temperature` | float | `0.0` | Nhiệt độ giải mã (0.0 = Greedy Search) |
+| `--max-retries` | int | `2` | Số lần retry tối đa cho SymCode / SymReasoner / DAPPER |
+| `--timeout` | int | `15` | Thời gian timeout cho sandbox thực thi code (giây) |
+| `--output-file` | str | `None` | Đường dẫn file kết quả JSON đầu ra |
+| `--save-every` | int | `5` | Tần suất lưu checkpoint trung gian |ggle/run_benchmark.py --dataset math500 --methods SymCode --output-file result_symcode_full.json
 ```
 
 **4. Danh sách đầy đủ các tham số hỗ trợ:**
@@ -189,7 +213,7 @@ File kết quả JSON được lưu với cấu trúc chuẩn:
     "dataset_name": "math500",
     "filter_levels": [1, 2, 3],
     "num_samples": 5,
-    "methods_to_run": ["Direct", "CoT", "SymCode"]
+    "methods_to_run": ["Direct", "CoT", "SymCode", "SymReasoner", "SymPlanner"]
   },
   "timestamp": "2026-08-25 00:00:00",
   "results": {
@@ -221,6 +245,23 @@ File kết quả JSON được lưu với cấu trúc chuẩn:
         "extracted_code": "...",
         "attempt_history": []
       }
+    ],
+    "SymPlanner": [
+      {
+        "problem": "...",
+        "subject": "Algebra",
+        "level": 1,
+        "ground_truth": "42",
+        "predicted": "42",
+        "is_correct": true,
+        "generated_tokens": 185,
+        "attempts": 1,
+        "execution_status": "success",
+        "verification_status": "pass",
+        "verification_feedback": "...",
+        "extracted_code": "...",
+        "attempt_history": []
+      }
     ]
   },
   "summary": {
@@ -231,6 +272,12 @@ File kết quả JSON được lưu với cấu trúc chuẩn:
       "by_subject_x_difficulty": {}
     },
     "SymCode": {
+      "accuracy_percent": 100.0,
+      "by_subject": {},
+      "by_difficulty": {},
+      "by_subject_x_difficulty": {}
+    },
+    "SymPlanner": {
       "accuracy_percent": 100.0,
       "by_subject": {},
       "by_difficulty": {},
