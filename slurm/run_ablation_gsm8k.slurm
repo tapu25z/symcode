@@ -9,22 +9,27 @@
 #SBATCH --mem=16G
 #SBATCH --time=72:00:00
 REQUIRED_VRAM=16384  # Quan trọng - Số vRAM cần dùng (để tìm GPU phù hợp)
+
 # =========================================================
-# CHUẨN BỊ MÔI TRƯỜNG
+# CHUẨN BỊ MÔI TRƯỜNG (TỰ ĐỘNG TẠO MỚI VENV NẾU CHƯA CÓ)
 # =========================================================
 module clear -f
 module load shared python312
 
-# *** Kích hoạt venv tự tạo ***
-if [ -f "/datastore/uitchain/PNGH/venv/bin/activate" ]; then
-    source /datastore/uitchain/PNGH/venv/bin/activate
-elif [ -f "/datastore/uitchain/venv/bin/activate" ]; then
-    source /datastore/uitchain/venv/bin/activate
-elif [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
+# Đường dẫn venv tự tạo của user trên /datastore
+VENV_DIR="/datastore/uitchain/PNGH/venv"
+
+# Tự động khởi tạo môi trường venv mới hoàn toàn nếu chưa tồn tại
+if [ ! -d "$VENV_DIR" ]; then
+    echo "⚠️ Môi trường venv chưa tồn tại tại $VENV_DIR. Đang tự động khởi tạo mới..."
+    python3 -m venv "$VENV_DIR"
 fi
 
-# Cài đặt / Cập nhật các thư viện phụ thuộc cho môi trường mới
+# Kích hoạt venv
+source "$VENV_DIR/bin/activate"
+
+# Cài đặt / Cập nhật 100% các thư viện phụ thuộc để tránh thiếu thư viện
+pip install --upgrade pip
 pip install -r kaggle/requirements.txt
 
 # Xóa biến môi trường Slurm để tự chọn GPU
