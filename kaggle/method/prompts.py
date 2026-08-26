@@ -1,6 +1,6 @@
 """
 Định nghĩa hệ thống prompt và bộ tạo thông điệp ChatML cho các phương pháp benchmark:
-Direct, CoT và SymCode (Neurosymbolic Equation Solving với SymPy và vòng lặp Verifier).
+Direct, CoT, SymCode, SymExtract, SymPlan, và SymPlanner.
 """
 
 from typing import Dict, List, Optional
@@ -53,7 +53,7 @@ Translate your plan into a complete, self-contained Python script enclosed in a 
 6. Print ONLY the final validated answer in LaTeX boxed format:
    print(f"\\\\boxed{{{final_answer}}}")"""
 
-# Prompt cho Ablation 1 - SymExtract: Only Stage 1 DIVIDE (State Extraction) -> Stage 3 EXECUTE
+# Prompt cho Ablation 1 - SymExtract: Only Stage 1 DIVIDE (State Extraction) -> Stage 2 EXECUTE
 SYMEXTRACT_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist applying the Divide-and-Plan Neurosymbolic framework (Ablation Study: State Extraction Only).
 
 To solve the problem accurately, follow these two structured steps:
@@ -73,7 +73,7 @@ Translate the extracted state components into a complete, self-contained Python 
 5. Print ONLY the final validated answer in LaTeX boxed format:
    print(f"\\\\boxed{{{final_answer}}}")"""
 
-# Prompt cho Ablation 2 - SymPlan: Only Stage 2 PLAN (Strategy Formulation) -> Stage 3 EXECUTE
+# Prompt cho Ablation 2 - SymPlan: Only Stage 2 PLAN (Strategy Formulation) -> Stage 2 EXECUTE
 SYMPLAN_SYSTEM_PROMPT = """You are an expert mathematical reasoner and symbolic computation specialist applying the Divide-and-Plan Neurosymbolic framework (Ablation Study: Planner Only).
 
 To solve the problem accurately, follow these two structured steps:
@@ -350,7 +350,3 @@ def build_symplan_retry_prompt_messages(
             "ensure equations are correctly formulated and solved, and print the result in \\boxed{}."
         )}
     ]
-
-
-
-
