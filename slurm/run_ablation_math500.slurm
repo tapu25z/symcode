@@ -14,10 +14,13 @@ REQUIRED_VRAM=16384  # Quan trọng - Số vRAM cần dùng (để tìm GPU phù
 # =========================================================
 module clear -f
 module load shared python312
-# *** Kích hoạt venv (Sửa đường dẫn theo user)
-if [ -d "/datastore/uitchain/venv" ]; then
+
+# *** Kích hoạt venv tự tạo ***
+if [ -f "/datastore/uitchain/PNGH/venv/bin/activate" ]; then
+    source /datastore/uitchain/PNGH/venv/bin/activate
+elif [ -f "/datastore/uitchain/venv/bin/activate" ]; then
     source /datastore/uitchain/venv/bin/activate
-elif [ -d "venv" ]; then
+elif [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
