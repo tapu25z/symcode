@@ -59,8 +59,9 @@ export WANDB_MODE=offline
 # =========================================================
 # CHẠY CODE
 # =========================================================
+# Chỉ thực thi 2 phương pháp Ablation Study: SymExtract vs SymPlan
 python kaggle/run_benchmark.py \
     --dataset gsm8k \
-    --methods Direct CoT SymCode SymExtract SymPlan SymPlanner \
+    --methods SymExtract SymPlan \
     --output-file result/gsm8k_ablation_results.json \
     --save-every 5
