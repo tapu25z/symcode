@@ -1,4 +1,4 @@
-"""Fail-closed bidirectional semantic verification for the relation graph."""
+"""Fail-closed numeric and symbolic verification for the relation graph."""
 
 from __future__ import annotations
 
@@ -7,17 +7,18 @@ import operator
 import re
 from typing import Any, Dict, Mapping
 
-from .normalizer import normalize_quantity
-
 try:
     import sympy as sp
 except ImportError:  # pragma: no cover
     sp = None
 
 
-OPS = {"=": operator.eq, "==": operator.eq, "!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
-SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\s]+$")
-SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "pi", "e"}
+OPS = {"!=": operator.ne, "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
+NUMERIC_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
+STRUCTURED_OUTPUT_TYPES = {"symbolic", "tuple", "set", "interval", "matrix", "text"}
+SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]\s]+$")
+SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]<>=!\s]+$")
+SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "pi", "e", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
@@ -31,26 +32,90 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _safe_sympify(value: Any, allow_condition: bool = False):
+    if sp is None:
+        raise RuntimeError("sympy is not installed")
+    if isinstance(value, sp.Basic):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not math.isfinite(float(value)):
+            raise ValueError("non-finite numeric value")
+        return sp.sympify(value)
+    text = str(value).strip()
+    pattern = SAFE_CONDITION_RE if allow_condition else SAFE_EXPRESSION_RE
+    if not text or not pattern.fullmatch(text) or "__" in text:
+        raise ValueError("unsafe or unsupported expression")
+    names = set(re.findall(r"\b[A-Za-z_]\w*\b", text))
+    local_dict = {name: sp.Symbol(name) for name in names - SAFE_FUNCTION_NAMES - {"Ropen", "Lopen", "open"}}
+    local_dict.update({
+        "sqrt": sp.sqrt, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
+        "exp": sp.exp, "log": sp.log, "abs": sp.Abs, "min": sp.Min,
+        "max": sp.Max, "pi": sp.pi, "e": sp.E, "oo": sp.oo, "Tuple": sp.Tuple,
+        "FiniteSet": sp.FiniteSet, "Interval": sp.Interval, "Union": sp.Union,
+        "Matrix": sp.Matrix,
+    })
+    parsed = sp.sympify(text, locals=local_dict)
+    if isinstance(parsed, tuple):
+        parsed = sp.Tuple(*parsed)
+    return parsed
+
+
+def _equivalent(left: Any, right: Any) -> bool:
+    try:
+        if left == right:
+            return True
+        if isinstance(left, sp.Set) and isinstance(right, sp.Set):
+            return left.symmetric_difference(right) == sp.EmptySet
+        difference = sp.simplify(left - right)
+        return difference == 0 or bool(getattr(difference, "equals", lambda _: False)(0))
+    except Exception:
+        try:
+            return bool(left.equals(right))
+        except Exception:
+            return False
+
+
 def _declared_symbols(normalized_ir: Mapping[str, Any]) -> set[str]:
     symbols = {str(item) for item in normalized_ir.get("symbols", {}).keys()}
-    symbols.update(str(item.get("symbol")) for item in normalized_ir.get("givens", []) if item.get("symbol"))
     target = normalized_ir.get("target_unknown", {}).get("symbol")
     if target:
         symbols.add(str(target))
     return symbols
 
 
+def _is_valid_canonical(value: Any, output_type: str) -> bool:
+    try:
+        parsed = _safe_sympify(value)
+        if output_type in NUMERIC_OUTPUT_TYPES:
+            return not parsed.free_symbols and bool(parsed.is_number) and _number(parsed.evalf()) is not None
+        return output_type in STRUCTURED_OUTPUT_TYPES
+    except Exception:
+        return False
+
+
 def validate_execution_output(execution: Mapping[str, Any], normalized_ir: Mapping[str, Any]) -> list[str]:
-    """Validate the model program's public JSON contract before semantic checks."""
     runtime_errors = [str(execution[key]) for key in ("error", "execution_error", "stderr") if execution.get(key)]
     if runtime_errors:
         return [f"execution error: {item}" for item in runtime_errors]
     errors: list[str] = []
-    for field in ("answer", "unit", "variables"):
+    required_fields = ("answer", "canonical_answer", "answer_type", "unit", "variables")
+    for field in required_fields:
         if field not in execution:
             errors.append(f"execution output missing field: {field}")
-    if _number(execution.get("answer")) is None:
-        errors.append("execution.answer must be a finite numeric value")
+    expected_type = str(normalized_ir.get("required_output", {}).get("type") or "")
+    if execution.get("answer_type") != expected_type:
+        errors.append(f"execution.answer_type must equal {expected_type!r}, got {execution.get('answer_type')!r}")
+    answer = execution.get("answer")
+    if expected_type in NUMERIC_OUTPUT_TYPES:
+        if not _is_valid_canonical(execution.get("canonical_answer"), expected_type):
+            errors.append("execution.canonical_answer must be a finite numeric expression")
+        if not isinstance(answer, (int, float, str)) or isinstance(answer, bool) or not str(answer).strip():
+            errors.append("execution.answer must be a non-empty numeric display value")
+    elif expected_type in STRUCTURED_OUTPUT_TYPES:
+        if not isinstance(answer, str) or not answer.strip():
+            errors.append("execution.answer must be a non-empty display string")
+        if not isinstance(execution.get("canonical_answer"), str) or not _is_valid_canonical(execution.get("canonical_answer"), expected_type):
+            errors.append("execution.canonical_answer must be a valid symbolic/structured expression")
     variables = execution.get("variables")
     if not isinstance(variables, Mapping):
         errors.append("execution.variables must be an object")
@@ -61,73 +126,68 @@ def validate_execution_output(execution: Mapping[str, Any], normalized_ir: Mappi
                 errors.append(f"execution.variables has invalid symbol: {symbol}")
             elif str(symbol) not in declared:
                 errors.append(f"execution.variables contains undeclared symbol: {symbol}")
-            if _number(value) is None:
-                errors.append(f"execution.variables[{symbol}] must be finite numeric")
+            try:
+                _safe_sympify(value)
+            except Exception:
+                errors.append(f"execution.variables[{symbol}] must be finite numeric or a safe symbolic expression")
     expected_unit = normalized_ir.get("required_output", {}).get("unit")
     actual_unit = execution.get("unit")
     if expected_unit is None:
         if actual_unit not in (None, ""):
-            errors.append(f"execution.unit must be null for a dimensionless target, got {actual_unit!r}")
+            errors.append(f"execution.unit must be null for a unitless target, got {actual_unit!r}")
     elif str(actual_unit or "").strip() != str(expected_unit).strip():
         errors.append(f"execution.unit must equal requested unit {expected_unit!r}, got {actual_unit!r}")
-    if _number(execution.get("answer")) is not None and actual_unit:
-        quantity = normalize_quantity(execution["answer"], str(actual_unit))
-        if quantity.get("status") != "ok":
-            errors.append(f"execution.unit is unsupported: {actual_unit}")
     return errors
 
 
-def _safe_sympify(expr: Any):
-    if sp is None:
-        raise RuntimeError("sympy is not installed")
-    text = str(expr).strip()
-    if not SAFE_EXPRESSION_RE.fullmatch(text) or "__" in text:
-        raise ValueError("unsafe or unsupported expression")
-    names = set(re.findall(r"\b[A-Za-z_]\w*\b", text))
-    local_dict = {name: sp.Symbol(name) for name in names - SAFE_FUNCTION_NAMES}
-    local_dict.update({"sqrt": sp.sqrt, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan, "exp": sp.exp, "log": sp.log, "abs": sp.Abs, "min": sp.Min, "max": sp.Max, "pi": sp.pi, "e": sp.E})
-    return sp.sympify(text, locals=local_dict)
+def _substitutions(env: Mapping[str, Any], exclude: str | None = None) -> dict[Any, Any]:
+    result = {}
+    for name, value in env.items():
+        if name == exclude:
+            continue
+        try:
+            result[sp.Symbol(name)] = _safe_sympify(value)
+        except Exception:
+            continue
+    return result
 
 
-def _evaluate(expr: Any, env: Mapping[str, Any]) -> tuple[float | None, str | None]:
-    if _number(expr) is not None:
-        return _number(expr), None
+def _evaluate(expr: Any, env: Mapping[str, Any]) -> tuple[Any | None, str | None]:
     try:
-        parsed = _safe_sympify(expr)
-        substitutions = {sp.Symbol(name): value for name, value in env.items() if _number(value) is not None}
-        result = parsed.subs(substitutions)
-        return (_number(result), None) if not result.free_symbols else (None, f"unresolved symbols: {sorted(map(str, result.free_symbols))}")
+        return _safe_sympify(expr).subs(_substitutions(env)), None
     except Exception as exc:
         return None, f"cannot parse expression {expr!r}: {exc}"
 
 
 def _reverse_checks(lhs: Any, rhs: Any, op: str, env: Mapping[str, Any]) -> list[Dict[str, Any]]:
-    """Solve an equality for every available symbol and compare the reverse result."""
     if sp is None or op not in {"=", "=="}:
         return []
     try:
         left, right = _safe_sympify(lhs), _safe_sympify(rhs)
     except Exception as exc:
         return [{"status": "unknown", "error": str(exc)}]
-    symbols = sorted((left - right).free_symbols, key=str)
+    try:
+        relation_symbols = (left - right).free_symbols
+    except Exception:
+        return []
     checks: list[Dict[str, Any]] = []
-    for symbol in symbols:
+    for symbol in sorted(relation_symbols, key=str):
         name = str(symbol)
-        candidate = _number(env.get(name))
-        if candidate is None:
+        if name not in env:
             continue
-        known = {sp.Symbol(key): value for key, value in env.items() if key != name and _number(value) is not None}
+        candidate = _safe_sympify(env[name])
+        if candidate == symbol:
+            # A free parameter is an input symbol, not a computed value to audit in reverse.
+            continue
         try:
-            solutions = sp.solve(sp.Eq(left.subs(known), right.subs(known)), symbol)
-            expected = [_number(item) for item in solutions]
-            expected = [item for item in expected if item is not None]
-            if not expected:
-                checks.append({"symbol": name, "status": "unknown", "candidate": candidate, "expected": []})
+            solutions = sp.solve(sp.Eq(left.subs(_substitutions(env, name)), right.subs(_substitutions(env, name))), symbol)
+            if not solutions:
+                checks.append({"symbol": name, "status": "unknown", "candidate": str(candidate), "expected": []})
                 continue
-            passed = any(abs(candidate - value) <= 1e-8 * max(1.0, abs(candidate), abs(value)) for value in expected)
-            checks.append({"symbol": name, "status": "pass" if passed else "fail", "candidate": candidate, "expected": expected})
+            passed = any(_equivalent(candidate, expected) for expected in solutions)
+            checks.append({"symbol": name, "status": "pass" if passed else "fail", "candidate": str(candidate), "expected": [str(item) for item in solutions]})
         except Exception as exc:
-            checks.append({"symbol": name, "status": "unknown", "candidate": candidate, "expected": [], "error": str(exc)})
+            checks.append({"symbol": name, "status": "unknown", "candidate": str(candidate), "expected": [], "error": str(exc)})
     return checks
 
 
@@ -136,21 +196,15 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
     output_errors = validate_execution_output(execution, normalized_ir)
     env: Dict[str, Any] = {}
     for given in normalized_ir.get("givens", []):
-        quantity = given.get("quantity", {})
-        if _number(quantity.get("canonical_value")) is not None:
-            env[str(given.get("symbol"))] = quantity["canonical_value"]
+        value = given.get("quantity", {}).get("canonical_value")
+        if value is not None:
+            env[str(given.get("symbol"))] = value
     variables = execution.get("variables") if isinstance(execution.get("variables"), Mapping) else {}
-    for key, value in variables.items():
-        if _number(value) is not None:
-            env[str(key)] = float(value)
-    answer = execution.get("answer")
-    answer_unit = execution.get("unit")
-    if _number(answer) is not None and answer_unit:
-        quantity = normalize_quantity(answer, str(answer_unit))
-        answer = quantity.get("canonical_value") if quantity.get("status") == "ok" else None
+    env.update({str(key): value for key, value in variables.items()})
+    canonical_answer = execution.get("canonical_answer")
     target_symbol = str(normalized_ir.get("target_unknown", {}).get("symbol") or "answer")
-    if _number(answer) is not None:
-        env[target_symbol] = float(answer)
+    if _is_valid_canonical(canonical_answer, str(normalized_ir.get("required_output", {}).get("type") or "")):
+        env[target_symbol] = canonical_answer
 
     relations = list(normalized_ir.get("relations", []))
     checks: list[Dict[str, Any]] = []
@@ -158,25 +212,49 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
     if not relations:
         output_errors.append("IR has no verifiable relations")
     for index, relation in enumerate(relations):
-        lhs, rhs = relation.get("lhs"), relation.get("rhs")
-        op = relation.get("operator", "=")
+        lhs, rhs, op = relation.get("lhs"), relation.get("rhs"), relation.get("operator", "=")
         left_value, left_error = _evaluate(lhs, env)
         right_value, right_error = _evaluate(rhs, env)
         status, residual = "unknown", None
         if left_value is not None and right_value is not None:
-            residual = left_value - right_value
-            passed = OPS.get(op, operator.eq)(left_value, right_value) if op not in {"=", "=="} else abs(residual) <= 1e-8 * max(1.0, abs(left_value), abs(right_value))
+            if op in {"=", "=="}:
+                passed = _equivalent(left_value, right_value)
+                try:
+                    residual = str(sp.simplify(left_value - right_value))
+                except Exception:
+                    residual = None
+            else:
+                left_number, right_number = _number(left_value), _number(right_value)
+                passed = left_number is not None and right_number is not None and OPS[op](left_number, right_number)
+                residual = None if left_number is None or right_number is None else left_number - right_number
             status = "pass" if passed else "fail"
         reverse = _reverse_checks(lhs, rhs, op, env)
-        reverse_failures = [item for item in reverse if item.get("status") == "fail"]
         check = {"id": relation.get("id", f"relation_{index}"), "lhs": lhs, "rhs": rhs, "operator": op, "status": status, "residual": residual, "forward_error": left_error or right_error, "reverse": reverse}
         checks.append(check)
-        if status == "fail" or reverse_failures:
+        if status == "fail" or any(item.get("status") == "fail" for item in reverse):
             failures.append(check)
-    missing_target = _number(answer) is None
+    condition_checks: list[Dict[str, Any]] = []
+    condition_failures: list[Dict[str, Any]] = []
+    for index, condition in enumerate(normalized_ir.get("conditions", [])):
+        expr = condition.get("expr")
+        try:
+            evaluated = _safe_sympify(expr, allow_condition=True).subs(_substitutions(env))
+            if evaluated in (True, sp.true):
+                status, error = "pass", None
+            elif evaluated in (False, sp.false):
+                status, error = "fail", None
+            else:
+                status, error = "unknown", f"unresolved condition: {evaluated}"
+        except Exception as exc:
+            status, error = "unknown", str(exc)
+        check = {"id": f"condition_{index}", "kind": condition.get("kind"), "expr": expr, "status": status, "error": error}
+        condition_checks.append(check)
+        if status == "fail":
+            condition_failures.append(check)
+    missing_target = target_symbol not in env
     unknown_checks = [item for item in checks if item["status"] == "unknown"]
-    reverse_unknown = [item for check in checks for item in check["reverse"] if item.get("status") == "unknown"]
-    overall = "fail" if failures or output_errors else ("unknown" if unknown_checks or reverse_unknown or missing_target else "pass")
+    unknown_conditions = [item for item in condition_checks if item["status"] == "unknown"]
+    overall = "fail" if failures or condition_failures or output_errors else ("unknown" if unknown_checks or unknown_conditions or missing_target else "pass")
     feedback = [f"Output contract error: {error}" for error in output_errors]
     feedback.extend(f"Relation {item['id']} fails: {item['lhs']} {item['operator']} {item['rhs']} (residual={item['residual']})" for item in failures)
     for check in checks:
@@ -184,6 +262,8 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
             if reverse.get("status") == "fail":
                 feedback.append(f"Reverse check {check['id']} fails for {reverse['symbol']}: candidate={reverse['candidate']}, expected={reverse['expected']}")
     feedback.extend(f"Relation {item['id']} cannot be evaluated: {item['forward_error'] or 'missing variable/value'}" for item in unknown_checks)
+    feedback.extend(f"Condition {item['expr']} fails" for item in condition_failures)
+    feedback.extend(f"Condition {item['expr']} cannot be evaluated: {item['error']}" for item in unknown_conditions)
     if missing_target:
-        feedback.append(f"Missing finite target answer for symbol {target_symbol}")
-    return {"status": overall, "environment": env, "checks": checks, "failures": failures, "unknown": unknown_checks, "output_errors": output_errors, "feedback": feedback}
+        feedback.append(f"Missing canonical target answer for symbol {target_symbol}")
+    return {"status": overall, "environment": {key: str(value) for key, value in env.items()}, "checks": checks, "condition_checks": condition_checks, "failures": failures, "unknown": unknown_checks, "output_errors": output_errors, "feedback": feedback}

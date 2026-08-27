@@ -25,19 +25,23 @@ def valid_ir():
     }
 
 
+def numeric_execution(answer, variables=None):
+    return {"answer": answer, "canonical_answer": answer, "answer_type": "number", "unit": None, "variables": variables or {}}
+
+
 class ContractTests(unittest.TestCase):
     def test_valid_ir_and_answer_pass(self):
         ir = valid_ir()
         self.assertEqual(validate_ir(ir), [])
         normalized = normalize_problem_ir(ir)
         self.assertEqual(validate_normalized_ir(normalized), [])
-        self.assertEqual(verify_bidirectional(normalized, {"answer": 10, "unit": None, "variables": {}})["status"], "pass")
+        self.assertEqual(verify_bidirectional(normalized, numeric_execution(10))["status"], "pass")
 
     def test_empty_relation_graph_never_passes(self):
         ir = valid_ir()
         ir["relations"] = []
         self.assertTrue(any("at least one relation" in error for error in validate_ir(ir)))
-        self.assertEqual(verify_bidirectional(normalize_problem_ir(ir), {"answer": 999, "unit": None, "variables": {}})["status"], "fail")
+        self.assertEqual(verify_bidirectional(normalize_problem_ir(ir), numeric_execution(999))["status"], "fail")
 
     def test_missing_metadata_and_unknown_symbol_are_rejected(self):
         ir = valid_ir()
@@ -48,13 +52,13 @@ class ContractTests(unittest.TestCase):
 
     def test_output_contract_rejects_missing_variables_and_nan(self):
         normalized = normalize_problem_ir(valid_ir())
-        missing = verify_bidirectional(normalized, {"answer": 10, "unit": None})
-        nan = verify_bidirectional(normalized, {"answer": math.nan, "unit": None, "variables": {}})
+        missing = verify_bidirectional(normalized, {"answer": 10, "canonical_answer": 10, "answer_type": "number", "unit": None})
+        nan = verify_bidirectional(normalized, numeric_execution(math.nan))
         self.assertEqual(missing["status"], "fail")
         self.assertEqual(nan["status"], "fail")
 
     def test_reverse_check_rejects_wrong_candidate(self):
-        result = verify_bidirectional(normalize_problem_ir(valid_ir()), {"answer": 11, "unit": None, "variables": {}})
+        result = verify_bidirectional(normalize_problem_ir(valid_ir()), numeric_execution(11))
         self.assertEqual(result["status"], "fail")
         self.assertTrue(any(item["status"] == "fail" for item in result["checks"][0]["reverse"]))
 
@@ -63,6 +67,41 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("source", payload["relations"][0])
         self.assertNotIn("evidence", payload["relations"][0])
         self.assertNotIn("raw", payload["givens"][0])
+
+    def test_symbolic_math500_style_answer(self):
+        ir = {
+            "target_unknown": {"name": "sum", "symbol": "S", "unit": None, "dimension": "symbolic"},
+            "givens": [
+                {"name": "p", "symbol": "p", "value": "p", "unit": None, "role": "parameter", "source": "named p"},
+                {"name": "q", "symbol": "q", "value": "q", "unit": None, "role": "parameter", "source": "named q"},
+            ],
+            "relations": [{"id": "sum", "kind": "definition", "lhs": "S", "rhs": "p-q", "operator": "=", "unit": None, "source": "reindex", "evidence": "in terms of p and q", "confidence": 1.0}],
+            "conditions": [],
+            "required_output": {"type": "symbolic", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        self.assertEqual(validate_ir(ir), [])
+        normalized = normalize_problem_ir(ir)
+        result = verify_bidirectional(normalized, {"answer": "p - q", "canonical_answer": "p-q", "answer_type": "symbolic", "unit": None, "variables": {}})
+        self.assertEqual(result["status"], "pass", result)
+
+    def test_tuple_math500_style_answer(self):
+        ir = {
+            "target_unknown": {"name": "pair", "symbol": "P", "unit": None, "dimension": "tuple"},
+            "givens": [
+                {"name": "x", "symbol": "x", "value": 0, "unit": None, "role": "constant", "source": "(0,3)"},
+                {"name": "y", "symbol": "y", "value": 3, "unit": None, "role": "constant", "source": "(0,3)"},
+            ],
+            "relations": [
+                {"id": "radius", "kind": "definition", "lhs": "r", "rhs": "sqrt(x**2+y**2)", "operator": "=", "unit": None, "source": "polar", "evidence": "radius", "confidence": 1.0},
+                {"id": "angle", "kind": "definition", "lhs": "theta", "rhs": "pi/2", "operator": "=", "unit": None, "source": "polar", "evidence": "angle", "confidence": 1.0},
+                {"id": "pair", "kind": "definition", "lhs": "P", "rhs": "Tuple(r,theta)", "operator": "=", "unit": None, "source": "polar", "evidence": "requested pair", "confidence": 1.0},
+            ],
+            "conditions": [{"kind": "positive", "expr": "r>0", "source": "r>0"}, {"kind": "range", "expr": "theta<2*pi", "source": "theta range"}],
+            "required_output": {"type": "tuple", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        self.assertEqual(validate_ir(ir), [])
+        result = verify_bidirectional(normalize_problem_ir(ir), {"answer": "(3, pi/2)", "canonical_answer": "Tuple(3,pi/2)", "answer_type": "tuple", "unit": None, "variables": {"r": 3, "theta": "pi/2"}})
+        self.assertEqual(result["status"], "pass", result)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@ Pipeline mới dùng hợp đồng dữ liệu cố định:
 
 Pipeline chạy theo nguyên tắc fail-closed: IR thiếu relation/metadata, symbol chưa khai báo, unit không hỗ trợ hoặc output code sai schema sẽ không được coi là hợp lệ. `source` và `evidence` chỉ dùng để audit extractor và bị loại khỏi computational payload. Intermediate variable chỉ được khai báo bởi vế trái dạng symbol của relation `kind="definition"` và phải xuất hiện trong `variables` nếu verifier cần nó để đánh giá graph.
 
+Math500 được hỗ trợ ở mức numeric, exact fraction, symbolic expression, tuple, finite set và interval. Output tách `answer` (chuỗi dùng để chấm với dataset) khỏi `canonical_answer` (biểu thức SymPy dùng cho verifier), tránh ép mọi bài về số thực.
+
 ## Chạy thử tối thiểu
 
 ```python
@@ -25,10 +27,25 @@ pipeline = SymPlannerIRPipeline(llm_call=my_llm, execute_code=my_sandbox)
 result = pipeline.run(question)
 ```
 
-`my_llm(messages)` trả về text model; `my_sandbox(code)` trả về dict tối thiểu `{"answer": ..., "variables": {...}}`.
+`my_llm(messages)` trả về text model; `my_sandbox(code)` trả về dict theo contract đầy đủ bên dưới.
 
-## Lộ trình tích hợp
+Contract sandbox hiện tại là một JSON line gồm `answer`, `canonical_answer`, `answer_type`, `unit`, `variables`. Adapter trong `new_method/adapters.py` chuyển output của sandbox cũ sang contract này.
 
-1. Nối `llm_call` với adapter trong `legacy/task2/llm.py` hoặc model hiện tại.
-2. Nối `execute_code` với sandbox hiện tại, giữ output JSON bắt buộc.
-3. Chạy ablation: baseline, IR, IR+verify, IR+verify+repair trên cùng seed/dataset.
+## Benchmark và ablation
+
+Runner mới dùng cùng `Qwen/Qwen2.5-Coder-7B-Instruct`, dataset loader, exact-match và result schema với benchmark cũ:
+
+```powershell
+python new-method/run_benchmark.py --dataset math500 --num-samples 50 --methods SymPlanner IR-Codegen IR-BiVerify IR-Full
+```
+
+- `SymPlanner`: baseline cũ.
+- `IR-Codegen`: structured IR + normalization + codegen, chỉ kiểm tra output contract.
+- `IR-BiVerify`: thêm bidirectional verifier, không code repair.
+- `IR-Full`: verifier và targeted repair đầy đủ.
+
+Import hoặc chạy `--help` không tải model. Model chỉ được khởi tạo khi `main()` bắt đầu một benchmark thật.
+
+## Trạng thái tích hợp
+
+Adapter model, sandbox, evaluator/checkpoint và runner ablation đã có. Model thật chưa được chạy; trước full benchmark nên chạy smoke 3–5 mẫu cho từng dataset để xác nhận VRAM, context length và output compliance của model.

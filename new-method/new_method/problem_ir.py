@@ -23,11 +23,12 @@ class ProblemIR(TypedDict, total=False):
 REQUIRED_KEYS = ("target_unknown", "givens", "relations", "conditions", "required_output")
 ALLOWED_RELATION_KINDS = {"equation", "inequality", "definition", "conservation", "proportion", "ordering"}
 ALLOWED_ROLES = {"constant", "variable", "measurement", "derived", "parameter"}
-ALLOWED_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
+ALLOWED_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage", "symbolic", "tuple", "set", "interval", "matrix", "text"}
 ALLOWED_PRECISIONS = {"exact", "integer", "decimal", "significant_figures"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
-SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\s]+$")
-ALLOWED_MATH_NAMES = {"pi", "e", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max"}
+SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]\s]+$")
+SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]<>=!\s]+$")
+ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 REQUIRED_RELATION_FIELDS = {"id", "kind", "lhs", "rhs", "operator", "unit", "source", "evidence", "confidence"}
 REQUIRED_GIVEN_FIELDS = {"name", "symbol", "value", "unit", "role", "source"}
 REQUIRED_CONDITION_FIELDS = {"kind", "expr", "source"}
@@ -40,12 +41,13 @@ def _expression_symbols(expression: Any) -> set[str]:
     }
 
 
-def _validate_expression(expression: Any, path: str, declared_symbols: set[str]) -> List[str]:
+def _validate_expression(expression: Any, path: str, declared_symbols: set[str], allow_comparison: bool = False) -> List[str]:
     text = str(expression or "").strip()
     errors: List[str] = []
     if not text:
         return [f"{path} must be a non-empty expression"]
-    if not SAFE_EXPRESSION_RE.fullmatch(text) or "__" in text:
+    pattern = SAFE_CONDITION_RE if allow_comparison else SAFE_EXPRESSION_RE
+    if not pattern.fullmatch(text) or "__" in text:
         errors.append(f"{path} contains unsupported characters")
     unknown = sorted(_expression_symbols(text) - declared_symbols)
     if unknown:
@@ -207,7 +209,7 @@ def validate_ir(ir: Mapping[str, Any]) -> List[str]:
             errors.append(f"condition[{index}].kind must be non-empty")
         if not str(condition.get("source") or "").strip():
             errors.append(f"condition[{index}].source must be non-empty")
-        errors.extend(_validate_expression(condition.get("expr"), f"condition[{index}].expr", declared_symbols))
+        errors.extend(_validate_expression(condition.get("expr"), f"condition[{index}].expr", declared_symbols, allow_comparison=True))
     return errors
 
 

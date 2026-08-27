@@ -164,6 +164,9 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
         symbol = str(item.get("symbol") or item.get("name") or f"given_{index}")
         item["symbol"] = re.sub(r"\W+", "_", symbol).strip("_") or f"given_{index}"
         item["quantity"] = normalize_quantity(item.get("value", item.get("expression")), item.get("unit"))
+        if item["quantity"].get("status") == "non_numeric" and item.get("role") in {"parameter", "variable"}:
+            symbolic_value = str(item.get("value") or item["symbol"]).strip()
+            item["quantity"] = {"raw": item.get("value"), "value": symbolic_value, "unit": item.get("unit"), "canonical_value": symbolic_value, "canonical_unit": item.get("unit"), "status": "symbolic"}
         symbols[item["symbol"]] = item["symbol"]
         givens.append(item)
     normalized["givens"] = givens
@@ -201,6 +204,8 @@ def validate_normalized_ir(normalized_ir: Mapping[str, Any]) -> list[str]:
         quantity = given.get("quantity", {})
         if quantity.get("status") == "unknown_unit":
             errors.append(f"given[{index}] has unsupported unit: {quantity.get('unit')}")
+        elif quantity.get("status") == "symbolic" and given.get("role") in {"parameter", "variable"}:
+            pass
         elif quantity.get("canonical_value") is None:
             errors.append(f"given[{index}] is not a concrete numeric quantity")
     for index, relation in enumerate(normalized_ir.get("relations", [])):
