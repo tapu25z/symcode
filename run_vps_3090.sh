@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
-# Script thực thi Ablation Study trên máy VPS trang bị GPU RTX 3090 (24GB vRAM)
-# Chạy trực tiếp (Không sử dụng Slurm job scheduler)
+# Script thực thi Ablation Study 4 luồng song song trên VPS GPU RTX 3090/4090
+# (Tận dụng 100% vRAM & GPU TFLOPS)
 # ==============================================================================
 
 set -e
@@ -11,7 +11,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 echo "=========================================================================="
-echo "🚀 KHỞI ĐỘNG THỰC NGHIỆM ABLATION STUDY (SymExtract vs SymPlan) TRÊN VPS 3090"
+echo "🚀 KHỞI ĐỘNG 4 LUỒNG SONG SONG ABLATION STUDY (SymExtract & SymPlan)"
 echo "=========================================================================="
 
 # 2. Tự động khởi tạo môi trường Python venv nếu chưa tồn tại
@@ -28,33 +28,45 @@ echo "📦 Đang kiểm tra và cài đặt các thư viện từ kaggle/require
 pip install --upgrade pip
 pip install -r kaggle/requirements.txt
 
-# 4. Đặt GPU mặc định là GPU 0 (RTX 3090)
+# 4. Cấu hình GPU & thư mục
 export CUDA_VISIBLE_DEVICES=0
 export WANDB_MODE=offline
 
-# Đảm bảo thư mục kết quả tồn tại
-mkdir -p result
+mkdir -p result logs
 
-# 5. Thực thi Ablation Study trên MATH-500
 echo ""
-echo "🔥 [1/2] Đang chạy Ablation Study trên tập dữ liệu MATH-500..."
+echo "🔥 Đang kích hoạt 4 tiến trình Python chạy song song trên GPU 0..."
+
+# Kích hoạt 4 luồng song song, đẩy log ra các file riêng để tránh đè tqdm
 python kaggle/run_benchmark.py \
     --dataset math500 \
-    --methods SymExtract SymPlan \
-    --output-file result/math500_ablation_results.json \
-    --save-every 5
+    --methods SymExtract \
+    --output-file result/math500_extract.json \
+    --save-every 5 > logs/math500_extract.log 2>&1 &
 
-# 6. Thực thi Ablation Study trên GSM8K
-echo ""
-echo "🔥 [2/2] Đang chạy Ablation Study trên tập dữ liệu GSM8K..."
+python kaggle/run_benchmark.py \
+    --dataset math500 \
+    --methods SymPlan \
+    --output-file result/math500_plan.json \
+    --save-every 5 > logs/math500_plan.log 2>&1 &
+
 python kaggle/run_benchmark.py \
     --dataset gsm8k \
-    --methods SymExtract SymPlan \
-    --output-file result/gsm8k_ablation_results.json \
-    --save-every 5
+    --methods SymExtract \
+    --output-file result/gsm8k_extract.json \
+    --save-every 5 > logs/gsm8k_extract.log 2>&1 &
 
-echo ""
+python kaggle/run_benchmark.py \
+    --dataset gsm8k \
+    --methods SymPlan \
+    --output-file result/gsm8k_plan.json \
+    --save-every 5 > logs/gsm8k_plan.log 2>&1 &
+
+echo "✅ Cả 4 tiến trình đã được kích hoạt thành công!"
+echo "📌 Xem các tiến trình Python đang chạy: ps aux | grep python"
+echo "📌 Theo dõi log từng luồng: tail -f logs/math500_extract.log"
 echo "=========================================================================="
-echo "🎉 HOÀN TẤT TOÀN BỘ THỰC NGHIỆM ABLATION STUDY TRÊN VPS 3090!"
-echo "Kết quả đã được lưu tại thư mục result/"
-echo "=========================================================================="
+
+# Chờ cả 4 tiến trình hoàn tất
+wait
+echo "🎉 HOÀN TẤT TOÀN BỘ 4 LUỒNG ABLATION STUDY!"
