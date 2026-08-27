@@ -54,6 +54,51 @@ def extract_boxed_content(text: str) -> Optional[str]:
     return None
 
 
+def extract_answer_fallback(text: str) -> Optional[str]:
+    """
+    Trích xuất đáp án toàn diện cho CoT/Direct:
+    1. Ưu tiên lấy nội dung trong \\boxed{...}.
+    2. Nếu không có, tìm kiếm các mẫu kết luận chuẩn:
+       'the answer is ...', 'the final answer is ...', '#### ...'.
+    """
+    if not text or not isinstance(text, str):
+        return None
+        
+    text = remove_thinking_tags(text)
+    boxed = extract_boxed_content(text)
+    if boxed is not None:
+        return boxed
+
+    # Các mẫu kết luận phổ biến
+    conclusion_patterns = [
+        r"(?:the\s+final\s+answer\s+is|the\s+answer\s+is|is\s+equal\s+to|equals|is\s+therefore)\s*[:=]?\s*([^\n\r]+)",
+        r"####\s*([^\n\r]+)"
+    ]
+    for pat in conclusion_patterns:
+        matches = list(re.finditer(pat, text, flags=re.IGNORECASE))
+        if matches:
+            cand = matches[-1].group(1).strip()
+            cand = cand.replace("$", "").rstrip(".").strip()
+            # Lọc bỏ các từ thừa
+            sub_m = re.search(r"(-?\d+(?:\.\d+)?(?:/\d+)?|[a-zA-Z]+)", cand)
+            if sub_m:
+                return sub_m.group(0).strip()
+            return cand
+
+    return None
+
+
+def remove_thinking_tags(text: str) -> str:
+    """Loại bỏ các thẻ <think>...</think> của các mô hình reasoning."""
+    text = str(text or "")
+    if "<think>" in text and "</think>" not in text:
+        return text.split("<think>", 1)[0].strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    if "</think>" in text:
+        text = text.split("</think>", 1)[-1].strip()
+    return text.strip()
+
+
 def extract_python_code(text: str) -> str:
     """
     Trích xuất mã nguồn Python từ khối markdown (```python ... ```).
@@ -61,6 +106,8 @@ def extract_python_code(text: str) -> str:
     """
     if not text or not isinstance(text, str):
         return ""
+
+    text = remove_thinking_tags(text)
 
     pattern = r"```(?:python|py)?\s*(.*?)\s*```"
     matches = re.findall(pattern, text, flags=re.DOTALL | re.IGNORECASE)
@@ -251,10 +298,11 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     s = re.sub(r"\\(?:text|mathrm|mathbf|textbf|textit|operatorname|mbox)\s*\{([^}]+)\}", r"\1", s)
     s = re.sub(r"\\(?:quad|qquad|,|;|!|\s)", " ", s)
     
-    s = re.sub(r"\^\s*\{\s*\\(?:circ|degree)\s*\}", "deg", s)
-    s = re.sub(r"\^\s*\\(?:circ|degree)\b", "deg", s)
-    s = re.sub(r"\\(?:degree|circ)\b", "deg", s)
-    s = re.sub(r"\^deg\b", "deg", s)
+    s = re.sub(r"\^\s*\{\s*\\?(?:circ|degree)\s*\}", "", s)
+    s = re.sub(r"\^\s*\\?(?:circ|degree)\b", "", s)
+    s = re.sub(r"\\(?:degree|circ)\b", "", s)
+    s = re.sub(r"\^deg\b", "", s)
+    s = re.sub(r"\bdeg\b", "", s)
     s = re.sub(r"\\pi\b", "pi", s)
     
     s = s.replace(r"\{", "{").replace(r"\}", "}")
@@ -266,9 +314,13 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     
     s = s.replace(r"\cdot", "*").replace(r"\times", "*").replace(r"\div", "/")
     
+    # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 -> 1200)
     s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
     
     s = re.sub(r"\s+", "", s)
+    
+    # Loại bỏ đơn vị đo phổ biến ở cuối chuỗi nếu phía trước là số
+    s = re.sub(r"(?<=\d)(?:hours?|hrs?|minutes?|mins?|seconds?|secs?|miles?|mph|meters?|cm|km|dollars?|cents?|eggs?|days?|weeks?|years?)$", "", s, flags=re.IGNORECASE)
     
     if s.endswith(".") and not re.search(r"\d\.\d", s):
         s = s[:-1].strip()

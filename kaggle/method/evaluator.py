@@ -23,10 +23,15 @@ except ImportError:
 from .prompts import (
     build_prompt_messages,
     build_retry_prompt_messages,
-    build_symplanner_retry_prompt_messages
+    build_symplanner_retry_prompt_messages,
+    build_planner_messages,
+    clean_planner_note,
+    build_symplanner_codegen_messages,
+    build_symplanner_debug_messages
 )
 from .extractor import (
     extract_boxed_content,
+    extract_answer_fallback,
     extract_python_code,
     extract_symplanner_code,
     extract_ground_truth,
@@ -200,7 +205,7 @@ def evaluate_direct_or_cot(
         messages = build_prompt_messages(method_name, question)
         
         raw_output, token_count = llm.generate_chat(messages)
-        predicted_ans = extract_boxed_content(raw_output)
+        predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
         results.append({
@@ -279,6 +284,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
+                raw_output, token_count = llm.generate_chat(messages)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -289,8 +295,8 @@ def evaluate_symcode(
                     verification_status=verif_status,
                     verification_feedback=verif_feedback
                 )
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False)
             
-            raw_output, token_count = llm.generate_chat(messages)
             total_tokens += token_count
             raw_outputs.append(raw_output)
             
@@ -298,6 +304,9 @@ def evaluate_symcode(
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
             
+            if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+                candidate_ans = None
+
             # Kiểm chứng độc lập không dùng ground truth
             if exec_res["status"] == "success" and candidate_ans is not None:
                 verif_status, verif_feedback = verify_candidate_answer(
@@ -328,6 +337,13 @@ def evaluate_symcode(
             error_tb = exec_res.get("traceback")
 
         final_predicted = candidate_ans
+        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+            for out in reversed(raw_outputs):
+                b = extract_boxed_content(out)
+                if b is not None and b.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                    final_predicted = b
+                    break
+
         is_correct = check_exact_match(final_predicted, gt)
 
         results.append({
@@ -375,10 +391,11 @@ def evaluate_symplanner(
     save_every: int = 5
 ) -> List[Dict[str, Any]]:
     """
-    Thực thi đánh giá phương pháp SymPlanner (Divide-and-Plan Neurosymbolic Synthesis với Guarded Repair & AST Sanitizer).
-    Quy trình 3 giai đoạn: Stage 1 (DIVIDE) -> Stage 2 (PLAN) -> Stage 3 (EXECUTE) -> Guarded Repair.
-    Cung cấp phản hồi lỗi thực thi (Traceback) và chẩn đoán toán học độc lập (Verifier Diagnosis).
-    Bộ kiểm chứng hoạt động độc lập 100%, không sử dụng ground truth.
+    Thực thi đánh giá phương pháp SymPlanner theo kiến trúc Decoupled Multi-Turn Pipeline:
+    - Turn 1 (Planner Phase): Phân tích & Lập kế hoạch ngắn gọn (<120 từ / JSON), không sinh code.
+    - Turn 2 (Pure Codegen Phase): Nhận Đề bài + Kế hoạch, sinh 100% mã nguồn Python/SymPy thực thi thuần túy.
+    - Turn 3 (Execution & Verifier): Chạy trong Sandbox, kiểm chứng toán học độc lập (không dùng ground truth).
+    - Turn 4 (Targeted Debug Repair): Sửa lỗi trực tiếp vào code nếu gặp lỗi Runtime/Cú pháp/Free Symbols/Verifier.
     """
     ckpt = _load_existing_checkpoint(checkpoint_file, "SymPlanner")
     results = ckpt["method_results"]
@@ -387,7 +404,7 @@ def evaluate_symplanner(
     if completed_problems:
         print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
 
-    print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (So lan retry toi da: {max_retries}) ====================")
+    print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Decoupled Multi-Turn Pipeline, Retries: {max_retries}) ====================")
     
     new_evaluated = 0
     for item in tqdm(dataset, desc="Danh gia SymPlanner"):
@@ -398,58 +415,95 @@ def evaluate_symplanner(
         gt = extract_ground_truth(item.get("raw") or item["answer"])
         
         total_tokens = 0
-        attempt = 0
         attempt_history = []
         raw_outputs = []
         
-        prev_code = ""
-        error_tb = None
-        candidate_ans = None
-        verif_status = "fail"
-        verif_feedback = None
-        exec_res = {"status": "error", "traceback": None, "extracted_answer": None, "stdout": ""}
-        extracted_code = ""
+        # -------------------------------------------------------------
+        # TURN 1: PLANNER PHASE (Chỉ lập kế hoạch ngắn gọn, không sinh code)
+        # -------------------------------------------------------------
+        planner_messages = build_planner_messages(question)
+        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=384)
+        total_tokens += plan_tokens
+        raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
+        planner_note = clean_planner_note(raw_plan)
 
-        while attempt <= max_retries:
+        # -------------------------------------------------------------
+        # TURN 2: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
+        # -------------------------------------------------------------
+        codegen_messages = build_symplanner_codegen_messages(question, planner_note)
+        raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False)
+        total_tokens += code_tokens
+        raw_outputs.append(f"### Turn 2 (Codegen Initial):\n{raw_code_output}")
+        
+        extracted_code = extract_python_code(raw_code_output)
+        exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+        candidate_ans = exec_res.get("extracted_answer")
+        
+        if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+            candidate_ans = None
+
+        if exec_res["status"] == "success" and candidate_ans is not None:
+            verif_status, verif_feedback = verify_candidate_answer(
+                question, candidate_ans, extracted_code, exec_res.get("stdout")
+            )
+        else:
+            verif_status = "fail"
+            verif_feedback = exec_res.get("traceback") or "Mã nguồn không in ra kết quả định dạng \\boxed{} hợp lệ."
+            
+        attempt_record = {
+            "attempt": 1,
+            "phase": "codegen",
+            "code": extracted_code,
+            "generated_tokens": code_tokens,
+            "execution_status": exec_res.get("status"),
+            "candidate_answer": candidate_ans,
+            "verification_status": verif_status,
+            "verification_feedback": verif_feedback,
+            "stdout": exec_res.get("stdout", ""),
+            "traceback": exec_res.get("traceback")
+        }
+        attempt_history.append(attempt_record)
+
+        attempt = 1
+        # -------------------------------------------------------------
+        # TURN 3: TARGETED DEBUG REPAIR LOOP (Nếu chạy lỗi hoặc Verifier fail)
+        # -------------------------------------------------------------
+        while attempt <= max_retries and (exec_res["status"] != "success" or candidate_ans is None or verif_status == "fail"):
             attempt += 1
-            if attempt == 1:
-                messages = build_prompt_messages("SymPlanner", question)
-            else:
-                messages = build_symplanner_retry_prompt_messages(
-                    question=question,
-                    prev_code=prev_code,
-                    execution_status=exec_res.get("status", "error"),
-                    error_tb=error_tb,
-                    candidate_answer=candidate_ans,
-                    verification_status=verif_status,
-                    verification_feedback=verif_feedback
-                )
+            debug_messages = build_symplanner_debug_messages(
+                question=question,
+                bad_code=extracted_code,
+                execution_status=exec_res.get("status", "error"),
+                error_tb=exec_res.get("traceback"),
+                candidate_answer=candidate_ans,
+                verification_status=verif_status,
+                verification_feedback=verif_feedback,
+                planner_note=planner_note
+            )
+            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
+            total_tokens += dbg_tokens
+            raw_outputs.append(f"### Turn 3 (Debug Retry {attempt}):\n{raw_debug_output}")
             
-            raw_output, token_count = llm.generate_chat(messages)
-            total_tokens += token_count
-            raw_outputs.append(raw_output)
-            
-            extracted_code = extract_symplanner_code(raw_output)
+            extracted_code = extract_python_code(raw_debug_output)
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
             
-            # Xử lý trường hợp code in ra None/Invalid/rỗng
             if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
                 candidate_ans = None
 
-            # Kiểm chứng độc lập không dùng ground truth
             if exec_res["status"] == "success" and candidate_ans is not None:
                 verif_status, verif_feedback = verify_candidate_answer(
                     question, candidate_ans, extracted_code, exec_res.get("stdout")
                 )
             else:
                 verif_status = "fail"
-                verif_feedback = exec_res.get("traceback") or "Mã nguồn in ra 'None'/'Invalid' hoặc không in ra kết quả định dạng \\boxed{}."
+                verif_feedback = exec_res.get("traceback") or "Mã nguồn sửa đổi không in ra kết quả định dạng \\boxed{}."
                 
-            attempt_record = {
+            retry_record = {
                 "attempt": attempt,
+                "phase": "debug_repair",
                 "code": extracted_code,
-                "generated_tokens": token_count,
+                "generated_tokens": dbg_tokens,
                 "execution_status": exec_res.get("status"),
                 "candidate_answer": candidate_ans,
                 "verification_status": verif_status,
@@ -457,23 +511,20 @@ def evaluate_symplanner(
                 "stdout": exec_res.get("stdout", ""),
                 "traceback": exec_res.get("traceback")
             }
-            attempt_history.append(attempt_record)
+            attempt_history.append(retry_record)
             
-            # Dừng nếu code chạy thành công VÀ vượt qua kiểm chứng (không bị fail)
             if exec_res["status"] == "success" and candidate_ans is not None and verif_status != "fail":
                 break
-                
-            prev_code = extracted_code
-            error_tb = exec_res.get("traceback")
 
+        # -------------------------------------------------------------
+        # FINAL ANSWER EXTRACTION & ACCURACY EVALUATION
+        # -------------------------------------------------------------
         final_predicted = candidate_ans
-        # Cơ chế Fallback cứu cánh: nếu code execution không cho ra đáp án hợp lệ, lấy từ khối \boxed{} của bước phân tích CoT
         if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
-            for out in reversed(raw_outputs):
-                cot_boxed = extract_boxed_content(out)
-                if cot_boxed is not None and cot_boxed.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
-                    final_predicted = cot_boxed.strip()
-                    break
+            # Fallback an toàn: trích xuất từ planner note nếu có
+            box_match = extract_boxed_content(planner_note)
+            if box_match:
+                final_predicted = box_match
 
         is_correct = check_exact_match(final_predicted, gt)
 
@@ -493,6 +544,7 @@ def evaluate_symplanner(
             "stdout": exec_res.get("stdout", ""),
             "traceback": exec_res.get("traceback"),
             "extracted_code": extracted_code,
+            "planner_note": planner_note,
             "raw_output": raw_outputs[-1] if raw_outputs else "",
             "raw_outputs": raw_outputs,
             "attempt_history": attempt_history

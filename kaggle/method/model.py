@@ -91,27 +91,41 @@ class LLMRunner:
         self.model.eval()
         print(f"[INFO] Mo hinh da duoc tai thanh cong tren thiet bi: {self.model.device}")
 
-    def generate_chat(self, messages: List[Dict[str, str]]) -> Tuple[str, int]:
+    def generate_chat(
+        self,
+        messages: List[Dict[str, str]],
+        max_new_tokens_override: Optional[int] = None,
+        enable_thinking: Optional[bool] = None
+    ) -> Tuple[str, int]:
         """
         Sinh câu trả lời từ danh sách thông điệp ChatML với cơ chế thu hồi bộ nhớ tensor nghiêm ngặt.
         
         Returns:
             (generated_text, generated_token_count)
         """
+        chat_template_kwargs: Dict[str, Any] = {
+            "tokenize": False,
+            "add_generation_prompt": True
+        }
+        if enable_thinking is not None:
+            try:
+                chat_template_kwargs["enable_thinking"] = enable_thinking
+            except TypeError:
+                pass
+
         try:
-            prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True
-            )
-        except Exception:
-            formatted = []
-            for m in messages:
-                role = m.get("role", "user").capitalize()
-                content = m.get("content", "")
-                formatted.append(f"<|im_start|>{role}\n{content}<|im_end|>")
-            formatted.append("<|im_start|>assistant\n")
-            prompt = "\n".join(formatted)
+            prompt = self.tokenizer.apply_chat_template(messages, **chat_template_kwargs)
+        except (TypeError, Exception):
+            try:
+                prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            except Exception:
+                formatted = []
+                for m in messages:
+                    role = m.get("role", "user").capitalize()
+                    content = m.get("content", "")
+                    formatted.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+                formatted.append("<|im_start|>assistant\n")
+                prompt = "\n".join(formatted)
 
         inputs = self.tokenizer(
             prompt,
@@ -121,10 +135,12 @@ class LLMRunner:
         ).to(self.model.device)
         input_len = inputs.input_ids.shape[1]
 
+        tokens_limit = int(max_new_tokens_override) if max_new_tokens_override is not None else self.max_new_tokens
+
         with torch.inference_mode():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=self.max_new_tokens,
+                max_new_tokens=tokens_limit,
                 do_sample=self.temperature > 0.0,
                 temperature=self.temperature if self.temperature > 0.0 else None,
                 top_p=self.top_p if self.temperature > 0.0 else None,
@@ -143,3 +159,4 @@ class LLMRunner:
         del gen_tokens
 
         return generated_text, num_generated_tokens
+

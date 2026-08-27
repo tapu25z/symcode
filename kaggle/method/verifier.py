@@ -1,5 +1,5 @@
 """
-Module bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier) cho phương pháp SymCode.
+Module bộ kiểm chứng toán học độc lập (Independent Mathematical Verifier) cho phương pháp SymCode và SymPlanner.
 Thực hiện kiểm tra tính nhất quán toán học, ràng buộc miền giá trị, phần dư phương trình và tính hợp thức đại số
 hoàn toàn độc lập, KHÔNG sử dụng hoặc làm lộ đáp án chuẩn (ground truth).
 """
@@ -34,25 +34,26 @@ def verify_candidate_answer(
 
     cand_str = str(candidate_answer).strip()
 
-    # 2. Kiểm tra lỗi in tên biến Python chưa qua tính toán trong \boxed{}
+    # 2. Kiểm tra các placeholder không hợp lệ hoặc chuỗi lỗi
+    invalid_tokens = ["todo", "none", "null", "undefined", "error", "nan", "invalid", "no valid solution", "<function", "<class"]
+    if any(p in cand_str.lower() for p in invalid_tokens):
+        return (
+            "fail",
+            f"Lỗi kiểm chứng: Đáp án '{cand_str}' là token không hợp lệ (None/Invalid/NaN/Error/Function Object). Hãy tính toán ra giá trị cụ thể."
+        )
+
+    # 3. Kiểm tra lỗi in tên biến Python chưa qua tính toán trong \boxed{}
     raw_var_pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
     common_code_vars = {
         "ans", "answer", "result", "res", "final_answer", "sol", "solution",
         "output", "val", "value", "perimeter_hexagon", "num_divisors", "count",
-        "total", "speed", "max_speed", "min_val", "max_val", "target"
+        "total", "speed", "max_speed", "min_val", "max_val", "target", "candidates"
     }
     cleaned_cand = cand_str.replace("\\", "").replace("{", "").replace("}", "").strip()
-    if cleaned_cand in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4):
+    if cleaned_cand in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4 and not cleaned_cand.isalpha()):
         return (
             "fail",
             f"Lỗi kiểm chứng: Đáp án '{cand_str}' là tên biến Python chưa được đánh giá thành giá trị cụ thể. Hãy tính toán giá trị của biến trước khi in."
-        )
-
-    # 3. Kiểm tra các placeholder không hợp lệ hoặc chuỗi lỗi
-    if any(p in cand_str.lower() for p in ["todo", "none", "null", "undefined", "error", "nan", "<function", "<class"]):
-        return (
-            "fail",
-            f"Lỗi kiểm chứng: Đáp án '{cand_str}' chứa token không hợp lệ (None/NaN/Error/Function Object)."
         )
 
     # 4. Kiểm tra miền giá trị và kiểu dữ liệu biểu tượng qua SymPy
@@ -96,7 +97,19 @@ def verify_candidate_answer(
         if sym_obj in (zoo, oo, -oo, nan):
             return ("fail", f"Lỗi kiểm chứng: Đáp án đánh giá thành giá trị không xác định hoặc vô cực ({sym_obj}).")
 
+        # Kiểm tra nếu bài toán số học/đếm nhưng đáp án vẫn còn chứa biến tự do (Symbol) như "48 - 6*z"
         q_lower = question.lower()
+        is_word_problem = any(kw in q_lower for kw in [
+            "how many", "how much", "find the value", "what is the total",
+            "calculate the", "speed", "hours", "dollars", "$", "percent", "miles"
+        ]) and not any(kw in q_lower for kw in ["in terms of", "express in terms of", "polynomial p(x)", "function f(x)"])
+        
+        if is_word_problem and sym_obj.free_symbols:
+            symbols_str = ", ".join(str(s) for s in sym_obj.free_symbols)
+            return (
+                "fail",
+                f"Lỗi kiểm chứng: Đáp án '{cand_str}' vẫn còn chứa biến tự do ({symbols_str}) chưa được giải thành số cụ thể. Hãy giải hệ phương trình hoặc tính toán tuần tự để tìm giá trị số cụ thể."
+            )
 
         # Ràng buộc số đếm / số lượng / số ước nguyên dương
         if any(term in q_lower for term in [
@@ -142,3 +155,4 @@ def verify_candidate_answer(
             return ("unknown", f"Đáp án là thực thể văn bản hợp lệ ('{cand_str}').")
 
     return ("unknown", "Đáp án hợp thức về mặt cú pháp nhưng đặc thù bài toán yêu cầu so khớp kết quả.")
+
