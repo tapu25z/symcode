@@ -23,18 +23,14 @@ fi
 # Kích hoạt môi trường venv
 source venv/bin/activate
 
-# 3. Cài đặt / Cập nhật 100% các thư viện phụ thuộc + hf_transfer để tải siêu tốc
+# 3. Cài đặt / Cập nhật 100% các thư viện phụ thuộc
 echo "📦 Đang kiểm tra và cài đặt các thư viện từ kaggle/requirements.txt..."
 pip install --upgrade pip
 pip install -r kaggle/requirements.txt
-pip install hf_transfer
 
-# 4. Cấu hình tải nhanh Hugging Face & GPU
+# 4. Đặt GPU mặc định là GPU 0 (RTX 3090)
 export CUDA_VISIBLE_DEVICES=0
 export WANDB_MODE=offline
-# Bật mirror endpoint và bộ tải đa luồng hf_transfer để tránh nghẽn mạng
-export HF_ENDPOINT=https://hf-mirror.com
-export HF_HUB_ENABLE_HF_TRANSFER=1
 
 # Đảm bảo thư mục kết quả tồn tại
 mkdir -p result
