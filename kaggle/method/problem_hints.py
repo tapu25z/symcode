@@ -19,7 +19,21 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "inserting parentheses" in text:
         hints.append(
-            "For inserted-parentheses problems, do not try to parse strings of expressions. Use a clear dynamic programming or recursion style to compute all possible parenthesization values for the list of numbers and operators, then return the count of unique values."
+            "For parenthesizing expression problems (e.g. '2*3*4*5+1'), define the expression as a list: lst = [2, '*', 3, '*', 4, '*', 5, '+', 1]. Use this clean recursive function or dynamic programming to evaluate all parenthesizations without string manipulation bugs:\n"
+            "def get_all_values(lst):\n"
+            "    if len(lst) == 1: return {lst[0]}\n"
+            "    res = set()\n"
+            "    for i in range(1, len(lst), 2):\n"
+            "        op = lst[i]\n"
+            "        left = get_all_values(lst[:i])\n"
+            "        right = get_all_values(lst[i+1:])\n"
+            "        for l in left:\n"
+            "            for r in right:\n"
+            "                if op == '*': res.add(l * r)\n"
+            "                elif op == '+': res.add(l + r)\n"
+            "                elif op == '-': res.add(l - r)\n"
+            "    return res\n"
+            "Count unique values using len(get_all_values(lst)). Alternatively, use dynamic programming over the ordered numbers and operators."
         )
     if "round table" in text or "rotations of each other" in text:
         hints.append(
