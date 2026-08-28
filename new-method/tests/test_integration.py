@@ -89,6 +89,21 @@ print(json.dumps({
         self.assertEqual(result["answer"], "sqrt(2)")
         self.assertEqual(result["variables"]["n"], 2)
 
+    def test_sandbox_prelude_supplies_common_runtime_modules(self):
+        def local_executor(code, **kwargs):
+            stream = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(stream):
+                    exec(code, {})
+                return {"status": "success", "stdout": stream.getvalue(), "traceback": None}
+            except Exception:
+                return {"status": "error", "stdout": stream.getvalue(), "traceback": traceback.format_exc()}
+
+        adapter = LegacySandboxAdapter(local_executor)
+        result = adapter("print(json.dumps({'answer': int(sp.sqrt(16)), 'canonical_answer': sp.Integer(4), 'answer_type': 'number', 'unit': None, 'variables': {}}))")
+        self.assertEqual(result["_sandbox_status"], "success")
+        self.assertEqual(result["answer"], 4)
+
     def test_single_ir_pipeline_runs_bidirectional_verifier(self):
         responses = [json.dumps(VALID_IR), "print('code')"]
         pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(11), max_repairs=0, ablation="IR")

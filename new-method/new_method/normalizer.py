@@ -213,7 +213,7 @@ def _normalize_function_evaluations(text: str) -> str:
 
 def relation_symbols(lhs: str, rhs: str) -> list[str]:
     candidates = re.findall(r"\b[A-Za-z_]\w*\b", f"{lhs} {rhs}")
-    reserved = {"and", "or", "not", "True", "False", "pi", "e", "I", "sin", "cos", "tan", "sqrt", "exp", "log"}
+    reserved = {"and", "or", "not", "True", "False", "pi", "e", "I", "oo", "sin", "cos", "tan", "sqrt", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix", "gcd", "lcm"}
     return sorted({item for item in candidates if item not in reserved and not item.isdigit()})
 
 
@@ -420,6 +420,7 @@ def build_codegen_payload(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
                 "operator": relation.get("operator", "="),
                 "symbols": relation.get("symbols", []),
                 "unit": relation.get("unit"),
+                "range": relation.get("range"),
             }
             for relation in normalized_ir.get("relations", [])
         ],

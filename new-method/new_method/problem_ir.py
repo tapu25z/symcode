@@ -21,14 +21,17 @@ class ProblemIR(TypedDict, total=False):
 
 
 REQUIRED_KEYS = ("target_unknown", "givens", "relations", "conditions", "required_output")
-ALLOWED_RELATION_KINDS = {"equation", "inequality", "definition", "conservation", "proportion", "ordering"}
+ALLOWED_RELATION_KINDS = {
+    "equation", "inequality", "definition", "conservation", "proportion", "ordering",
+    "system", "range", "identity",
+}
 ALLOWED_ROLES = {"constant", "variable", "measurement", "derived", "parameter"}
 ALLOWED_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage", "symbolic", "tuple", "set", "interval", "matrix", "text"}
 ALLOWED_PRECISIONS = {"exact", "integer", "decimal", "significant_figures"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]<>=!\s]+$")
-ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix", "gcd", "lcm"}
 REQUIRED_RELATION_FIELDS = {"id", "kind", "lhs", "rhs", "operator", "unit", "source", "evidence", "confidence"}
 REQUIRED_GIVEN_FIELDS = {"name", "symbol", "value", "unit", "role", "source"}
 REQUIRED_CONDITION_FIELDS = {"kind", "expr", "source"}

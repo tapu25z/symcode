@@ -18,7 +18,7 @@ NUMERIC_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
 STRUCTURED_OUTPUT_TYPES = {"symbolic", "tuple", "set", "interval", "matrix", "text"}
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]<>=!\s]+$")
-SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "pi", "e", "I", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "pi", "e", "I", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
@@ -60,7 +60,7 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
         "exp": sp.exp, "log": sp.log, "abs": sp.Abs, "min": sp.Min,
         "max": sp.Max, "pi": sp.pi, "e": sp.E, "I": sp.I, "oo": sp.oo, "Tuple": sp.Tuple,
         "FiniteSet": sp.FiniteSet, "Interval": sp.Interval, "Union": sp.Union,
-        "Matrix": sp.Matrix,
+        "Matrix": sp.Matrix, "gcd": sp.gcd, "lcm": sp.ilcm,
     })
     parsed = sp.sympify(text, locals=local_dict)
     if isinstance(parsed, tuple):

@@ -9,8 +9,25 @@ from typing import Any, Callable, Mapping
 
 LEGACY_7B_MODEL_ID = "Qwen/Qwen2.5-Coder-7B-Instruct"
 JSON_SERIALIZATION_PRELUDE = r"""
-import json as _symplanner_json
+import math
+import sympy as sp
+import json
+_symplanner_json = json
 _symplanner_original_json_dumps = _symplanner_json.dumps
+
+def _symplanner_safe_eval(value):
+    return value if isinstance(value, sp.Basic) else sp.sympify(value)
+
+def _symplanner_safe_enc(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, sp.Integer):
+        return int(value)
+    if isinstance(value, sp.Float):
+        return float(value)
+    if isinstance(value, sp.Basic):
+        return str(value)
+    return value
 
 def _symplanner_json_default(obj):
     try:

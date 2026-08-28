@@ -67,6 +67,18 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("source", payload["relations"][0])
         self.assertNotIn("evidence", payload["relations"][0])
         self.assertNotIn("raw", payload["givens"][0])
+        self.assertIsNone(payload["relations"][0]["range"])
+
+    def test_system_and_finite_range_relations_survive_normalization(self):
+        ir = valid_ir()
+        ir["relations"] = [
+            {**ir["relations"][0], "id": "system_a", "kind": "system", "lhs": "p", "rhs": "r*w"},
+            {**ir["relations"][0], "id": "search", "kind": "range", "lhs": "p", "rhs": "p", "range": {"symbol": "p", "start": 1, "stop": 3, "step": 1}},
+        ]
+        normalized = normalize_problem_ir(ir)
+        self.assertEqual(validate_ir(normalized), [])
+        payload = build_codegen_payload(normalized)
+        self.assertEqual(payload["relations"][1]["range"]["stop"], 3)
 
     def test_math_competition_units_are_supported(self):
         for unit in ("hr", "km/hr", "in", "units", "degrees"):
