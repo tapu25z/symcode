@@ -2,17 +2,16 @@
 
 ## Objective
 
-Compare the old `SymPlanner` with three controlled IR ablations using the same legacy `Qwen/Qwen2.5-Coder-7B-Instruct`, dataset order, decoding settings and sandbox.
+Compare the old `SymPlanner` with one IR pipeline using the same legacy `Qwen/Qwen2.5-Coder-7B-Instruct`, dataset order, decoding settings and sandbox.
 
 ```mermaid
 flowchart LR
     Q[Question] --> E[IR Extractor]
-    E --> R[IR Repair + Validation]
-    R --> N[Normalizer]
+    E --> N[Normalizer]
     N --> C[Structured Codegen]
     C --> X[Legacy Sandbox Adapter]
     X --> V[Bidirectional Verifier]
-    V --> D[Targeted Code Repair]
+    V --> D[Code Repair x2 max]
     D --> X
     X --> S[Dataset-aware Scoring]
 ```
@@ -22,16 +21,14 @@ flowchart LR
 | Method | Structured IR | Normalization | Bidirectional verify | Code repair |
 |---|---:|---:|---:|---:|
 | SymPlanner | No | No | Legacy verifier | Legacy repair |
-| IR-Codegen | Yes | Yes | No | No |
-| IR-BiVerify | Yes | Yes | Yes | No |
-| IR-Full | Yes | Yes | Yes | Yes |
+| IR | Yes | Yes | Yes | Yes, tối đa 2 |
 
-IR validation and output-contract validation remain enabled in every new variant; otherwise an ablation could gain accuracy by accepting malformed outputs.
+IR diagnostics and output-contract validation remain enabled. Small schema omissions are normalized; only an unusable target or relation graph is marked `invalid_ir`.
 
 ## Evaluation phases
 
 1. Smoke: 3–5 GSM8K and 3–5 Math500 samples; confirm VRAM, context length, JSON compliance and checkpoint resume.
-2. Pilot: the same 50 paired samples for all four methods; inspect stage failures before interpreting accuracy.
+2. Pilot: the same 50 paired samples for both methods; inspect stage failures before interpreting accuracy.
 3. Full: complete dataset or a pre-registered subset; no prompt/config changes during the run.
 
 ## Fixed controls

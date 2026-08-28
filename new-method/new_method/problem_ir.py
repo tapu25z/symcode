@@ -96,12 +96,30 @@ def normalize_ir_shape(raw: Mapping[str, Any] | None) -> ProblemIR:
     out["required_output"].setdefault("precision", "exact")
     out["required_output"].setdefault("digits", None)
     out["required_output"].setdefault("target_count", 1)
-    for given in out["givens"]:
+    for index, given in enumerate(out["givens"]):
         if isinstance(given, Mapping):
+            given.setdefault("name", given.get("symbol") or f"given_{index}")
+            given.setdefault("symbol", given.get("name") or f"given_{index}")
+            given.setdefault("value", given.get("expression"))
+            given.setdefault("role", "constant")
+            given.setdefault("source", str(given.get("value") or "given"))
             given.setdefault("unit", None)
-    for relation in out["relations"]:
+    for index, relation in enumerate(out["relations"]):
         if isinstance(relation, Mapping):
+            relation.setdefault("id", f"relation_{index}")
+            relation.setdefault("kind", "equation")
+            relation.setdefault("lhs", "")
+            relation.setdefault("rhs", "")
+            relation.setdefault("operator", "=")
             relation.setdefault("unit", None)
+            relation.setdefault("source", "extracted relation")
+            relation.setdefault("evidence", relation.get("source") or "extracted relation")
+            relation.setdefault("confidence", 1.0)
+    for condition in out["conditions"]:
+        if isinstance(condition, Mapping):
+            condition.setdefault("kind", "assumption")
+            condition.setdefault("expr", "")
+            condition.setdefault("source", str(condition.get("expr") or "condition"))
     return out
 
 

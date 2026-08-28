@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
-# Script thực thi Benchmark nhánh new-method (Verifiable SymPlanner IR Ablation)
-# Chạy so sánh đối đầu: SymPlanner vs IR-Codegen vs IR-BiVerify vs IR-Full
+# Script thực thi benchmark nhánh new-method (SymPlanner IR)
+# Chạy so sánh đối đầu: baseline SymPlanner vs pipeline IR duy nhất
 # ==============================================================================
 
 set -e
@@ -35,7 +35,7 @@ export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR/new-method:$SCRIPT_DIR/kaggle:$PYTHON
 # 3. Tạo thư mục chứa log
 mkdir -p logs
 
-# 4. Thực thi benchmark ablation new-method
+# 4. Thực thi benchmark new-method
 echo "========================================================="
 echo "🚀 Bắt đầu Benchmark 50 mẫu trên nhánh new-method..."
 echo "========================================================="
@@ -43,7 +43,7 @@ echo "========================================================="
 python new-method/run_benchmark.py \
     --dataset math500 \
     --num-samples 50 \
-    --methods SymPlanner IR-Codegen IR-BiVerify IR-Full \
+    --methods SymPlanner IR \
     --output-file math500_symplanner_ir_ablation_n50.json \
     --save-every 5 2>&1 | tee logs/bench_new_method.log
 

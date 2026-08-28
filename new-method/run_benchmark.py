@@ -1,4 +1,4 @@
-"""Benchmark the old SymPlanner baseline and the new IR ablations with one model."""
+"""Benchmark the old SymPlanner baseline against the single IR pipeline."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="SymPlanner new-method benchmark")
     parser.add_argument("--dataset", choices=["math500", "gsm8k"], default="math500")
     parser.add_argument("--dataset-path", default=None)
-    parser.add_argument("--methods", nargs="+", choices=["SymPlanner", *ABLATIONS], default=["SymPlanner", "IR-Lite"])
+    parser.add_argument("--methods", nargs="+", choices=["SymPlanner", *ABLATIONS], default=["SymPlanner", "IR"])
     parser.add_argument("--num-samples", type=int, default=None)
     parser.add_argument("--filter-levels", nargs="+", type=int, default=None)
     parser.add_argument("--model-id", default=LEGACY_7B_MODEL_ID)
@@ -36,13 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-input-tokens", type=int, default=6144)
     parser.add_argument("--max-new-tokens", type=int, default=1800)
     parser.add_argument("--extractor-tokens", type=int, default=1400)
-    parser.add_argument("--ir-repair-tokens", type=int, default=1400)
     parser.add_argument("--codegen-tokens", type=int, default=1800)
     parser.add_argument("--code-repair-tokens", type=int, default=1800)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max-retries", type=int, default=1)
-    parser.add_argument("--max-ir-retries", type=int, default=1)
+    parser.add_argument("--max-retries", type=int, default=2)
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--save-every", type=int, default=5)
     parser.add_argument("--output-file", default=None)
@@ -82,7 +80,7 @@ def main() -> None:
         max_input_tokens=args.max_input_tokens,
         temperature=args.temperature,
     )
-    budgets = StageTokenBudgets(args.extractor_tokens, args.ir_repair_tokens, args.codegen_tokens, args.code_repair_tokens)
+    budgets = StageTokenBudgets(args.extractor_tokens, args.codegen_tokens, args.code_repair_tokens)
     config = {
         "model_id": args.model_id,
         "dataset_name": args.dataset,
@@ -95,7 +93,6 @@ def main() -> None:
         "max_input_tokens": args.max_input_tokens,
         "max_new_tokens": args.max_new_tokens,
         "max_retries": args.max_retries,
-        "max_ir_retries": args.max_ir_retries,
         "timeout": args.timeout,
         "stage_token_budgets": budgets.__dict__,
     }
@@ -120,7 +117,7 @@ def main() -> None:
             benchmark_data["results"][method] = evaluate_ir_variant(
                 dataset, runner, execute_code_safely, variant=method,
                 timeout=args.timeout, max_retries=args.max_retries,
-                max_ir_retries=args.max_ir_retries, checkpoint_file=output_file,
+                checkpoint_file=output_file,
                 save_every=args.save_every, token_budgets=budgets,
             )
 
