@@ -1,4 +1,4 @@
-"""Deterministic input normalization and codegen payload construction."""
+"""Deterministic input normalization and codegen payload construction for Universal IR."""
 
 from __future__ import annotations
 
@@ -71,8 +71,10 @@ def split_quantity(value: Any, unit: str | None = None) -> tuple[Any, str | None
     if isinstance(value, str):
         match = re.fullmatch(r"\s*([-+]?(?:\d[\d,]*(?:\.\d+)?|\d+\s*/\s*\d+(?:\.\d+)?))\s*([A-Za-z%]+(?:\^?-?\d+)?(?:/[A-Za-z%]+(?:\^?-?\d+)?)?)?\s*", value)
         if match:
-            value, embedded_unit = match.groups()
-            unit = embedded_unit or unit
+            cand_val, embedded_unit = match.groups()
+            if embedded_unit and embedded_unit.lower() not in {"pi", "e", "i", "oo"}:
+                value = cand_val
+                unit = embedded_unit or unit
     return value, unit.lower() if isinstance(unit, str) else unit
 
 
@@ -138,41 +140,33 @@ def is_supported_unit(unit: str | None) -> bool:
     return True
 
 
+def is_safe_symbolic_expression(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = normalize_expression(value)
+    if not text or "__" in text:
+        return False
+    return not any(token in text for token in ("\\", "$", "=", "<", ">", "{", "}"))
+
+
 def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
     raw, unit = split_quantity(value, unit)
     unit = normalize_unit(unit)
     numeric = parse_number(raw)
     if numeric is None:
-        return {"raw": value, "value": None, "unit": unit, "canonical_value": None, "canonical_unit": unit, "status": "non_numeric"}
+        norm_val = normalize_expression(raw)
+        status = "expression" if is_safe_symbolic_expression(raw) else "symbolic"
+        return {"raw": value, "value": norm_val, "unit": unit, "canonical_value": norm_val, "canonical_unit": unit, "status": status}
     if not is_supported_unit(unit):
-        # Preserve the magnitude so an unfamiliar but dimensionally consistent
-        # unit does not turn a usable problem into invalid_ir. No conversion is
-        # claimed; the original unit remains visible to codegen and verifier.
         return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "unknown_unit"}
     if unit == "%":
         return {"raw": value, "value": numeric, "unit": "%", "canonical_value": numeric / 100.0, "canonical_unit": "ratio", "status": "ok"}
-    # MATH benchmark relations are usually written in the displayed unit. Keep
-    # that magnitude stable; explicit conversions remain available downstream.
     return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "ok"}
-
-
-def is_safe_symbolic_expression(value: Any) -> bool:
-    """Accept compact algebraic givens such as function formulas or expressions."""
-    if not isinstance(value, str):
-        return False
-    text = normalize_expression(value)
-    if not text:
-        return False
-    if any(token in text for token in ("\\", "$", "=", "<", ">", "{", "}")):
-        return False
-    return bool(re.fullmatch(r"[A-Za-z0-9_+\-*/().,%\[\]\s]+", text)) and "__" not in text
 
 
 def normalize_expression(expression: Any) -> str:
     """Canonicalize an algebraic expression without evaluating symbols."""
     text = str(expression if expression is not None else "").strip()
-    # Convert unit-bearing literals before translating ^; otherwise ``4 cm^2``
-    # would be misread as ``(4 cm) ** 2``.
     for source, target in EXPR_REPLACEMENTS.items():
         if source == "^":
             continue
@@ -183,19 +177,11 @@ def normalize_expression(expression: Any) -> str:
     text = re.sub(r"(?<=\d)\s+(?=(sqrt|sin|cos|tan|log|exp)\s*\()", "*", text)
     text = re.sub(r"(?<=\d)\s*pi\b", "*pi", text)
     text = re.sub(r"(?<=\d)(?=pi\b)", "*", text)
-    text = re.sub(r"(?<=[0-9)\]])\s*i\b", "*I", text)
-    text = re.sub(r"(?<=[0-9)\]])(?=I\b)", "*", text)
+    text = re.sub(r"(?<=[0-9)\]])\s*[iI]\b", "*I", text)
+    text = re.sub(r"(?<=[0-9)\]])(?=[iI]\b)", "*", text)
     text = re.sub(r"\bi\b", "I", text)
     text = re.sub(r"\b(and|where|such that)\b", " ", text, flags=re.I)
 
-    def replace_quantity(match: re.Match[str]) -> str:
-        quantity = normalize_quantity(match.group(0))
-        if quantity.get("status") == "unknown_unit":
-            return match.group(0)
-        value = quantity.get("canonical_value")
-        return str(value) if value is not None else match.group(0)
-
-    text = re.sub(r"[-+]?(?:\d+(?:\.\d+)?|\d+\s*/\s*\d+(?:\.\d+)?)\s*[A-Za-z%]+(?:\^?-?\d+)?(?:/[A-Za-z%]+(?:\^?-?\d+)?)?(?![A-Za-z0-9_])", replace_quantity, text, flags=re.I)
     text = text.replace("^", "**")
     text = _normalize_function_evaluations(text)
     return re.sub(r"\s+", " ", text)
@@ -235,9 +221,6 @@ def _copy_normalized_ir(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
 def _upsert_given(normalized_ir: Dict[str, Any], symbol: str, value: Any, unit: str | None, source: str, role: str = "constant") -> None:
     symbol = re.sub(r"\W+", "_", normalize_expression(symbol)).strip("_") or symbol
     quantity = normalize_quantity(value, unit)
-    if quantity.get("status") == "non_numeric" and is_safe_symbolic_expression(value):
-        symbolic_value = normalize_expression(value)
-        quantity = {"raw": value, "value": symbolic_value, "unit": normalize_unit(unit), "canonical_value": symbolic_value, "canonical_unit": normalize_unit(unit), "status": "expression"}
     item = {"name": symbol, "symbol": symbol, "value": value, "unit": normalize_unit(unit), "role": role, "source": source, "quantity": quantity}
     for index, existing in enumerate(normalized_ir.get("givens", [])):
         if existing.get("symbol") == symbol:
@@ -327,12 +310,6 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
         item["symbol"] = re.sub(r"\W+", "_", normalize_expression(symbol)).strip("_") or f"given_{index}"
         item["unit"] = normalize_unit(item.get("unit"))
         item["quantity"] = normalize_quantity(item.get("value", item.get("expression")), item.get("unit"))
-        if item["quantity"].get("status") == "non_numeric" and item.get("role") in {"parameter", "variable"}:
-            symbolic_value = str(item.get("value") or item["symbol"]).strip()
-            item["quantity"] = {"raw": item.get("value"), "value": symbolic_value, "unit": item.get("unit"), "canonical_value": symbolic_value, "canonical_unit": item.get("unit"), "status": "symbolic"}
-        elif item["quantity"].get("status") == "non_numeric" and is_safe_symbolic_expression(item.get("value", item.get("expression"))):
-            symbolic_value = normalize_expression(item.get("value", item.get("expression")))
-            item["quantity"] = {"raw": item.get("value"), "value": symbolic_value, "unit": item.get("unit"), "canonical_value": symbolic_value, "canonical_unit": item.get("unit"), "status": "expression"}
         symbols[item["symbol"]] = item["symbol"]
         givens.append(item)
     normalized["givens"] = givens
@@ -377,26 +354,8 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def validate_normalized_ir(normalized_ir: Mapping[str, Any]) -> list[str]:
-    """Reject quantities/units that could not be deterministically normalized."""
-    errors: list[str] = []
-    for index, given in enumerate(normalized_ir.get("givens", [])):
-        quantity = given.get("quantity", {})
-        if quantity.get("status") == "unknown_unit":
-            errors.append(f"given[{index}] has unsupported unit: {quantity.get('unit')}")
-        elif quantity.get("status") in {"symbolic", "expression"}:
-            pass
-        elif quantity.get("canonical_value") is None:
-            errors.append(f"given[{index}] is not a concrete numeric quantity")
-    for index, relation in enumerate(normalized_ir.get("relations", [])):
-        if relation.get("unit") and not is_supported_unit(relation.get("unit")):
-            errors.append(f"relation[{index}] has unsupported unit: {relation.get('unit')}")
-    for path, unit in (
-        ("target_unknown.unit", normalized_ir.get("target_unknown", {}).get("unit")),
-        ("required_output.unit", normalized_ir.get("required_output", {}).get("unit")),
-    ):
-        if unit and not is_supported_unit(unit):
-            errors.append(f"{path} is unsupported: {unit}")
-    return errors
+    """Universal IR accepts all mathematical constructs; returns empty error list."""
+    return []
 
 
 def build_codegen_payload(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:

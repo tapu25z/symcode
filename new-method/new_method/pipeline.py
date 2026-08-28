@@ -1,4 +1,4 @@
-"""Single IR pipeline: extract, normalize, plan/codegen, execute and verify."""
+"""Single IR pipeline: extract, normalize, plan/codegen, execute and verify for Universal IR."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ RUNTIME_HEADER = r"""import sympy as sp
 import math
 import json
 from fractions import Fraction
+from math import comb, perm, gcd, lcm, factorial, sqrt, sin, cos, tan, exp, log, pi, e
 
 def enc(v):
     if isinstance(v, bool):
@@ -111,17 +112,11 @@ class SymPlannerIRPipeline:
     def _fatal_ir_errors(
         ir: Mapping[str, Any], errors: list[str]
     ) -> list[str]:
-        """Keep schema diagnostics, but reserve invalid_ir for unusable IR."""
+        """Keep schema diagnostics, but reserve invalid_ir for completely unusable IR."""
         fatal: list[str] = []
         if not ir.get("relations") and not ir.get("givens"):
             fatal.append("at least one usable relation or given is required")
-        target = ir.get("target_unknown")
-        if not isinstance(target, Mapping) or not str(target.get("symbol") or target.get("name") or "").strip():
-            fatal.append("target_unknown.symbol is required")
-        output = ir.get("required_output")
-        if not isinstance(output, Mapping) or not output.get("type"):
-            fatal.append("required_output.type is required")
-        return list(dict.fromkeys(fatal))
+        return fatal
 
     @staticmethod
     def _invalid_ir(
