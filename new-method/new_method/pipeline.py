@@ -22,9 +22,15 @@ def enc(v):
         return v
     if getattr(v, "is_Integer", False):
         return int(v)
+    if isinstance(v, (int, str)):
+        return v
     if isinstance(v, float):
         return int(v) if v.is_integer() else v
-    return str(v) if isinstance(v, sp.Basic) else v
+    if isinstance(v, (tuple, list)):
+        return [enc(x) for x in v]
+    if isinstance(v, (set, sp.FiniteSet)):
+        return [enc(x) for x in sorted(list(v), key=str)]
+    return str(v)
 
 def safe_eval(v):
     return v if isinstance(v, sp.Basic) else sp.sympify(v)
@@ -107,21 +113,14 @@ class SymPlannerIRPipeline:
     ) -> list[str]:
         """Keep schema diagnostics, but reserve invalid_ir for unusable IR."""
         fatal: list[str] = []
-        if not ir.get("relations"):
-            fatal.append("at least one usable relation is required")
+        if not ir.get("relations") and not ir.get("givens"):
+            fatal.append("at least one usable relation or given is required")
         target = ir.get("target_unknown")
-        if not isinstance(target, Mapping) or not str(target.get("symbol") or "").strip():
+        if not isinstance(target, Mapping) or not str(target.get("symbol") or target.get("name") or "").strip():
             fatal.append("target_unknown.symbol is required")
         output = ir.get("required_output")
         if not isinstance(output, Mapping) or not output.get("type"):
             fatal.append("required_output.type is required")
-        for error in errors:
-            if any(marker in error for marker in (
-                "must be a non-empty expression",
-                "target_count must equal",
-                "has unsupported operator",
-            )):
-                fatal.append(error)
         return list(dict.fromkeys(fatal))
 
     @staticmethod
