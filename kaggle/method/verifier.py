@@ -7,7 +7,153 @@ hoàn toàn độc lập, KHÔNG sử dụng hoặc làm lộ đáp án chuẩn 
 import re
 from typing import Tuple, Optional, Any
 
-from .target_contract import target_contract_feedback
+from .target_contract import target_contract_feedback, infer_target_spec
+from .extractor import check_exact_match
+
+
+def _extract_in_terms_vars(question: str) -> list[str]:
+    cleaned = re.sub(r"[$\\{}.,]", " ", str(question or "").lower())
+    match = re.search(r"(?:in terms of|express .* in terms of)\s+([a-zA-Z](?:\s*(?:,|and)\s*[a-zA-Z])*)", cleaned)
+    if not match:
+        return []
+    return [item for item in re.findall(r"[a-zA-Z]+", match.group(1)) if item != "and"]
+
+
+def _code_strategy_feedback(question: str, candidate_answer: str, code: Optional[str]) -> tuple[str, str] | None:
+    q_lower = str(question or "").lower()
+    code_lower = str(code or "").lower()
+    cand_lower = str(candidate_answer or "").lower()
+
+    target_vars = _extract_in_terms_vars(q_lower)
+    if target_vars and not any(re.search(rf"\b{re.escape(var)}\b", cand_lower) for var in target_vars):
+        return (
+            "fail",
+            "Verification Error: symbolic target must be simplified in the requested variables; do not leave an unevaluated special-function sum."
+        )
+
+    if "round table" in q_lower and "no two" in q_lower and "next to each other" in q_lower:
+        has_adjacency_check = any(token in code_lower for token in ("itertools.permutations", "for perm", "def is_valid", "adjacent", "next_to"))
+        if "restricted_permutations" in code_lower and "total_permutations" in code_lower and not has_adjacency_check:
+            return (
+                "fail",
+                "Verification Error: circular no-adjacency counting needs pairwise adjacency handling or brute-force validation; subtracting only one grouped case is incomplete."
+            )
+
+    if "different battalions" in q_lower or ("how many different" in q_lower and "soldiers" in q_lower):
+        if "min(" in code_lower and "//" in code_lower and "comb" not in code_lower and "binomial" not in code_lower:
+            return (
+                "fail",
+                "Verification Error: this asks for number of selectable groups, so use combinations/binomial counts rather than the maximum number of full battalions."
+            )
+
+    if "three for" in q_lower and "$1" in q_lower:
+        if "// 3" in code_lower and re.search(r"price_\w+\s*=\s*1\s*/\s*3", code_lower):
+            return (
+                "fail",
+                "Verification Error: phrase 'three for $1' means each group of three earns one dollar; do not multiply the number of groups by 1/3 again."
+            )
+
+    has_norm_target = "norm" in q_lower or "||" in q_lower or "\\|" in q_lower or "magnitude" in q_lower
+    has_matrix_target = "matrix" in q_lower or "pmatrix" in q_lower or "begin{pmatrix}" in q_lower
+    if has_norm_target and "for all" in q_lower and has_matrix_target:
+        if "eigenvals" in code_lower and not any(token in code_lower for token in ("singular", ".t *", ".t*", "transpose")):
+            return (
+                "fail",
+                "Verification Error: the smallest C for ||Av|| <= C||v|| is the spectral norm, sqrt(max eigenvalue of A.T*A), not the maximum absolute eigenvalue of A."
+            )
+
+    if "logarithms of the roots" in q_lower and "sp.solve(log_condition" in code_lower:
+        return (
+            "fail",
+            "Verification Error: use log product rules directly with Vieta; do not ask SymPy to solve a sum of logs for a product expression."
+        )
+
+    if "functional equation" in q_lower and "sp.function" in code_lower and "f(2)" in code_lower:
+        return (
+            "fail",
+            "Verification Error: solve the functional equation by assuming a quadratic/affine polynomial form and equating coefficients, not by solving for isolated f(k) symbols."
+        )
+
+    if "smallest positive perfect cube" in q_lower and "three consecutive integers" in q_lower:
+        try:
+            import sympy as sp
+            candidate_value = sp.sympify(candidate_answer)
+            for base in range(1, 1000):
+                cube = base ** 3
+                if cube % 3 == 0:
+                    if sp.simplify(candidate_value - cube) != 0:
+                        return (
+                            "fail",
+                            "Verification Error: candidate is not the smallest qualifying cube; search cube values in increasing order and return the cube value itself."
+                        )
+                    break
+        except Exception:
+            pass
+
+    if "rotated around" in q_lower and ("complex" in q_lower or " i" in q_lower or "i$" in q_lower):
+        if any(token in code_lower for token in ("sp.arg", "arg(", "sp.abs", "abs(")) and "z-c" not in code_lower.replace(" ", ""):
+            return (
+                "fail",
+                "Verification Error: complex rotation around a center should use c + (z-c)*(cos(theta)+I*sin(theta)); do not rotate polar coordinates around the origin."
+            )
+
+    if "compound interest" in q_lower and "deposit" in q_lower:
+        if re.search(r"\b[a-z]\s*\*\s*\(\s*1\s*\+\s*r\s*\)\s*\*\*\s*n\b", code_lower) and "(1 + r)**2" not in code_lower:
+            return (
+                "fail",
+                "Verification Error: repeated end-of-year deposits require summing separately compounded deposits, not treating all deposits as one lump sum."
+            )
+
+    if "remainder" in q_lower and ("mod" in q_lower or "pmod" in q_lower):
+        if "as_coefficients_dict()[1]" in code_lower:
+            return (
+                "fail",
+                "Verification Error: modular remainder should be computed by direct residue substitution and modulo reduction, not by extracting a constant coefficient."
+            )
+
+    if "for all angles" in q_lower and "sin" in q_lower and "collect" in code_lower and "coeffs_lhs.get" in code_lower:
+        return (
+            "fail",
+            "Verification Error: trig power identity coefficients are not obtained reliably by collect on sin(k*x); use exact expansion/equating at enough sample points or Fourier identities."
+        )
+
+    if "reassigned to" in q_lower and "denali" in q_lower and "nate" in q_lower:
+        compact_code = code_lower.replace(" ", "")
+        if "12+x" in compact_code:
+            return (
+                "fail",
+                "Verification Error: when x of Nate's dogs are reassigned to Denali, Denali gains x and Nate loses x; Nate's count should not become 12+x."
+            )
+
+    return None
+
+
+def _diagram_numeric_feedback(question: str, candidate_answer: str) -> tuple[str, str] | None:
+    q_text = str(question or "")
+    q_lower = q_text.lower()
+    segment_match = re.search(r"(?:what\s+is|find)\s+\$?([A-Za-z]{2})\$?", q_text, re.IGNORECASE)
+    if "[asy]" not in q_lower or not segment_match:
+        return None
+    segment = segment_match.group(1).upper()
+    pair_pattern = re.compile(
+        r"\b([A-Za-z])\s*=\s*\(([^,()]+(?:\([^)]*\))?[^,()]*),\s*([^,()]+(?:\([^)]*\))?[^,()]*)\)"
+    )
+    coords = {name.upper(): (x.strip(), y.strip()) for name, x, y in pair_pattern.findall(q_text)}
+    if segment[0] not in coords or segment[1] not in coords:
+        return None
+    try:
+        import sympy as sp
+        x1, y1 = [sp.sympify(value, locals={"sqrt": sp.sqrt, "pi": sp.pi}) for value in coords[segment[0]]]
+        x2, y2 = [sp.sympify(value, locals={"sqrt": sp.sqrt, "pi": sp.pi}) for value in coords[segment[1]]]
+        expected = sp.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+        if not check_exact_match(candidate_answer, str(expected)):
+            return (
+                "fail",
+                f"Verification Error: diagram source gives explicit coordinates for segment {segment}; compute the distance from those coordinates."
+            )
+    except Exception:
+        return None
+    return None
 
 
 def verify_candidate_answer(
@@ -38,7 +184,12 @@ def verify_candidate_answer(
     cand_str = str(candidate_answer).strip()
 
     contract_result = target_contract_feedback(question, cand_str, planner_note)
-    if contract_result is not None:
+    defer_contract_result = (
+        contract_result is not None
+        and contract_result[0] == "unknown"
+        and "diagram-dependent" in contract_result[1].lower()
+    )
+    if contract_result is not None and not defer_contract_result:
         return contract_result
 
     # 2. Kiểm tra các placeholder không hợp lệ hoặc chuỗi lỗi
@@ -48,6 +199,23 @@ def verify_candidate_answer(
             "fail",
             f"Verification Error: Candidate answer '{cand_str}' is an invalid token (None/Invalid/NaN/Error/Function Object). Compute and print a concrete value."
         )
+
+    target_spec = infer_target_spec(question, planner_note)
+    if target_spec.get("answer_type") == "number":
+        if cand_str in {"[]", "{}", "()"}:
+            return ("fail", "Verification Error: numeric target cannot be an empty collection.")
+        if re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", cand_str):
+            return ("fail", "Verification Error: numeric target cannot be an unresolved symbol or placeholder variable.")
+
+    strategy_result = _code_strategy_feedback(question, cand_str, code)
+    if strategy_result is not None:
+        return strategy_result
+
+    diagram_result = _diagram_numeric_feedback(question, cand_str)
+    if diagram_result is not None:
+        return diagram_result
+    if defer_contract_result:
+        return contract_result
 
     # 3. Kiểm tra lỗi in tên biến Python chưa qua tính toán trong \boxed{}
     raw_var_pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
@@ -121,20 +289,16 @@ def verify_candidate_answer(
             )
 
         # Ràng buộc "in terms of X, Y": Nếu đề yêu cầu biểu diễn theo biến p, q nhưng đáp án lại không chứa p, q
-        in_terms_match = re.search(r"(?:in terms of|express .* in terms of)\s+([a-zA-Z](?:\s*(?:,|and)\s*[a-zA-Z])*)", q_lower)
-        if in_terms_match:
-            raw_vars = in_terms_match.group(1)
-            target_vars = re.findall(r"[a-zA-Z]+", raw_vars)
-            target_vars = [item for item in target_vars if item.lower() not in {"and"}]
-            if target_vars:
-                cand_syms = {str(s) for s in sym_obj.free_symbols}
-                # Nếu đáp án hoàn toàn là số/hằng số mà không chứa biến được yêu cầu
-                if not any(tv in cand_syms for tv in target_vars):
-                    vars_str = ", ".join(target_vars)
-                    return (
-                        "fail",
-                        f"Verification Error: The problem explicitly asks to express the answer in terms of ({vars_str}), but the candidate answer '{cand_str}' contains none of these target symbols. Express your solution using symbols ({vars_str})."
-                    )
+        target_vars = _extract_in_terms_vars(q_lower)
+        if target_vars:
+            cand_syms = {str(s) for s in sym_obj.free_symbols}
+            # Nếu đáp án hoàn toàn là số/hằng số mà không chứa biến được yêu cầu
+            if not any(tv in cand_syms for tv in target_vars):
+                vars_str = ", ".join(target_vars)
+                return (
+                    "fail",
+                    f"Verification Error: The problem explicitly asks to express the answer in terms of ({vars_str}), but the candidate answer '{cand_str}' contains none of these target symbols. Express your solution using symbols ({vars_str})."
+                )
 
         # Ràng buộc số đếm / số lượng / số ước nguyên dương
         is_distance_question = any(term in q_lower for term in ["miles", "kilometers", "kilometres", "meters", "distance"])

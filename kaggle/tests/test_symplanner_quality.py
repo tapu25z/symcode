@@ -46,6 +46,8 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(status, "unknown")
         status, _ = verify_candidate_answer("Write the answer in terms of p and q.", "-zeta(3)+pi**2/6")
         self.assertEqual(status, "fail")
+        status, _ = verify_candidate_answer(r"Write the answer in terms of $p$ and $q$.", "Sum(lerchphi(1, 3, j + 1), (j, 1, oo))")
+        self.assertEqual(status, "fail")
         status, _ = verify_candidate_answer("Find all values of x that satisfy the equation.", "5")
         self.assertEqual(status, "unknown")
 
@@ -69,6 +71,9 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertTrue(any("dynamic programming" in hint for hint in hints))
         hints = build_problem_hints("Solve -4 < 2(x - 1) < 8.")
         self.assertTrue(any("chained inequalities" in hint for hint in hints))
+        hints = build_problem_hints("Find a double sum in terms of p and q.")
+        self.assertTrue(any("group terms" in hint for hint in hints))
+        self.assertFalse(any("p - q" in hint for hint in hints))
 
 
     def test_static_lint_catches_known_sympy_hazards(self):
@@ -105,3 +110,44 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(infer_target_spec("Find the roots of x^2-1.")["answer_type"], "set")
         self.assertEqual(infer_target_spec("What is the smallest n such that all the roots of x^4+x^2+1 are nth roots of unity?")["answer_type"], "number")
         self.assertEqual(infer_target_spec("Enter the ordered triple (p,q,r).")["answer_type"], "tuple")
+
+    def test_verifier_flags_detectable_wrong_strategies_for_retry(self):
+        status, feedback = verify_candidate_answer(
+            "In how many ways can 7 people sit around a round table if no two of 3 people sit next to each other?",
+            "576",
+            "total_permutations = sp.factorial(6)\nrestricted_permutations = sp.factorial(4)*sp.factorial(3)\nanswer = total_permutations - restricted_permutations",
+        )
+        self.assertEqual(status, "fail")
+        self.assertIn("no-adjacency", feedback)
+
+        status, _ = verify_candidate_answer(
+            "Find the smallest C for which ||A v|| <= C ||v|| for all two-dimensional vectors v. The matrix is [[2,3],[0,-2]].",
+            "2",
+            "A = sp.Matrix([[2,3],[0,-2]])\nC = max(abs(e) for e in A.eigenvals())",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            "You have seven bags of gold coins. What is the smallest number of coins?",
+            "x",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            "What is the smallest positive perfect cube that can be written as the sum of three consecutive integers?",
+            "729",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            r"Suppose $\sin D=0.7$. What is $DE$? [asy] pair D,E,F; F=(0,0); D=(sqrt(51),7); E=(0,7); [/asy]",
+            "4.9",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            "A worker makes three end-of-year deposits with compound interest. What rate is needed?",
+            "49.03",
+            "equation = sp.Eq(A, P * (1 + r)**n)",
+        )
+        self.assertEqual(status, "fail")

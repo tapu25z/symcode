@@ -54,7 +54,12 @@ The code MUST:
    - Always solve for the requested target in the required output type; never print an intermediate quantity.
    - Respect the target output type inferred from the question: text/entity names must not be replaced by a numeric score; symbolic targets must preserve named parameters; sets must include all solutions; tuples must contain all coordinates; base notation must be preserved.
    - Never silently replace a diagram-dependent quantity with an arbitrary numeric guess. If the diagram is required, encode its stated coordinates/relations explicitly.
-5. Print exactly one JSON line and nothing else at the very end:
+5. Before printing, add cheap internal checks whenever possible:
+   - Substitute candidate solutions back into equations/inequalities.
+   - For small combinatorics, brute-force enumerate and compare against any formula.
+   - For symbolic identities, expand/simplify both sides at exact or multiple sample values.
+   - For optimization/norm problems, compare analytic result against numeric samples.
+6. Print exactly one JSON line and nothing else at the very end:
    print(json.dumps({"answer": str(display_answer), "canonical_answer": str(canonical_answer), "answer_type": "<target type>", "unit": None, "variables": {}}, default=str))
    Do not use `.format(...)` or an f-string to hand-build JSON; braces in JSON conflict with those formatting methods.
    `answer_type` must match the OUTPUT CONTRACT.

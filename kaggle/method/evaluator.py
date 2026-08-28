@@ -71,6 +71,21 @@ def _should_retry_symplanner(execution_status: str, candidate: Any, verification
         "empty candidate",
         "did not print",
         "no candidate",
+        "placeholder variable",
+        "no-adjacency",
+        "selectable groups",
+        "three for",
+        "spectral norm",
+        "log product rules",
+        "functional equation",
+        "special-function sum",
+        "smallest qualifying cube",
+        "complex rotation",
+        "end-of-year deposits",
+        "modular remainder",
+        "trig power identity",
+        "reassigned",
+        "explicit coordinates",
     )
     if verification_status == "fail":
         return any(token in feedback_text for token in actionable_tokens)

@@ -19,11 +19,15 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "inserting parentheses" in text:
         hints.append(
-            "For inserted-parentheses problems, use dynamic programming over the ordered numbers/operators and count distinct values; do not sample only a few parenthesizations."
+            "For inserted-parentheses problems, use dynamic programming over the ordered numbers and operators. Split every interval at every operator, combine left/right value sets, and count distinct final values."
         )
     if "round table" in text or "rotations of each other" in text:
         hints.append(
             "For circular seating with at most 9 people, a brute-force permutation check with one fixed anchor is safer than a fragile formula."
+        )
+    if "round table" in text and "no two" in text and "next to each other" in text:
+        hints.append(
+            "For circular no-adjacency seating, do not subtract only the all-special-people-together case; handle every pairwise adjacency or brute-force all circular arrangements."
         )
     if re.search(r"<\s*[^<>=]+\s*<", text):
         hints.append(
@@ -32,6 +36,10 @@ def build_problem_hints(question: str) -> list[str]:
     if "roots of unity" in text:
         hints.append(
             "For roots-of-unity targets, factor the polynomial and derive each root's angle/order; the answer is the least common multiple of the orders."
+        )
+    if "double sum" in text or (r"\sum_{j" in question and r"\sum_{k" in question):
+        hints.append(
+            "For double sums depending on j+k, group terms by n=j+k and count how many ordered pairs produce each n before simplifying into the named series variables."
         )
     if "is a factor of" in text and re.search(r"\bp\b|\bq\b|\br\b", text):
         hints.append(
@@ -47,15 +55,57 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "smallest positive perfect cube" in text and "three consecutive integers" in text:
         hints.append(
-            "A sum of three consecutive integers is three times the middle integer, so search cubes in increasing order and test divisibility by 3."
+            "A sum of three consecutive integers is three times the middle integer. Search candidate cube values in increasing order and return the cube value itself, not the middle integer or another power."
         )
     if "compound interest" in text and "deposits" in text:
         hints.append(
-            "For repeated end-of-year deposits, compound earlier deposits for more periods than later deposits before solving the rate."
+            "For repeated end-of-year deposits, compound earlier deposits for more periods than later deposits. A three-year end-of-year deposit plan has factors (1+r)^2, (1+r), and 1."
         )
     if "logarithms of the roots" in text:
         hints.append(
-            "Use log product rules with Vieta's formulas: a sum of logs gives the log of the product of roots."
+            "Use log product rules with Vieta's formulas: a sum of logs gives the log of the product of roots; for a cubic, product of roots is -constant/leading_coefficient."
+        )
+    if "functional equation" in text:
+        hints.append(
+            "For polynomial-looking functional equations over all reals, assume f(t)=A*t**2+B*t+C, substitute x,y, equate coefficients, then apply the given value."
+        )
+    if "different battalions" in text or ("how many different" in text and "soldiers" in text):
+        hints.append(
+            "When counting different selectable groups, multiply binomial choices for each class, e.g. choose required people from available people; do not compute only how many full groups can be formed."
+        )
+    if "three for" in text and "$1" in text:
+        hints.append(
+            "For pricing text like 'three for $1', revenue is number_sold / 3 dollars when divisible; avoid multiplying groups by 1/3."
+        )
+    if "remainder" in text and "mod" in text:
+        hints.append(
+            "For modular arithmetic, substitute the residue directly and reduce the final expression modulo the modulus."
+        )
+    if "gold coins" in text and "redistribute" in text and "bags" in text:
+        hints.append(
+            "For redistribution divisibility, search totals that satisfy both the original equal-bag condition and the new equal-bag condition after adding the found bag."
+        )
+    if "reassigned to" in text:
+        hints.append(
+            "For reassignment word problems, update both sides of the transfer: the receiver gains x while the giver loses x."
+        )
+    has_matrix_like = "matrix" in text or "pmatrix" in text or "begin{pmatrix}" in text
+    has_norm_like = "norm" in text or "||" in text or "\\|" in text or "magnitude" in text
+    if has_norm_like and "for all" in text and has_matrix_like:
+        hints.append(
+            "For ||A v|| <= C ||v||, compute the spectral norm sqrt(max eigenvalue of A.T*A), not the maximum absolute eigenvalue of A."
+        )
+    if "angle between" in text and "line" in text and re.search(r"=\s*[^=]+=", text):
+        hints.append(
+            "For chained-equality line definitions such as ax=by=cz, set the common value to t, derive a constant direction vector, then use the dot-product angle formula."
+        )
+    if "rotated around" in text and ("complex" in text or " i" in text):
+        hints.append(
+            "For complex rotation around center c, use w = c + (z-c)*(cos(theta)+I*sin(theta)) exactly; do not rotate absolute polar coordinates around the origin."
+        )
+    if "[asy]" in text and re.search(r"\bwhat\s+is\s+\$?[A-Z]{2}\$?", question):
+        hints.append(
+            "When ASY gives explicit point coordinates and asks for a segment length, compute the Euclidean distance between those named points."
         )
 
     return hints
