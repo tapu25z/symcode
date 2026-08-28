@@ -36,6 +36,7 @@ from .verifier import (
 )
 from .target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from .static_lint import lint_sympy_code
+from .problem_hints import build_problem_hints
 try:
     from .model import LLMRunner
 except ImportError:
@@ -89,6 +90,7 @@ __all__ = [
     "parse_planner_contract",
     "format_answer_for_contract",
     "lint_sympy_code",
+    "build_problem_hints",
     "LLMRunner",
     "load_dataset_file",
     "evaluate_direct_or_cot",

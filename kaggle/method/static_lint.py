@@ -14,6 +14,7 @@ def lint_sympy_code(code: str) -> list[str]:
         (r"(?:Eq|solve)\([^\n]*//", "using floor division inside an equation/solver expression"),
         (r"\)\s*&\s*\(", "combining inequalities with Python '&' instead of SymPy And"),
         (r"\.evalf\(\)", "evalf() may be called on a Python scalar; use sp.sympify first"),
+        (r"print\(\s*['\"]\{.*['\"]\.format\(", "hand-formatting JSON with .format; use json.dumps(..., default=str)"),
     ]
     for pattern, message in patterns:
         if re.search(pattern, text):

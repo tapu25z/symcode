@@ -283,11 +283,25 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     """
     if ans is None:
         return ""
+
+    if isinstance(ans, (list, tuple, set)):
+        items = list(ans)
+        left, right = ("(", ")") if isinstance(ans, tuple) else ("[", "]")
+        return left + ",".join(normalize_answer_str(item) for item in items) + right
     
     s = str(ans).strip()
     boxed = extract_boxed_content(s)
     if boxed is not None:
         s = boxed
+
+    if s.startswith(("[", "(")) and s.endswith(("]", ")")):
+        try:
+            literal = ast.literal_eval(s)
+            if isinstance(literal, (list, tuple)) and not any(isinstance(item, (list, tuple, dict, set)) for item in literal):
+                left, right = ("(", ")") if isinstance(literal, tuple) else ("[", "]")
+                return left + ",".join(normalize_answer_str(item) for item in literal) + right
+        except Exception:
+            pass
         
     s = re.sub(r"^[a-zA-Z](?:\([a-zA-Z0-9_, ]+\))?\s*=\s*", "", s).strip()
     s = re.sub(r"^ans(?:wer)?\s*=\s*", "", s, flags=re.IGNORECASE).strip()
@@ -312,6 +326,7 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     
     s = re.sub(r"\\sqrt\[([^\]]+)\]\{([^}]+)\}", r"((\2)**(1/(\1)))", s)
     s = re.sub(r"\\sqrt\{([^}]+)\}", r"sqrt(\1)", s)
+    s = re.sub(r"\\sqrt\s*([A-Za-z0-9]+)", r"sqrt(\1)", s)
     
     s = s.replace(r"\cdot", "*").replace(r"\times", "*").replace(r"\div", "/")
     # SymPy uses ``I`` for the imaginary unit; normalize common LaTeX/plain-text variants.
@@ -376,6 +391,21 @@ def _parse_math_expression(text: str):
     return parse_expr(text, local_dict=local_dict, transformations=transformations, evaluate=True)
 
 
+def _collection_parts(text: str) -> Optional[List[str]]:
+    if not text:
+        return None
+    if text[0] in "[{" and text[-1] in "]}":
+        inner = text[1:-1]
+        parts = _split_top_level(inner)
+        return parts if parts else None
+    if text[0] == "(" and text[-1] == ")":
+        inner = text[1:-1]
+        parts = _split_top_level(inner)
+        return parts if len(parts) > 1 else None
+    parts = _split_top_level(text)
+    return parts if len(parts) > 1 else None
+
+
 def check_exact_match(pred: Optional[str], gt: str) -> bool:
     """
     Kiểm tra độ chính xác tuyệt đối (Exact Match) giữa câu trả lời dự đoán và đáp án chuẩn.
@@ -419,31 +449,16 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
     except Exception:
         pass
 
-    if (norm_pred.startswith("(") and norm_pred.endswith(")") and 
-        norm_gt.startswith("(") and norm_gt.endswith(")")):
-        pred_parts = [p.strip() for p in norm_pred[1:-1].split(",") if p.strip()]
-        gt_parts = [p.strip() for p in norm_gt[1:-1].split(",") if p.strip()]
-        if len(pred_parts) == len(gt_parts) and len(pred_parts) > 0:
-            if all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
-                return True
-
-    if (norm_pred.startswith("{") and norm_pred.endswith("}") and 
-        norm_gt.startswith("{") and norm_gt.endswith("}")):
-        pred_items = {normalize_answer_str(p) for p in norm_pred[1:-1].split(",") if p.strip()}
-        gt_items = {normalize_answer_str(g) for g in norm_gt[1:-1].split(",") if g.strip()}
-        if pred_items == gt_items:
-            return True
-
     try:
         import sympy
-        # Compare collections element-wise so ``[3,5,7]`` and ``3, 5, 7``
-        # receive the same treatment as the corresponding MATH answer.
-        p_collection = norm_pred[1:-1] if norm_pred.startswith("[") and norm_pred.endswith("]") else norm_pred
-        g_collection = norm_gt[1:-1] if norm_gt.startswith("[") and norm_gt.endswith("]") else norm_gt
-        if (norm_pred.startswith("[") and norm_pred.endswith("]")) or (norm_gt.startswith("[") and norm_gt.endswith("]")):
-            pred_parts = _split_top_level(p_collection)
-            gt_parts = _split_top_level(g_collection)
-            if len(pred_parts) == len(gt_parts) and pred_parts and all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
+        pred_parts = _collection_parts(norm_pred)
+        gt_parts = _collection_parts(norm_gt)
+        if pred_parts or gt_parts:
+            if pred_parts and not gt_parts and len(pred_parts) == 1:
+                return check_exact_match(pred_parts[0], norm_gt)
+            if gt_parts and not pred_parts and len(gt_parts) == 1:
+                return check_exact_match(norm_pred, gt_parts[0])
+            if pred_parts and gt_parts and len(pred_parts) == len(gt_parts) and all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
                 return True
         p_sym = _parse_math_expression(norm_pred)
         g_sym = _parse_math_expression(norm_gt)

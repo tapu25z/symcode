@@ -20,6 +20,7 @@ if str(ROOT / "kaggle") not in sys.path:
     sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
+from method.target_contract import format_answer_for_contract
 
 
 def _rate(value: int, total: int) -> float:
@@ -37,6 +38,14 @@ def audit(path: str) -> dict[str, Any]:
     results = list(data.get("results", {}).get("SymPlanner", []))
     total = len(results)
     normalized_correct = [check_exact_match(item.get("predicted"), item.get("ground_truth", "")) for item in results]
+    postprocessed_predictions = [
+        format_answer_for_contract(item.get("problem", ""), item.get("predicted"), item.get("answer_type"))
+        for item in results
+    ]
+    postprocessed_correct = [
+        check_exact_match(predicted, item.get("ground_truth", ""))
+        for predicted, item in zip(postprocessed_predictions, results)
+    ]
     false_passes = [item for item, correct in zip(results, normalized_correct) if item.get("verification_status") == "pass" and not correct]
     false_fails = [item for item, correct in zip(results, normalized_correct) if item.get("verification_status") == "fail" and correct]
     malformed = [item for item in results if item.get("planner_errors")]
@@ -54,6 +63,7 @@ def audit(path: str) -> dict[str, Any]:
         "total": total,
         "accuracy_percent": _rate(sum(bool(item.get("is_correct")) for item in results), total),
         "normalized_accuracy_percent": _rate(sum(normalized_correct), total),
+        "postprocessed_accuracy_percent": _rate(sum(postprocessed_correct), total),
         "verification_status": dict(Counter(item.get("verification_status", "unknown") for item in results)),
         "execution_status": dict(Counter(item.get("execution_status", "unknown") for item in results)),
         "false_pass_count": len(false_passes),

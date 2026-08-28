@@ -678,7 +678,7 @@ def evaluate_symplanner(
         # -------------------------------------------------------------
         while attempt <= max_retries and _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
             attempt += 1
-            if any(record.get("code") == extracted_code for record in attempt_history):
+            if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
                 verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
             debug_messages = build_symplanner_debug_messages(
                 question=question,
@@ -831,7 +831,13 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
             continue
         
         num_correct = sum(1 for r in res_list if r.get("is_correct"))
-        normalized_correct = sum(1 for r in res_list if check_exact_match(r.get("predicted"), r.get("ground_truth", "")))
+        normalized_correct = sum(
+            1 for r in res_list
+            if check_exact_match(
+                format_answer_for_contract(r.get("problem", ""), r.get("predicted"), r.get("answer_type")),
+                r.get("ground_truth", "")
+            )
+        )
         acc = (num_correct / total) * 100.0
         avg_tokens = sum(r.get("generated_tokens", 0) for r in res_list) / total
         avg_attempts = sum(r.get("attempts", 1) for r in res_list) / total
@@ -859,7 +865,12 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
         for record in res_list:
             history = record.get("attempt_history") or []
             if len(history) > 1 and history[0].get("candidate_answer") is not None and record.get("is_correct"):
-                if not check_exact_match(history[0].get("candidate_answer"), record.get("ground_truth", "")):
+                first_pred = format_answer_for_contract(
+                    record.get("problem", ""),
+                    history[0].get("candidate_answer"),
+                    history[0].get("answer_type"),
+                )
+                if not check_exact_match(first_pred, record.get("ground_truth", "")):
                     recovered += 1
 
         print(f"{method:<14} | {acc:<9.2f}% | {f'{num_correct}/{total}':<15} | {avg_tokens:<12.1f} | {avg_attempts:<12.2f} | {exec_rate_str:<10} | {verif_rate_str:<10}")
