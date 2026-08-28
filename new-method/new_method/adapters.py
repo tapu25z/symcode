@@ -25,6 +25,10 @@ def _symplanner_safe_enc(value):
         return int(value)
     if isinstance(value, sp.Float):
         return float(value)
+    if isinstance(value, sp.Tuple):
+        return [_symplanner_safe_enc(item) for item in value]
+    if isinstance(value, sp.Set):
+        return [_symplanner_safe_enc(item) for item in sorted(value, key=str)]
     if isinstance(value, sp.Basic):
         return str(value)
     return value
@@ -36,6 +40,10 @@ def _symplanner_json_default(obj):
             return int(obj)
         if isinstance(obj, _symplanner_sp.Float):
             return float(obj)
+        if isinstance(obj, _symplanner_sp.Tuple):
+            return [_symplanner_safe_enc(item) for item in obj]
+        if isinstance(obj, _symplanner_sp.Set):
+            return [_symplanner_safe_enc(item) for item in sorted(obj, key=str)]
         if isinstance(obj, _symplanner_sp.Basic):
             return str(obj)
     except Exception:

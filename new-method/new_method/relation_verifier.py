@@ -86,6 +86,10 @@ def _equivalent(left: Any, right: Any) -> bool:
             return all(_equivalent(a, b) for a, b in zip(left, right))
         if isinstance(left, sp.Set) and isinstance(right, sp.Set):
             return left.symmetric_difference(right) == sp.EmptySet
+        left_structured = isinstance(left, (tuple, list, sp.Tuple, sp.MatrixBase, sp.Set))
+        right_structured = isinstance(right, (tuple, list, sp.Tuple, sp.MatrixBase, sp.Set))
+        if left_structured or right_structured:
+            return False
         left_number, right_number = _number(left.evalf() if hasattr(left, "evalf") else left), _number(right.evalf() if hasattr(right, "evalf") else right)
         if left_number is not None and right_number is not None:
             scale = max(1.0, abs(left_number), abs(right_number))
@@ -167,7 +171,17 @@ def _check_condition(condition: Mapping[str, Any], env: Mapping[str, Any]) -> tu
                 return ("pass", None) if float(value.evalf()).is_integer() else ("fail", None)
             return "unknown", f"unresolved integer value: {value}"
     try:
-        evaluated = _safe_sympify(expr, allow_condition=True).subs(_substitutions(env))
+        # Python's `Symbol != 0` produces a native bool before SymPy can attach
+        # `.subs()`. Parse this common domain condition explicitly as `Ne`.
+        not_equal = re.fullmatch(r"\s*(.+?)\s*!=\s*(.+?)\s*", expr)
+        if not_equal:
+            evaluated = sp.Ne(
+                _safe_sympify(not_equal.group(1), allow_condition=True),
+                _safe_sympify(not_equal.group(2), allow_condition=True),
+            )
+        else:
+            evaluated = _safe_sympify(expr, allow_condition=True)
+        evaluated = evaluated.subs(_substitutions(env)) if hasattr(evaluated, "subs") else evaluated
         if evaluated in (True, sp.true):
             return "pass", None
         if evaluated in (False, sp.false):

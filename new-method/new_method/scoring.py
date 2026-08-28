@@ -76,6 +76,10 @@ def _latex_matrix(text: str, normalize: Callable[[str], str]):
         return None
 
 
+def _is_structured(value: Any) -> bool:
+    return isinstance(value, (tuple, list)) or (sp is not None and isinstance(value, (sp.Tuple, sp.MatrixBase, sp.Set)))
+
+
 def _clean_base_suffix(text: str) -> str:
     s = str(text or "").strip()
     s = re.sub(r"_\{\s*\d+\s*\}", "", s)
@@ -144,17 +148,21 @@ def check_math500_equivalence(
                         elem_matches.append(False)
                 if all(elem_matches):
                     return True
-            try:
-                diff = sp.simplify(cand_expr - gold_expr)
-                if diff == 0 or getattr(diff, "equals", lambda _: False)(0):
-                    return True
-            except Exception:
-                pass
-            try:
-                diff_val = complex(sp.N(cand_expr - gold_expr))
-                if abs(diff_val) <= 1e-6:
-                    return True
-            except Exception:
-                pass
+            # Never subtract a structured SymPy object from a scalar. Older
+            # code let Tuple reach this branch, which emits a deprecation
+            # warning and can become a hard error in newer SymPy releases.
+            if not _is_structured(cand_expr) and not _is_structured(gold_expr):
+                try:
+                    diff = sp.simplify(cand_expr - gold_expr)
+                    if diff == 0 or getattr(diff, "equals", lambda _: False)(0):
+                        return True
+                except Exception:
+                    pass
+                try:
+                    diff_val = complex(sp.N(cand_expr - gold_expr))
+                    if abs(diff_val) <= 1e-6:
+                        return True
+                except Exception:
+                    pass
 
     return False

@@ -131,6 +131,8 @@ def evaluate_ir_variant(
             "traceback": execution.get("_traceback"),
             "extracted_code": trace.get("code"),
             "planner_note": json.dumps(trace.get("ir"), ensure_ascii=False, default=str),
+            "solver_plan": trace.get("solver_plan"),
+            "acg_ir": trace.get("acg_ir"),
             "raw_output": calls[-1]["response"] if calls else "",
             "raw_outputs": [call["response"] for call in calls],
             "attempt_history": attempts,

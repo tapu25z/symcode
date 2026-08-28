@@ -7,9 +7,17 @@ from typing import Any, Callable, Mapping
 
 from .config import AblationConfig, resolve_ablation
 from .normalizer import augment_ir_from_question, build_codegen_payload, normalize_problem_ir, validate_normalized_ir
-from .problem_ir import extract_json_object, normalize_ir_shape, validate_ir
-from .prompts import codegen_prompt, extraction_prompt, repair_prompt
+from .problem_ir import (
+    acg_to_legacy_ir,
+    extract_json_object,
+    normalize_acg_shape,
+    normalize_ir_shape,
+    validate_acg_ir,
+    validate_ir,
+)
+from .prompts import acg_codegen_prompt, acg_extraction_prompt, codegen_prompt, extraction_prompt, repair_prompt
 from .relation_verifier import verify_bidirectional
+from .solver_planner import plan_solver
 
 
 RUNTIME_HEADER = r"""import sympy as sp
@@ -23,6 +31,8 @@ def enc(v):
         return v
     if getattr(v, "is_Integer", False):
         return int(v)
+    if isinstance(v, sp.Tuple):
+        return [enc(x) for x in v]
     if isinstance(v, (int, str)):
         return v
     if isinstance(v, float):
@@ -67,19 +77,38 @@ class SymPlannerIRPipeline:
         self.ablation = resolve_ablation(ablation)
 
     def run(self, question: str) -> dict[str, Any]:
-        raw_ir = extract_json_object(self.llm_call(extraction_prompt(question)))
-        ir = normalize_ir_shape(raw_ir)
-        schema_errors = self._schema_errors(raw_ir, ir)
+        acg_ir = None
+        solver_plan = None
+        if self.ablation.name == "ACG":
+            raw_ir = extract_json_object(self.llm_call(acg_extraction_prompt(question)))
+            acg_ir = normalize_acg_shape(raw_ir)
+            ir = acg_to_legacy_ir(acg_ir)
+            schema_errors = ([] if raw_ir else ["extractor returned no valid ACG JSON"])
+            schema_errors.extend(validate_acg_ir(acg_ir))
+            solver_plan = plan_solver(acg_ir)
+        else:
+            raw_ir = extract_json_object(self.llm_call(extraction_prompt(question)))
+            ir = normalize_ir_shape(raw_ir)
+            schema_errors = self._schema_errors(raw_ir, ir)
         normalized = augment_ir_from_question(question, normalize_problem_ir(ir))
         normalization_errors = validate_normalized_ir(normalized)
         all_ir_errors = list(dict.fromkeys(schema_errors + normalization_errors))
 
         fatal_errors = self._fatal_ir_errors(ir, all_ir_errors)
         if fatal_errors:
-            return self._invalid_ir(question, normalized, all_ir_errors, fatal_errors)
+            return self._invalid_ir(question, normalized, all_ir_errors, fatal_errors, acg_ir, solver_plan, self.ablation.name)
 
         payload = build_codegen_payload(normalized)
-        code = strip_code_fence(self.llm_call(codegen_prompt(payload)))
+        if acg_ir is not None:
+            payload = {
+                **payload,
+                "representation": "acg-ir-v1",
+                "acg_ir": acg_ir,
+                "solver_plan": solver_plan,
+            }
+            code = strip_code_fence(self.llm_call(acg_codegen_prompt(payload)))
+        else:
+            code = strip_code_fence(self.llm_call(codegen_prompt(payload)))
         attempts: list[dict[str, Any]] = []
         for attempt in range(self.max_repairs + 1):
             execution = self._execute(code)
@@ -95,6 +124,8 @@ class SymPlannerIRPipeline:
             "variant": self.ablation.name,
             "question": question,
             "ir": normalized,
+            "acg_ir": acg_ir,
+            "solver_plan": solver_plan,
             "payload": payload,
             "code": code,
             "schema_errors": all_ir_errors,
@@ -124,12 +155,17 @@ class SymPlannerIRPipeline:
         normalized: Mapping[str, Any],
         diagnostics: list[str],
         fatal_errors: list[str],
+        acg_ir: Mapping[str, Any] | None = None,
+        solver_plan: Mapping[str, Any] | None = None,
+        variant: str = "IR",
     ) -> dict[str, Any]:
         return {
             "status": "invalid_ir",
-            "variant": "IR",
+            "variant": variant,
             "question": question,
             "ir": normalized,
+            "acg_ir": acg_ir,
+            "solver_plan": solver_plan,
             "payload": None,
             "code": None,
             "schema_errors": diagnostics,

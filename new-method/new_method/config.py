@@ -10,6 +10,7 @@ class AblationConfig:
 
 ABLATIONS = {
     "IR": AblationConfig("IR"),
+    "ACG": AblationConfig("ACG"),
 }
 
 

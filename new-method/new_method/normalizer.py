@@ -152,6 +152,18 @@ def is_supported_unit(unit: str | None) -> bool:
     return True
 
 
+def classify_unit(unit: str | None) -> str:
+    """Classify a label without making unknown labels a normalization failure."""
+    cleaned = normalize_unit(unit)
+    if not cleaned:
+        return "none"
+    if is_supported_unit(cleaned):
+        return "convertible"
+    if cleaned in {"box", "boxes", "pack", "packs", "bag", "bags", "month", "months", "year", "years"}:
+        return "ambiguous"
+    return "opaque"
+
+
 def is_safe_symbolic_expression(value: Any) -> bool:
     if not isinstance(value, str):
         return False
@@ -168,12 +180,12 @@ def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
     if numeric is None:
         norm_val = normalize_expression(raw)
         status = "expression" if is_safe_symbolic_expression(raw) else "symbolic"
-        return {"raw": value, "value": norm_val, "unit": unit, "canonical_value": norm_val, "canonical_unit": unit, "status": status}
-    if not is_supported_unit(unit):
-        return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "unknown_unit"}
+        return {"raw": value, "value": norm_val, "unit": unit, "canonical_value": norm_val, "canonical_unit": unit, "unit_class": classify_unit(unit), "status": status}
     if unit == "%":
-        return {"raw": value, "value": numeric, "unit": "%", "canonical_value": numeric / 100.0, "canonical_unit": "ratio", "status": "ok"}
-    return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "ok"}
+        return {"raw": value, "value": numeric, "unit": "%", "canonical_value": numeric / 100.0, "canonical_unit": "ratio", "unit_class": "convertible", "status": "ok"}
+    # A unit is a semantic label unless a conversion rule is explicit. This keeps
+    # domain entities such as "dogs" and "packs" from becoming hard failures.
+    return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "unit_class": classify_unit(unit), "status": "ok"}
 
 
 def normalize_expression(expression: Any) -> str:
@@ -403,7 +415,12 @@ def build_codegen_payload(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
         "target_unknown": {key: normalized_ir.get("target_unknown", {}).get(key) for key in ("symbol", "unit", "dimension")},
         "required_output": normalized_ir.get("required_output", {}),
         "unit_conversions": {
-            unit: {"canonical_unit": unit_conversion(unit)[0], "to_canonical": unit_conversion(unit)[1], "from_canonical": 1.0 / unit_conversion(unit)[1]}
-            for unit in sorted(units) if is_supported_unit(unit)
+            unit: {
+                "canonical_unit": unit_conversion(unit)[0],
+                "to_canonical": unit_conversion(unit)[1],
+                "from_canonical": 1.0 / unit_conversion(unit)[1],
+                "unit_class": classify_unit(unit),
+            }
+            for unit in sorted(units)
         },
     }

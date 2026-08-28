@@ -1,4 +1,4 @@
-"""Benchmark the old SymPlanner baseline against the single IR pipeline."""
+"""Benchmark SymPlanner baselines against IR and Adaptive Computation Graph variants."""
 
 from __future__ import annotations
 
