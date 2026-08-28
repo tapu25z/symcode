@@ -107,6 +107,18 @@ def parse_args():
         help="Duong dan file JSON luu ket qua."
     )
     parser.add_argument(
+        "--tail",
+        action="store_true",
+        default=False,
+        help="Lay N mau CUOI CUNG thay vi N mau dau tien."
+    )
+    parser.add_argument(
+        "--per-level-samples",
+        type=int,
+        default=None,
+        help="So luong mau lay cho MOI LEVEL (vi du: --per-level-samples 100)."
+    )
+    parser.add_argument(
         "--save-every",
         type=int,
         default=5,
@@ -135,7 +147,8 @@ def main():
             lvl_str = "_lvl" + "_".join(str(l) for l in sorted(args.filter_levels))
         else:
             lvl_str = ""
-        output_file = f"{args.dataset}{lvl_str}_results.json"
+        tail_str = "_tail" if args.tail else ""
+        output_file = f"{args.dataset}{lvl_str}{tail_str}_results.json"
 
     config = {
         "model_id": args.model_id,
@@ -146,6 +159,8 @@ def main():
         "dataset_path": dataset_path,
         "filter_levels": args.filter_levels,
         "num_samples": args.num_samples,
+        "per_level_samples": args.per_level_samples,
+        "tail": args.tail,
         "methods_to_run": args.methods,
         "code_exec_timeout": args.timeout,
         "max_symcode_retries": args.max_retries,
@@ -157,6 +172,8 @@ def main():
     print(f"[INFO] Mo hinh: {config['model_id']}")
     print(f"[INFO] Tap du lieu: {config['dataset_name'].upper()} ({config['dataset_path']})")
     print(f"[INFO] Loc do kho: {config['filter_levels']}")
+    print(f"[INFO] Mau moi level: {config['per_level_samples']}")
+    print(f"[INFO] Lat nguoc lay tu cuoi (tail): {config['tail']}")
     print(f"[INFO] So mau danh gia: {config['num_samples'] if config['num_samples'] is not None else 'TOAN BO'}")
     print(f"[INFO] Cac phuong phap: {config['methods_to_run']}")
     print(f"[INFO] File ket qua: {config['output_file']}")
@@ -167,8 +184,11 @@ def main():
         dataset_path,
         split="test",
         num_samples=args.num_samples,
-        filter_levels=args.filter_levels
+        filter_levels=args.filter_levels,
+        tail=args.tail,
+        per_level_samples=args.per_level_samples
     )
+
 
     if not dataset:
         print("[ERROR] Khong tim thay du lieu de danh gia. Kiem tra lai duong dan file.")
