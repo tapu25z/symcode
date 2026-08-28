@@ -1,8 +1,10 @@
 """
 Định nghĩa hệ thống prompt và bộ tạo thông điệp ChatML cho các phương pháp benchmark:
 Direct, CoT, SymCode và SymPlanner (Decoupled Divide-and-Plan Pipeline: Planner -> Pure Codegen -> Debug Repair).
+Sử dụng phân tích động cây cú pháp Python (AST - Abstract Syntax Tree) tổng quát để chẩn đoán nguyên nhân Timeout không cứng nhắc.
 """
 
+import ast
 import re
 from typing import Dict, List, Optional, Any
 
@@ -26,6 +28,9 @@ Output ONLY this JSON object:
   "pitfalls": ["unit/sign/rounding/free-variable pitfalls to avoid"]
 }
 
+Rules:
+- Read constants from the problem accurately.
+- For large summations or systemic relations, prefer analytical identities or pattern recognition.
 Keep the final JSON under 150 words."""
 
 # ==============================================================================
@@ -55,7 +60,7 @@ The code MUST:
    - Never output `None`, `Invalid`, or undefined variables. Do NOT create conditional `if/else` checks that assign `None`.
    - Never call `.evalf()` on Python standard `int` or `float`.
 5. FORMATTING & SIMPLIFICATION & LATEX PRINTING:
-   - ALWAYS post-process final SymPy expression/number using `sp.nsimplify()`, `sp.radsimp()`, `sp.trigsimp()`, or `sp.expand_complex()` to simplify radicals and convert repeating decimals to exact fractions (e.g. 218.571428571429 -> 270/7).
+   - ALWAYS post-process final SymPy expression/number using `sp.nsimplify()`, `sp.radsimp()`, `sp.trigsimp()`, or `sp.expand_complex()` to simplify radicals and convert repeating decimals to exact fractions.
    - Always print the final answer in LaTeX boxed format at the very end.
    - If `final_answer` is a SymPy object or expression, use `sp.latex(final_answer)`:
      `if isinstance(final_answer, (sp.Basic, sp.Matrix)): print(f"\\boxed{{{sp.latex(final_answer)}}}") else: print(f"\\boxed{{{final_answer}}}")`
@@ -86,19 +91,16 @@ Do NOT write explanations. Do NOT output <think> tags.
 
 Fix the shown failure:
 - Syntax error / Indentation error / Runtime error (AttributeError, TypeError, KeyError, RecursionError)
+- Timeout error: Change algorithmic approach! DO NOT output the same code structure. Switch to a lower-complexity strategy.
 - RecursionError: Add `@functools.lru_cache(None)` above recursive functions or rewrite using an iterative DP loop.
 - Misuse of `//` inside SymPy `sp.Eq()` or passing tuples to `.subs()`
 - Unevaluated Python variable name or missing `\boxed{}` output
 - Free variables remaining in answer when a concrete value is required
-- Verifier diagnosis feedback (e.g. missing target symbols, un-simplified radical/fraction, angle out of bounds)
+- Verifier diagnosis feedback
 
 Requirements:
 1. Ensure the code computes a concrete numerical value, LaTeX-formatted expression, or simplified symbolic result.
-2. Follow STRICT SYMPY CODE RULES:
-   - Safe solution list indexing (`sol[0] if sol else None`).
-   - Pass dictionary to `.subs({x: val1})`.
-   - Post-process with `sp.nsimplify()`, `sp.radsimp()`, or `sp.trigsimp()`.
-3. Print ONLY the final answer in LaTeX boxed format:
+2. Print ONLY the final answer in LaTeX boxed format:
    `if isinstance(final_answer, (sp.Basic, sp.Matrix)): print(f"\\boxed{{{sp.latex(final_answer)}}}") else: print(f"\\boxed{{{final_answer}}}")`
 """
 
@@ -121,7 +123,7 @@ SYSTEM_PROMPTS = {
 
 
 # ==============================================================================
-# 5. HELPER FUNCTIONS & MESSAGE BUILDERS
+# 5. GENERALIZED DYNAMIC AST ANALYSIS & MESSAGE BUILDERS
 # ==============================================================================
 
 def remove_thinking_tags(text: str) -> str:
@@ -136,11 +138,7 @@ def remove_thinking_tags(text: str) -> str:
 
 
 def clean_planner_note(raw_plan: str) -> str:
-    """
-    Làm sạch kết quả kế hoạch từ Turn 1:
-    - Loại bỏ thẻ thinking.
-    - Trích xuất khối JSON hoặc văn bản kế hoạch có giới hạn độ dài để không làm phình context codegen.
-    """
+    """Làm sạch kết quả kế hoạch từ Turn 1."""
     if not raw_plan or not raw_plan.strip():
         return ""
     text = remove_thinking_tags(raw_plan.strip())
@@ -148,6 +146,70 @@ def clean_planner_note(raw_plan: str) -> str:
     if match:
         text = match.group(1).strip()
     return text[:1500].strip()
+
+
+def extract_code_ast_features(code: str) -> List[str]:
+    """
+    Phân tích cây cú pháp (AST - Abstract Syntax Tree) tổng quát của đoạn mã ngẫu nhiên
+    để tự động trích xuất các thành phần cấu trúc phức tạp mà không rào cứng hàm/số cụ thể.
+    """
+    features = []
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            # 1. Phát hiện vòng lặp lồng nhau
+            if isinstance(node, (ast.While, ast.For)):
+                for child in ast.walk(node):
+                    if child is not node and isinstance(child, (ast.While, ast.For)):
+                        features.append("Nested loop structure (For/While lồng nhau)")
+                        break
+
+            # 2. Phân tích các lệnh gọi hàm đại số biểu tượng / solver
+            if isinstance(node, ast.Call):
+                func_name = ""
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+                
+                if func_name in ("solve", "solveset", "linsolve", "nonlinsolve", "diophantine", "dsolve", "rsolve"):
+                    features.append(f"Symbolic equation solver: `{func_name}()`")
+                elif func_name in ("simplify", "expand", "factor", "full_simplify", "nsimplify", "radsimp", "trigsimp"):
+                    features.append(f"Heavy symbolic expression transformer: `{func_name}()`")
+
+            # 3. Trích xuất các dải lặp lớn hơn 500
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range":
+                for arg in node.args:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, int) and arg.value > 500:
+                        features.append(f"Large iteration range (`range(..., {arg.value})`)")
+    except Exception:
+        pass
+
+    return list(dict.fromkeys(features))
+
+
+def diagnose_timeout_cause(code: str) -> str:
+    """
+    Chẩn đoán Timeout dựa trên cây cú pháp AST tổng quát và quy tắc nguyên tắc chung (Meta-Rules).
+    """
+    ast_features = extract_code_ast_features(code)
+    
+    lines = [
+        "DIAGNOSIS FOR TIMEOUT FAILURE:",
+        "1. Execution exceeded the maximum allowed time limit (15s).",
+    ]
+    if ast_features:
+        lines.append("2. High-complexity structural elements detected via AST analysis:")
+        for feat in ast_features:
+            lines.append(f"   - {feat}")
+            
+    lines.extend([
+        "3. MANDATORY STRATEGY SWITCH RULE:",
+        "   - The previous approach is computationally intractable.",
+        "   - You are STRICTLY FORBIDDEN from returning the same code structure.",
+        "   - You MUST switch to a fundamentally different strategy (e.g., from symbolic solver to discrete search, or from iterative summation to closed-form analytical representation)."
+    ])
+    return "\n".join(lines)
 
 
 def build_planner_messages(question: str) -> List[Dict[str, str]]:
@@ -188,7 +250,10 @@ def build_symplanner_debug_messages(
     feedback_lines = []
     if execution_status != "success":
         feedback_lines.append(f"Execution status: {execution_status.upper()}")
-        if error_tb:
+        if execution_status == "timeout":
+            timeout_diag = diagnose_timeout_cause(bad_code)
+            feedback_lines.append(f"\n{timeout_diag}")
+        elif error_tb:
             clean_tb = str(error_tb).strip()
             if len(clean_tb) > 600:
                 clean_tb = clean_tb[-600:]
@@ -294,6 +359,3 @@ def build_symplanner_retry_prompt_messages(
         verification_status=verification_status,
         verification_feedback=verification_feedback
     )
-
-
-

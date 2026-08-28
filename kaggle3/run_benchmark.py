@@ -65,10 +65,22 @@ def parse_args():
         help="ID mo hinh tren Hugging Face."
     )
     parser.add_argument(
+        "--use-vllm",
+        action="store_true",
+        default=False,
+        help="Su dung vLLM Engine de tang toc do suy luan (chua kich hoat mac dinh)."
+    )
+    parser.add_argument(
+        "--no-vllm",
+        dest="use_vllm",
+        action="store_false",
+        help="Tat vLLM, su dung Hugging Face Transformers native."
+    )
+    parser.add_argument(
         "--load-in-4bit",
         action="store_true",
         default=True,
-        help="Su dung luong tu hoa 4-bit NF4 via bitsandbytes."
+        help="Su dung luong tu hoa 4-bit NF4 via bitsandbytes (HF fallback)."
     )
     parser.add_argument(
         "--no-4bit",
@@ -203,6 +215,7 @@ def main():
     # Khoi tao mo hinh
     llm = LLMRunner(
         model_id=args.model_id,
+        use_vllm=args.use_vllm,
         load_in_4bit=args.load_in_4bit,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature

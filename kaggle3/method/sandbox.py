@@ -1,15 +1,14 @@
 """
 Module Sandbox thực thi mã nguồn Python/SymPy cách ly và an toàn.
-Sử dụng ThreadPoolExecutor để đảm bảo tốc độ thực thi nhanh dưới 0.05 giây và bảo vệ chống treo (timeout).
+Sử dụng multiprocessing.Process để đảm bảo cô lập hoàn toàn tiến trình và cưỡng chế diệt (terminate/kill)
+ngay lập tức nếu đoạn mã của LLM bị lặp vô hạn (infinite loop) hoặc vượt quá timeout.
 """
 
 import io
 import math
-import queue
-import random
 import traceback
 import contextlib
-import concurrent.futures
+import multiprocessing
 from typing import Dict, Any, Optional
 
 from .extractor import extract_boxed_content
@@ -76,6 +75,7 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
     """
     Thực thi mã nguồn Python/SymPy trong phạm vi biến cô lập và thu thập stdout / traceback.
     """
+    import math, random
     stdout_capture = io.StringIO()
     
     exec_globals = {
@@ -152,21 +152,16 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
         return {"status": "error", "stdout": stdout_capture.getvalue(), "traceback": tb_clean}
 
 
+def _process_sandbox_target(code: str, mode: str, q: multiprocessing.Queue):
+    """Worker target chạy trong tiến trình riêng cô lập."""
+    res = _run_code_in_scope(code, mode)
+    q.put(res)
+
+
 def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> Dict[str, Any]:
     """
-    Thực thi mã nguồn an toàn với cơ chế timeout nghiêm ngặt, cô lập môi trường và trích xuất kết quả.
-
-    Args:
-        code: Chuỗi mã nguồn Python cần chạy.
-        mode: "symcode" (hỗ trợ toán biểu tượng SymPy) hoặc "pal" (chỉ Python chuẩn).
-        timeout: Thời gian thực thi tối đa tính bằng giây.
-
-    Returns:
-        Dict gồm các trường:
-            - "status": "success" | "error" | "timeout"
-            - "stdout": chuỗi đầu ra tiêu chuẩn
-            - "traceback": thông báo lỗi chi tiết (nếu có)
-            - "extracted_answer": đáp án trích xuất được từ stdout
+    Thực thi mã nguồn an toàn với cơ chế Process isolation & Hard Timeout termination.
+    Nếu đoạn mã bị lặp vô hạn (while True), tiến trình con sẽ bị diệt (terminate/kill) ngay lập tức.
     """
     if not code or not code.strip():
         return {
@@ -176,24 +171,34 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
             "extracted_answer": None
         }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_run_code_in_scope, code, mode)
-        try:
-            res = future.result(timeout=timeout)
-        except concurrent.futures.TimeoutError:
-            return {
-                "status": "timeout",
-                "stdout": "",
-                "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây).",
-                "extracted_answer": None
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "stdout": "",
-                "traceback": str(e),
-                "extracted_answer": None
-            }
+    ctx = multiprocessing.get_context("fork") if "fork" in multiprocessing.get_all_start_methods() else multiprocessing.get_context()
+    q = ctx.Queue()
+    p = ctx.Process(target=_process_sandbox_target, args=(code, mode, q))
+    
+    p.start()
+    p.join(timeout=timeout)
+
+    if p.is_alive():
+        p.terminate()
+        p.join(timeout=1)
+        if p.is_alive():
+            p.kill()
+        return {
+            "status": "timeout",
+            "stdout": "",
+            "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây do lặp vô hạn hoặc tính toán quá lâu).",
+            "extracted_answer": None
+        }
+
+    if not q.empty():
+        res = q.get()
+    else:
+        res = {
+            "status": "error",
+            "stdout": "",
+            "traceback": "Tiến trình thực thi mã nguồn kết thúc bất ngờ mà không có kết quả.",
+            "extracted_answer": None
+        }
 
     stdout = res.get("stdout", "")
     boxed_ans = extract_boxed_content(stdout)

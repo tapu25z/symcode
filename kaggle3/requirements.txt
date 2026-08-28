@@ -2,6 +2,8 @@ torch
 transformers>=4.40.0
 accelerate>=0.28.0
 bitsandbytes>=0.43.0
+vllm>=0.4.0
 sympy>=1.12
 datasets>=2.18.0
 tqdm
+
