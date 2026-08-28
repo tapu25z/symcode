@@ -115,7 +115,7 @@ python kaggle/run_benchmark.py \
     --dataset math500 \
     --methods SymPlanner \
     --output-file result_symplanner_math500.json \
-    --timeout 3 \
+    --timeout 15 \
     --save-every 5
 
 echo "========================================================="
@@ -125,7 +125,7 @@ python kaggle/run_benchmark.py \
     --dataset gsm8k \
     --methods SymPlanner \
     --output-file result_symplanner_gsm8k.json \
-    --timeout 3 \
+    --timeout 15 \
     --save-every 10
 
 echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất Benchmark cả 2 dataset!"

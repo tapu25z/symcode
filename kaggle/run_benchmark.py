@@ -97,7 +97,7 @@ def parse_args():
     parser.add_argument(
         "--timeout",
         type=int,
-        default=3,
+        default=15,
         help="Thoi gian timeout thuc thi code sandbox (tinh bang giay)."
     )
     parser.add_argument(
