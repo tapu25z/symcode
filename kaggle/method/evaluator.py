@@ -40,11 +40,36 @@ from .extractor import (
 )
 from .sandbox import execute_code_safely
 from .verifier import verify_candidate_answer
+from .static_lint import lint_sympy_code
+from .target_contract import infer_target_spec, parse_planner_contract
 
 try:
     from .model import LLMRunner
 except ImportError:
     LLMRunner = Any
+
+
+def _verification_rank(status: str) -> int:
+    return {"pass": 2, "unknown": 1, "fail": 0}.get(str(status), -1)
+
+
+def _should_retry_symplanner(execution_status: str, candidate: Any, verification_status: str, feedback: Any) -> bool:
+    if execution_status != "success" or candidate is None:
+        return True
+    if verification_status == "fail":
+        return True
+    # Unknown is retried only when the verifier identified an actionable
+    # contract/diagram issue; generic syntactic uncertainty is not actionable.
+    feedback_text = str(feedback or "").lower()
+    return verification_status == "unknown" and any(token in feedback_text for token in ("target requires", "diagram", "tuple", "symbolic", "base notation"))
+
+
+def _with_static_diagnostics(feedback: Any, code: str, execution_status: str, candidate: Any, verification_status: str) -> Any:
+    findings = lint_sympy_code(code)
+    if not findings or (execution_status == "success" and candidate is not None and verification_status != "fail"):
+        return feedback
+    suffix = "Static diagnostics: " + "; ".join(findings)
+    return f"{feedback or 'No verifier feedback.'} {suffix}"
 
 
 def _translate_legacy_verification_feedback(feedback: Any) -> Any:
@@ -556,7 +581,20 @@ def evaluate_symplanner(
         raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=384)
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
-        planner_note = clean_planner_note(raw_plan)
+        planner_note, planner_meta, planner_errors = parse_planner_contract(raw_plan, question)
+        if planner_errors:
+            # Do not feed truncated/non-JSON planner text into codegen. Preserve
+            # the raw response for diagnostics and pass a bounded safe fallback.
+            fallback_spec = infer_target_spec(question, planner_note)
+            planner_note = json.dumps({
+                "target_unknown": "infer from problem",
+                "given_constants": [],
+                "strategy": "solve directly from the problem",
+                "steps": [],
+                "pitfalls": planner_errors,
+                "answer_type": fallback_spec["answer_type"],
+            }, ensure_ascii=True)
+            planner_meta = {"answer_type": fallback_spec["answer_type"]}
 
         # -------------------------------------------------------------
         # TURN 2: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
@@ -567,7 +605,7 @@ def evaluate_symplanner(
         raw_outputs.append(f"### Turn 2 (Codegen Initial):\n{raw_code_output}")
         
         extracted_code = extract_python_code(raw_code_output)
-        exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+        exec_res = execute_code_safely(extracted_code, mode="symplanner", timeout=timeout)
         candidate_ans = exec_res.get("extracted_answer")
         
         if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
@@ -575,11 +613,14 @@ def evaluate_symplanner(
 
         if exec_res["status"] == "success" and candidate_ans is not None:
             verif_status, verif_feedback = verify_candidate_answer(
-                question, candidate_ans, extracted_code, exec_res.get("stdout")
+                question, candidate_ans, extracted_code, exec_res.get("stdout"), planner_note
             )
         else:
             verif_status = "fail"
             verif_feedback = exec_res.get("traceback") or "Code did not print a valid \\boxed{} result."
+        verif_feedback = _with_static_diagnostics(
+            verif_feedback, extracted_code, exec_res.get("status", "error"), candidate_ans, verif_status
+        )
             
         attempt_record = {
             "attempt": 1,
@@ -588,8 +629,13 @@ def evaluate_symplanner(
             "generated_tokens": code_tokens,
             "execution_status": exec_res.get("status"),
             "candidate_answer": candidate_ans,
+            "canonical_answer": exec_res.get("canonical_answer"),
+            "answer_type": exec_res.get("answer_type"),
+            "unit": exec_res.get("unit"),
+            "variables": exec_res.get("variables"),
             "verification_status": verif_status,
             "verification_feedback": verif_feedback,
+            "static_lint": lint_sympy_code(extracted_code),
             "stdout": exec_res.get("stdout", ""),
             "traceback": exec_res.get("traceback")
         }
@@ -599,8 +645,10 @@ def evaluate_symplanner(
         # -------------------------------------------------------------
         # TURN 3: TARGETED DEBUG REPAIR LOOP (Nếu chạy lỗi hoặc Verifier fail)
         # -------------------------------------------------------------
-        while attempt <= max_retries and (exec_res["status"] != "success" or candidate_ans is None or verif_status == "fail"):
+        while attempt <= max_retries and _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
             attempt += 1
+            if any(record.get("code") == extracted_code for record in attempt_history):
+                verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
             debug_messages = build_symplanner_debug_messages(
                 question=question,
                 bad_code=extracted_code,
@@ -616,7 +664,7 @@ def evaluate_symplanner(
             raw_outputs.append(f"### Turn 3 (Debug Retry {attempt}):\n{raw_debug_output}")
             
             extracted_code = extract_python_code(raw_debug_output)
-            exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+            exec_res = execute_code_safely(extracted_code, mode="symplanner", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
             
             if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
@@ -624,11 +672,14 @@ def evaluate_symplanner(
 
             if exec_res["status"] == "success" and candidate_ans is not None:
                 verif_status, verif_feedback = verify_candidate_answer(
-                    question, candidate_ans, extracted_code, exec_res.get("stdout")
+                    question, candidate_ans, extracted_code, exec_res.get("stdout"), planner_note
                 )
             else:
                 verif_status = "fail"
                 verif_feedback = exec_res.get("traceback") or "Repaired code did not print a \\boxed{} result."
+            verif_feedback = _with_static_diagnostics(
+                verif_feedback, extracted_code, exec_res.get("status", "error"), candidate_ans, verif_status
+            )
                 
             retry_record = {
                 "attempt": attempt,
@@ -637,20 +688,44 @@ def evaluate_symplanner(
                 "generated_tokens": dbg_tokens,
                 "execution_status": exec_res.get("status"),
                 "candidate_answer": candidate_ans,
+                "canonical_answer": exec_res.get("canonical_answer"),
+                "answer_type": exec_res.get("answer_type"),
+                "unit": exec_res.get("unit"),
+                "variables": exec_res.get("variables"),
                 "verification_status": verif_status,
                 "verification_feedback": verif_feedback,
+                "static_lint": lint_sympy_code(extracted_code),
                 "stdout": exec_res.get("stdout", ""),
                 "traceback": exec_res.get("traceback")
             }
             attempt_history.append(retry_record)
+
+            if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
+                break
             
-            if exec_res["status"] == "success" and candidate_ans is not None and verif_status != "fail":
+            if not _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
                 break
 
         # -------------------------------------------------------------
         # FINAL ANSWER EXTRACTION & ACCURACY EVALUATION
         # -------------------------------------------------------------
-        final_predicted = candidate_ans
+        # Keep the strongest non-failing attempt. A repair response can execute
+        # successfully while silently degrading a previously valid answer.
+        best_record = max(
+            attempt_history,
+            key=lambda record: (_verification_rank(record.get("verification_status")), record.get("attempt", 0)),
+            default={}
+        )
+        final_predicted = best_record.get("candidate_answer", candidate_ans)
+        final_exec_status = best_record.get("execution_status", exec_res.get("status", "unknown"))
+        final_verif_status = best_record.get("verification_status", verif_status)
+        final_verif_feedback = best_record.get("verification_feedback", verif_feedback)
+        final_stdout = best_record.get("stdout", exec_res.get("stdout", ""))
+        final_traceback = best_record.get("traceback", exec_res.get("traceback"))
+        final_code = best_record.get("code", extracted_code)
+        final_canonical = best_record.get("canonical_answer")
+        final_answer_type = best_record.get("answer_type")
+        final_unit = best_record.get("unit")
         if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
             # Fallback an toàn: trích xuất từ planner note nếu có
             box_match = extract_boxed_content(planner_note)
@@ -669,13 +744,18 @@ def evaluate_symplanner(
             "is_correct": is_correct,
             "generated_tokens": total_tokens,
             "attempts": attempt,
-            "execution_status": exec_res.get("status", "unknown"),
-            "verification_status": verif_status,
-            "verification_feedback": verif_feedback,
-            "stdout": exec_res.get("stdout", ""),
-            "traceback": exec_res.get("traceback"),
-            "extracted_code": extracted_code,
+            "execution_status": final_exec_status,
+            "verification_status": final_verif_status,
+            "verification_feedback": final_verif_feedback,
+            "stdout": final_stdout,
+            "traceback": final_traceback,
+            "extracted_code": final_code,
+            "canonical_answer": final_canonical,
+            "answer_type": final_answer_type,
+            "unit": final_unit,
             "planner_note": planner_note,
+            "planner_contract": planner_meta,
+            "planner_errors": planner_errors,
             "raw_output": raw_outputs[-1] if raw_outputs else "",
             "raw_outputs": raw_outputs,
             "attempt_history": attempt_history
@@ -719,6 +799,7 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
             continue
         
         num_correct = sum(1 for r in res_list if r.get("is_correct"))
+        normalized_correct = sum(1 for r in res_list if check_exact_match(r.get("predicted"), r.get("ground_truth", "")))
         acc = (num_correct / total) * 100.0
         avg_tokens = sum(r.get("generated_tokens", 0) for r in res_list) / total
         avg_attempts = sum(r.get("attempts", 1) for r in res_list) / total
@@ -738,6 +819,16 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
             verif_rate_str = f"{(verif_pass / len(verif_applicable)) * 100.0:.1f}%"
         else:
             verif_rate_str = "N/A"
+
+        false_passes = sum(1 for r in res_list if r.get("verification_status") == "pass" and not r.get("is_correct"))
+        false_fails = sum(1 for r in res_list if r.get("verification_status") == "fail" and r.get("is_correct"))
+        malformed_plans = sum(1 for r in res_list if r.get("planner_errors"))
+        recovered = 0
+        for record in res_list:
+            history = record.get("attempt_history") or []
+            if len(history) > 1 and history[0].get("candidate_answer") is not None and record.get("is_correct"):
+                if not check_exact_match(history[0].get("candidate_answer"), record.get("ground_truth", "")):
+                    recovered += 1
 
         print(f"{method:<14} | {acc:<9.2f}% | {f'{num_correct}/{total}':<15} | {avg_tokens:<12.1f} | {avg_attempts:<12.2f} | {exec_rate_str:<10} | {verif_rate_str:<10}")
 
@@ -786,12 +877,18 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
 
         summary_data[method] = {
             "accuracy_percent": round(acc, 2),
+            "normalized_accuracy_percent": round((normalized_correct / total) * 100.0, 2),
+            "normalized_match_count": normalized_correct,
             "exact_match_count": num_correct,
             "total_samples": total,
             "avg_generated_tokens": round(avg_tokens, 1),
             "avg_attempts": round(avg_attempts, 2),
             "execution_success_rate": exec_rate_str,
             "verification_success_rate": verif_rate_str,
+            "verification_false_passes": false_passes,
+            "verification_false_fails": false_fails,
+            "planner_malformed_count": malformed_plans,
+            "repair_recovered_count": recovered,
             "by_subject": by_subject,
             "by_difficulty": by_difficulty,
             "by_subject_x_difficulty": by_subject_x_difficulty

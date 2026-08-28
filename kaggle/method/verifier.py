@@ -7,12 +7,15 @@ hoàn toàn độc lập, KHÔNG sử dụng hoặc làm lộ đáp án chuẩn 
 import re
 from typing import Tuple, Optional, Any
 
+from .target_contract import target_contract_feedback
+
 
 def verify_candidate_answer(
     question: str,
     candidate_answer: Optional[str],
     code: Optional[str] = None,
-    stdout: Optional[str] = None
+    stdout: Optional[str] = None,
+    planner_note: str = ""
 ) -> Tuple[str, str]:
     """
     Kiểm tra tính hợp lệ của đáp án ứng viên dựa trên logic toán học và ràng buộc của bài toán.
@@ -33,6 +36,10 @@ def verify_candidate_answer(
         )
 
     cand_str = str(candidate_answer).strip()
+
+    contract_result = target_contract_feedback(question, cand_str, planner_note)
+    if contract_result is not None:
+        return contract_result
 
     # 2. Kiểm tra các placeholder không hợp lệ hoặc chuỗi lỗi
     invalid_tokens = ["todo", "none", "null", "undefined", "error", "nan", "invalid", "no valid solution", "<function", "<class"]
@@ -85,7 +92,7 @@ def verify_candidate_answer(
                         th_f = float(theta_val)
                         if th_f < 0 or th_f >= two_pi:
                             return ("fail", f"Verification Error: The polar angle theta must satisfy 0 <= theta < 2*pi, but got theta = {theta_val}.")
-                    return ("pass", "Verification Passed: Candidate answer satisfies polar-coordinate constraints (r > 0 and 0 <= theta < 2*pi).")
+                    return ("unknown", "Verification Unknown: candidate satisfies polar-coordinate bounds, but no relation proves the requested pair.")
                 except Exception:
                     pass
             return ("unknown", "Candidate coordinate tuple is well-formed.")
@@ -114,10 +121,11 @@ def verify_candidate_answer(
             )
 
         # Ràng buộc "in terms of X, Y": Nếu đề yêu cầu biểu diễn theo biến p, q nhưng đáp án lại không chứa p, q
-        in_terms_match = re.search(r"(?:in terms of|express .* in terms of)\s+([a-zA-Z,\s\$\\\{\}]+)", q_lower)
+        in_terms_match = re.search(r"(?:in terms of|express .* in terms of)\s+([a-zA-Z](?:\s*(?:,|and)\s*[a-zA-Z])*)", q_lower)
         if in_terms_match:
             raw_vars = in_terms_match.group(1)
-            target_vars = [v.strip().replace("$", "").replace("\\", "") for v in re.findall(r"[a-zA-Z]", raw_vars)]
+            target_vars = re.findall(r"[a-zA-Z]+", raw_vars)
+            target_vars = [item for item in target_vars if item.lower() not in {"and"}]
             if target_vars:
                 cand_syms = {str(s) for s in sym_obj.free_symbols}
                 # Nếu đáp án hoàn toàn là số/hằng số mà không chứa biến được yêu cầu
@@ -129,7 +137,8 @@ def verify_candidate_answer(
                     )
 
         # Ràng buộc số đếm / số lượng / số ước nguyên dương
-        if any(term in q_lower for term in [
+        is_distance_question = any(term in q_lower for term in ["miles", "kilometers", "kilometres", "meters", "distance"])
+        if not is_distance_question and any(term in q_lower for term in [
             "how many", "number of positive", "number of integers", 
             "number of ways", "number of divisors", "number of solutions",
             "proper divisors", "divisors"
@@ -141,7 +150,7 @@ def verify_candidate_answer(
                         return ("fail", f"Verification Error: This problem requires a non-negative count, but the result is negative ({num_val}).")
                     if not num_val.is_integer():
                         return ("fail", f"Verification Error: This problem requires an integer count, but the result is not an integer ({num_val}).")
-                    return ("pass", f"Verification Passed: Candidate answer {cand_str} is a valid non-negative integer count.")
+                    return ("unknown", f"Verification Unknown: candidate {cand_str} is a valid count, but no independent relation proves the count.")
                 except Exception:
                     pass
 
@@ -152,7 +161,7 @@ def verify_candidate_answer(
                     prob_val = float(sym_obj)
                     if prob_val < 0.0 or prob_val > 1.0:
                         return ("fail", f"Verification Error: Probability must lie in [0, 1], but the result is {prob_val}.")
-                    return ("pass", f"Verification Passed: Candidate answer satisfies probability bounds [0, 1].")
+                    return ("unknown", "Verification Unknown: candidate satisfies probability bounds, but no independent relation proves the probability.")
                 except Exception:
                     pass
 
@@ -163,13 +172,15 @@ def verify_candidate_answer(
                     dim_val = float(sym_obj)
                     if dim_val <= 0:
                         return ("fail", f"Verification Error: Geometric quantity (length/area/perimeter) must be positive, but got {dim_val}.")
-                    return ("pass", f"Verification Passed: Geometric dimension is positive ({dim_val}).")
+                    return ("unknown", f"Verification Unknown: geometric quantity is positive ({dim_val}), but no independent relation proves its value.")
                 except Exception:
                     pass
 
-        # Nếu đáp án là một số cụ thể (hằng số số thực / phân số / hằng số toán học)
+        # A syntactically valid scalar is not proof of correctness. Without a
+        # relation-level proof, fail closed and let the evaluator score it only
+        # against ground truth.
         if sym_obj.is_number:
-            return ("pass", f"Verification Passed: Candidate answer '{cand_str}' evaluates to a valid concrete numeric value/constant.")
+            return ("unknown", f"Verification Unknown: candidate '{cand_str}' is numeric, but no independent relation proves the target value.")
 
     except Exception:
         # Nếu SymPy không parse được (ví dụ chuỗi chữ cái tên riêng như "Evelyn")

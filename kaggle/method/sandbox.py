@@ -4,6 +4,7 @@ Sử dụng ThreadPoolExecutor để đảm bảo tốc độ thực thi nhanh d
 """
 
 import io
+import json
 import math
 import queue
 import random
@@ -158,7 +159,7 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
 
     Args:
         code: Chuỗi mã nguồn Python cần chạy.
-        mode: "symcode" (hỗ trợ toán biểu tượng SymPy) hoặc "pal" (chỉ Python chuẩn).
+        mode: "symcode" (boxed output), "symplanner" (structured JSON output), hoặc "pal" (chỉ Python chuẩn).
         timeout: Thời gian thực thi tối đa tính bằng giây.
 
     Returns:
@@ -196,6 +197,39 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
             }
 
     stdout = res.get("stdout", "")
+    if mode == "symplanner":
+        lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+        if len(lines) == 1:
+            try:
+                structured = json.loads(lines[0])
+            except json.JSONDecodeError:
+                structured = None
+            if isinstance(structured, dict) and "answer" in structured:
+                required = {"answer", "canonical_answer", "answer_type", "unit", "variables"}
+                missing = sorted(required - set(structured))
+                if missing:
+                    res["status"] = "error"
+                    res["traceback"] = f"Structured output missing fields: {', '.join(missing)}"
+                    res["extracted_answer"] = None
+                    return res
+                res["structured_output"] = structured
+                res["extracted_answer"] = structured.get("answer")
+                res["canonical_answer"] = structured.get("canonical_answer")
+                res["answer_type"] = structured.get("answer_type")
+                res["unit"] = structured.get("unit")
+                res["variables"] = structured.get("variables")
+                return res
+            if lines[0].startswith("{"):
+                res["status"] = "error"
+                res["traceback"] = "Invalid SymPlanner JSON output"
+                res["extracted_answer"] = None
+                return res
+        elif any(line.startswith("{") for line in lines):
+            res["status"] = "error"
+            res["traceback"] = "SymPlanner output must contain exactly one JSON line"
+            res["extracted_answer"] = None
+            return res
+        # Backward-compatible fallback for old SymPlanner checkpoints/code.
     boxed_ans = extract_boxed_content(stdout)
     if boxed_ans is not None:
         res["extracted_answer"] = boxed_ans

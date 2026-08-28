@@ -1,0 +1,65 @@
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "kaggle"))
+
+from method.extractor import check_exact_match
+from method.prompts import build_symplanner_codegen_messages
+from method.static_lint import lint_sympy_code
+from method.sandbox import execute_code_safely
+from method.target_contract import infer_target_spec, parse_planner_contract
+from method.verifier import verify_candidate_answer
+
+
+class SymPlannerQualityTests(unittest.TestCase):
+    def test_common_math_format_variants_are_equivalent(self):
+        self.assertTrue(check_exact_match("3*sqrt(13)", r"3\sqrt{13}"))
+        self.assertTrue(check_exact_match("6 + 9*I", "6+9i"))
+        self.assertTrue(check_exact_match("[3, 5, 7]", "3, 5, 7"))
+        self.assertTrue(check_exact_match("x=5", "5"))
+
+
+    def test_base_notation_is_not_collapsed_to_decimal(self):
+        self.assertFalse(check_exact_match("52", "52_8"))
+        self.assertTrue(check_exact_match("52_8", "52_8"))
+
+
+    def test_verifier_fails_closed_for_numeric_guess_and_target_mismatch(self):
+        status, _ = verify_candidate_answer("How many students are there?", "17")
+        self.assertEqual(status, "unknown")
+        status, _ = verify_candidate_answer("Which student has the greatest average speed?", "3.6")
+        self.assertEqual(status, "fail")
+        status, _ = verify_candidate_answer("How many miles did she travel?", "1.25")
+        self.assertEqual(status, "unknown")
+        status, _ = verify_candidate_answer("Write the answer in terms of p and q.", "-zeta(3)+pi**2/6")
+        self.assertEqual(status, "fail")
+
+
+    def test_planner_contract_recovers_truncated_plan(self):
+        note, parsed, errors = parse_planner_contract("```json\n{\"target_unknown\": \"x\"\n", "Which student wins?")
+        self.assertTrue(note)
+        self.assertTrue(errors)
+        self.assertEqual(parsed["answer_type"], "text")
+        self.assertEqual(infer_target_spec("Convert the point to polar coordinates")["answer_type"], "tuple")
+
+
+    def test_codegen_prompt_contains_target_contract(self):
+        messages = build_symplanner_codegen_messages("Which student has the greatest speed?", "{}")
+        self.assertIn("OUTPUT CONTRACT", messages[-1]["content"])
+        self.assertIn('"answer_type": "text"', messages[-1]["content"])
+
+
+    def test_static_lint_catches_known_sympy_hazards(self):
+        findings = lint_sympy_code("sol = sp.solve(eq, x)[0]\nvalue = x.evalf()")
+        self.assertGreaterEqual(len(findings), 2)
+
+    def test_symplanner_sandbox_enforces_structured_output(self):
+        code = 'import json; print(json.dumps({"answer":"5","canonical_answer":"5","answer_type":"number","unit":None,"variables":{}}))'
+        result = execute_code_safely(code, mode="symplanner")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["extracted_answer"], "5")
+        self.assertEqual(result["answer_type"], "number")
+        invalid = execute_code_safely('print("{bad json}")', mode="symplanner")
+        self.assertEqual(invalid["status"], "error")

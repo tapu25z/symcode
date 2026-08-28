@@ -4,7 +4,10 @@ Direct, CoT, SymCode và SymPlanner (Decoupled Divide-and-Plan Pipeline: Planner
 """
 
 import re
+import json
 from typing import Dict, List, Optional, Any
+
+from .target_contract import infer_target_spec
 
 # ==============================================================================
 # 1. PLANNER PROMPTS (Turn 1: Phân tích & Lập kế hoạch ngắn gọn, không sinh code)
@@ -21,7 +24,8 @@ Output ONLY this JSON object:
   "given_constants": ["key numbers, parameters and relations from problem"],
   "strategy": "sequential arithmetic OR symbolic equation solving (sp.solve)",
   "steps": ["step 1", "step 2", "step 3"],
-  "pitfalls": ["unit/sign/rounding/free-variable pitfalls to avoid"]
+  "pitfalls": ["unit/sign/rounding/free-variable pitfalls to avoid"],
+  "answer_type": "number|symbolic|tuple|set|matrix|text|base_notation"
 }
 
 Keep the final JSON under 120 words."""
@@ -45,9 +49,12 @@ The code MUST:
    - Never output `None`, `Invalid`, or undefined variables.
    - Do NOT create conditional `if/else` checks that assign `None` or `Invalid`.
    - Never call `.evalf()` on Python standard `int` or `float`.
-   - Always solve for a concrete number or simplified algebraic expression.
-5. Print ONLY the final answer in LaTeX boxed format at the very end:
-   print(f"\\boxed{{{final_answer}}}")
+   - Always solve for the requested target in the required output type; never print an intermediate quantity.
+   - Respect the target output type inferred from the question: text/entity names must not be replaced by a numeric score; symbolic targets must preserve named parameters; sets must include all solutions; tuples must contain all coordinates; base notation must be preserved.
+   - Never silently replace a diagram-dependent quantity with an arbitrary numeric guess. If the diagram is required, encode its stated coordinates/relations explicitly.
+5. Print exactly one JSON line and nothing else at the very end:
+   {"answer": <display value>, "canonical_answer": <canonical SymPy value>, "answer_type": <target type>, "unit": <string or null>, "variables": {}}
+   `answer_type` must match the OUTPUT CONTRACT. Convert SymPy values to strings before json.dumps.
 """
 
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
@@ -84,6 +91,17 @@ Requirements:
 1. Ensure the code computes a concrete numerical value or simplified expression.
 2. Print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")
+"""
+
+SYMPLANNER_DEBUG_SYSTEM_PROMPT = r"""You are fixing Python/SymPy code for a math problem.
+
+Return ONLY corrected executable Python code enclosed in a single ```python ... ``` block.
+Do NOT write explanations or <think> tags.
+
+Fix the shown execution, contract, or verifier failure. Recompute the answer from
+the problem; do not hard-code a replacement. Print exactly one JSON line with
+exactly answer, canonical_answer, answer_type, unit, and variables. Keep the
+answer_type required by the OUTPUT CONTRACT and do not print debug output.
 """
 
 # ==============================================================================
@@ -145,11 +163,16 @@ def build_planner_messages(question: str) -> List[Dict[str, str]]:
 def build_symplanner_codegen_messages(question: str, planner_note: str = "") -> List[Dict[str, str]]:
     """Xây dựng thông điệp cho Turn 2: Sinh mã nguồn Python/SymPy từ đề bài + Kế hoạch."""
     plan_block = planner_note.strip() or "Planner note unavailable. Solve directly from first principles."
+    target_spec = infer_target_spec(question, planner_note)
+    target_block = json.dumps(target_spec, sort_keys=True)
     user_content = f"""# PROBLEM
 {question}
 
 # PLANNER NOTES
 {plan_block}
+
+# OUTPUT CONTRACT
+{target_block}
 
 Return executable Python code only enclosed in ```python ... ```. Do not write explanations."""
     return [
@@ -166,7 +189,8 @@ def build_symplanner_debug_messages(
     candidate_answer: Optional[str] = None,
     verification_status: str = "fail",
     verification_feedback: Optional[str] = None,
-    planner_note: str = ""
+    planner_note: str = "",
+    structured_output: bool = True
 ) -> List[Dict[str, str]]:
     """Xây dựng thông điệp cho Turn 3: Sửa lỗi mã nguồn có chủ đích (Pure Code Debug)."""
     feedback_lines = []
@@ -190,12 +214,16 @@ def build_symplanner_debug_messages(
 
     feedback_text = "\n".join(feedback_lines)
     plan_block = planner_note.strip() or "N/A"
+    target_block = json.dumps(infer_target_spec(question, planner_note), sort_keys=True)
 
     user_text = f"""# PROBLEM
 {question}
 
 # PLANNER NOTES
 {plan_block}
+
+# OUTPUT CONTRACT
+{target_block}
 
 # PREVIOUS CODE
 ```python
@@ -208,7 +236,7 @@ def build_symplanner_debug_messages(
 Fix the issue and return corrected executable Python code only enclosed in ```python ... ```."""
 
     return [
-        {"role": "system", "content": DEBUG_SYSTEM_PROMPT},
+        {"role": "system", "content": SYMPLANNER_DEBUG_SYSTEM_PROMPT if structured_output else DEBUG_SYSTEM_PROMPT},
         {"role": "user", "content": user_text}
     ]
 
@@ -256,7 +284,8 @@ def build_retry_prompt_messages(
         error_tb=error_tb,
         candidate_answer=candidate_answer,
         verification_status=verification_status,
-        verification_feedback=verification_feedback
+        verification_feedback=verification_feedback,
+        structured_output=False
     )
 
 
@@ -276,7 +305,8 @@ def build_symplanner_retry_prompt_messages(
         error_tb=error_tb,
         candidate_answer=candidate_answer,
         verification_status=verification_status,
-        verification_feedback=verification_feedback
+        verification_feedback=verification_feedback,
+        structured_output=True
     )
 
 

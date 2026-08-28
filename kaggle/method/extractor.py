@@ -296,6 +296,7 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     
     s = re.sub(r"\\(?:left|right|displaystyle|limits|textstyle|scriptstyle)", "", s)
     s = re.sub(r"\\(?:text|mathrm|mathbf|textbf|textit|operatorname|mbox)\s*\{([^}]+)\}", r"\1", s)
+    s = re.sub(r"\\(?:mathrm|mathit)\s*i\b", "I", s, flags=re.IGNORECASE)
     s = re.sub(r"\\(?:quad|qquad|,|;|!|\s)", " ", s)
     
     s = re.sub(r"\^\s*\{\s*\\?(?:circ|degree)\s*\}", "", s)
@@ -313,6 +314,8 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     s = re.sub(r"\\sqrt\{([^}]+)\}", r"sqrt(\1)", s)
     
     s = s.replace(r"\cdot", "*").replace(r"\times", "*").replace(r"\div", "/")
+    # SymPy uses ``I`` for the imaginary unit; normalize common LaTeX/plain-text variants.
+    s = re.sub(r"(?<![A-Za-z])i(?![A-Za-z])", "I", s)
     
     # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 -> 1200)
     s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
@@ -334,6 +337,43 @@ def normalize_answer_str(ans: Optional[str]) -> str:
         pass
 
     return s
+
+
+def _split_top_level(text: str, separator: str = ",") -> List[str]:
+    """Split a tuple/set/list without breaking nested function arguments."""
+    parts: List[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == separator and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    parts.append(text[start:].strip())
+    return [part for part in parts if part]
+
+
+def _parse_math_expression(text: str):
+    """Parse a normalized expression with safe implicit multiplication support."""
+    import sympy
+    from sympy.parsing.sympy_parser import (
+        convert_xor,
+        implicit_multiplication_application,
+        parse_expr,
+        standard_transformations,
+    )
+    local_dict = {
+        "pi": sympy.pi,
+        "sqrt": sympy.sqrt,
+        "I": sympy.I,
+        "E": sympy.E,
+        "oo": sympy.oo,
+    }
+    transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
+    return parse_expr(text, local_dict=local_dict, transformations=transformations, evaluate=True)
 
 
 def check_exact_match(pred: Optional[str], gt: str) -> bool:
@@ -396,8 +436,17 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
 
     try:
         import sympy
-        p_sym = sympy.sympify(norm_pred)
-        g_sym = sympy.sympify(norm_gt)
+        # Compare collections element-wise so ``[3,5,7]`` and ``3, 5, 7``
+        # receive the same treatment as the corresponding MATH answer.
+        p_collection = norm_pred[1:-1] if norm_pred.startswith("[") and norm_pred.endswith("]") else norm_pred
+        g_collection = norm_gt[1:-1] if norm_gt.startswith("[") and norm_gt.endswith("]") else norm_gt
+        if (norm_pred.startswith("[") and norm_pred.endswith("]")) or (norm_gt.startswith("[") and norm_gt.endswith("]")):
+            pred_parts = _split_top_level(p_collection)
+            gt_parts = _split_top_level(g_collection)
+            if len(pred_parts) == len(gt_parts) and pred_parts and all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
+                return True
+        p_sym = _parse_math_expression(norm_pred)
+        g_sym = _parse_math_expression(norm_gt)
         diff = sympy.simplify(p_sym - g_sym)
         if diff == 0:
             return True

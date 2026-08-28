@@ -34,6 +34,8 @@ from .sandbox import (
 from .verifier import (
     verify_candidate_answer
 )
+from .target_contract import infer_target_spec, parse_planner_contract
+from .static_lint import lint_sympy_code
 try:
     from .model import LLMRunner
 except ImportError:
@@ -83,6 +85,9 @@ __all__ = [
     "check_exact_match",
     "execute_code_safely",
     "verify_candidate_answer",
+    "infer_target_spec",
+    "parse_planner_contract",
+    "lint_sympy_code",
     "LLMRunner",
     "load_dataset_file",
     "evaluate_direct_or_cot",
