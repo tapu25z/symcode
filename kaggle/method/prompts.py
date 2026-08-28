@@ -54,6 +54,8 @@ The code MUST:
    - Always solve for the requested target in the required output type; never print an intermediate quantity.
    - Respect the target output type inferred from the question: text/entity names must not be replaced by a numeric score; symbolic targets must preserve named parameters; sets must include all solutions; tuples must contain all coordinates; base notation must be preserved.
    - Never silently replace a diagram-dependent quantity with an arbitrary numeric guess. If the diagram is required, encode its stated coordinates/relations explicitly.
+   - Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+   - Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
 5. Before printing, add cheap internal checks whenever possible:
    - Substitute candidate solutions back into equations/inequalities.
    - For small combinatorics, brute-force enumerate and compare against any formula.
@@ -75,7 +77,9 @@ The code MUST:
 2. Define all given quantities and formulate equations accurately.
 3. Solve for the target quantity symbolically or numerically.
 4. Never call `.evalf()` on standard Python int/float.
-5. Print ONLY the final answer in LaTeX boxed format at the end:
+5. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+6. Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+7. Print ONLY the final answer in LaTeX boxed format at the end:
    print(f"\\boxed{{{final_answer}}}")
 """
 
@@ -97,7 +101,9 @@ Fix the shown failure:
 
 Requirements:
 1. Ensure the code computes a concrete numerical value or simplified expression.
-2. Print ONLY the final answer in LaTeX boxed format:
+2. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+3. Never write infinite loops or unbounded while loops. Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+4. Print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")
 """
 
@@ -112,6 +118,10 @@ exactly answer, canonical_answer, answer_type, unit, and variables. Keep the
 answer_type required by the OUTPUT CONTRACT and do not print debug output. Use
 print(json.dumps(..., default=str)); do not hand-format JSON with .format or an
 f-string.
+
+CRITICAL RULES:
+- Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+- Never write infinite loops or unbounded while loops. Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
 """
 
 # ==============================================================================
@@ -328,6 +338,3 @@ def build_symplanner_retry_prompt_messages(
         verification_feedback=verification_feedback,
         structured_output=True
     )
-
-
-

@@ -72,6 +72,7 @@ python kaggle/run_benchmark.py \
     --tail \
     --methods SymPlanner \
     --output-file result_symplanner_math500_perlvl100_tail_4090.json \
+    --timeout 3 \
     --save-every 5 2>&1 | tee -a logs/bench_vastai_4090.log
 
 echo "========================================================="
@@ -84,6 +85,7 @@ python kaggle/run_benchmark.py \
     --tail \
     --methods SymPlanner \
     --output-file result_symplanner_gsm8k_n250_tail_4090.json \
+    --timeout 3 \
     --save-every 10 2>&1 | tee -a logs/bench_vastai_4090.log
 
 echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất toàn bộ Benchmark trên Vast.ai RTX 4090!"

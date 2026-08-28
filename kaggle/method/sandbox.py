@@ -250,9 +250,65 @@ def _parse_symplanner_structured_stdout(stdout: str) -> Optional[Dict[str, Any]]
     return None
 
 
+def _run_code_in_process_wrapper(code: str, mode: str, conn) -> None:
+    try:
+        res = _run_code_in_scope(code, mode)
+        conn.send((True, res))
+    except Exception as e:
+        tb = traceback.format_exc()
+        conn.send((False, (str(e), tb)))
+    finally:
+        conn.close()
+
+
+def _run_code_with_process_timeout(code: str, mode: str, timeout: float) -> Dict[str, Any]:
+    import multiprocessing
+    ctx = multiprocessing.get_context('spawn')
+    parent_conn, child_conn = ctx.Pipe()
+    p = ctx.Process(target=_run_code_in_process_wrapper, args=(code, mode, child_conn))
+    p.start()
+    
+    # Chờ tiến trình con hoàn thành hoặc quá thời gian timeout
+    p.join(timeout)
+    
+    if p.is_alive():
+        p.terminate()
+        p.join()
+        parent_conn.close()
+        return {
+            "status": "timeout",
+            "stdout": "",
+            "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây).",
+            "extracted_answer": None
+        }
+    
+    if parent_conn.poll():
+        try:
+            success, val = parent_conn.recv()
+        except Exception as e:
+            success, val = False, (str(e), traceback.format_exc())
+        parent_conn.close()
+        if success:
+            return val
+        else:
+            return {
+                "status": "error",
+                "stdout": "",
+                "traceback": val[1],
+                "extracted_answer": None
+            }
+    parent_conn.close()
+    return {
+        "status": "error",
+        "stdout": "",
+        "traceback": "Lỗi: Tiến trình con kết thúc đột ngột không phản hồi.",
+        "extracted_answer": None
+    }
+
+
 def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> Dict[str, Any]:
     """
-    Thực thi mã nguồn an toàn với cơ chế timeout nghiêm ngặt, cô lập môi trường và trích xuất kết quả.
+    Thực thi mã nguồn an toàn với cơ chế timeout nghiêm ngặt bằng Process cách ly, cô lập môi trường và trích xuất kết quả.
 
     Args:
         code: Chuỗi mã nguồn Python cần chạy.
@@ -274,24 +330,7 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
             "extracted_answer": None
         }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_run_code_in_scope, code, mode)
-        try:
-            res = future.result(timeout=timeout)
-        except concurrent.futures.TimeoutError:
-            return {
-                "status": "timeout",
-                "stdout": "",
-                "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây).",
-                "extracted_answer": None
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "stdout": "",
-                "traceback": str(e),
-                "extracted_answer": None
-            }
+    res = _run_code_with_process_timeout(code, mode, timeout)
 
     stdout = res.get("stdout", "")
     if mode == "symplanner":

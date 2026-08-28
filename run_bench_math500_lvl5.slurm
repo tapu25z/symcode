@@ -119,6 +119,7 @@ python kaggle/run_benchmark.py \
     --num-samples 50 \
     --methods SymPlanner \
     --output-file result_symplanner_math500_lvl5_n50.json \
+    --timeout 3 \
     --save-every 5
 
 echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất Benchmark 50 mẫu Level 5 MATH-500!"
