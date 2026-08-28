@@ -59,7 +59,7 @@ class SymPlannerIRPipeline:
             execution = self._execute(code)
             verification = verify_bidirectional(normalized, execution)
             attempts.append({"attempt": attempt, "execution": execution, "verification": verification})
-            if verification["status"] == "pass" or attempt >= self.max_repairs:
+            if verification["status"] == "pass" or not self._repair_would_help(verification) or attempt >= self.max_repairs:
                 break
             code = strip_code_fence(self.llm_call(repair_prompt(payload, code, verification)))
 
@@ -99,12 +99,7 @@ class SymPlannerIRPipeline:
         for error in errors:
             if any(marker in error for marker in (
                 "must be a non-empty expression",
-                "contains unsupported characters",
-                "references undeclared symbols",
-                "must be an ASCII Python identifier",
                 "target_count must equal",
-                "required_output.type must be one of",
-                "required_output.precision must be one of",
                 "has unsupported operator",
             )):
                 fatal.append(error)
@@ -135,3 +130,13 @@ class SymPlannerIRPipeline:
             return dict(self.execute_code(code) or {})
         except Exception as exc:
             return {"execution_error": f"{type(exc).__name__}: {exc}"}
+
+    @staticmethod
+    def _repair_would_help(verification: Mapping[str, Any]) -> bool:
+        """Avoid spending repairs on merely unverifiable auxiliary relations."""
+        if verification.get("status") != "unknown":
+            return True
+        if verification.get("output_errors") or verification.get("failures"):
+            return True
+        feedback = verification.get("feedback") or []
+        return any("Missing canonical target answer" in str(item) for item in feedback)

@@ -123,6 +123,17 @@ print(json.dumps({
         self.assertEqual(len(result["attempts"]), 3)
         self.assertEqual(len(responses), 0)
 
+    def test_undeclared_intermediate_symbol_is_not_fatal_ir(self):
+        ir = {
+            **VALID_IR,
+            "relations": [{"id": "answer", "kind": "definition", "lhs": "x", "rhs": "n**3", "operator": "=", "unit": None, "source": "cube", "evidence": "perfect cube", "confidence": 1.0}],
+        }
+        responses = [json.dumps(ir), "print('code')"]
+        pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(10), max_repairs=0, ablation="IR")
+        result = pipeline.run("cube")
+        self.assertNotEqual(result["status"], "invalid_ir")
+        self.assertTrue(any("undeclared symbols" in error for error in result["schema_errors"]))
+
     def test_math500_matrix_and_infinity_scoring(self):
         matrix_gold = r"\begin{pmatrix} -1 & 0 \\ 0 & -1 \end{pmatrix}"
         self.assertTrue(check_math500_equivalence("Matrix([[-1,0],[0,-1]])", "Matrix([[-1,0],[0,-1]])", matrix_gold, check_exact_match, normalize_answer_str))

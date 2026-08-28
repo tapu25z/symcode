@@ -147,6 +147,39 @@ class ContractTests(unittest.TestCase):
         result = verify_bidirectional(normalize_problem_ir(ir), {"answer": "(3.0, 1.57079632679490)", "canonical_answer": "(3.0, 1.57079632679490)", "answer_type": "tuple", "unit": None, "variables": {"r": 3.0, "theta": 1.57079632679490}})
         self.assertEqual(result["status"], "pass", result)
 
+    def test_display_units_keep_relation_magnitude(self):
+        ir = {
+            "target_unknown": {"name": "perimeter", "symbol": "P_hex", "unit": "in", "dimension": "length"},
+            "givens": [{"name": "side", "symbol": "s", "value": "21/3", "unit": "in", "role": "measurement", "source": "21 inches"}],
+            "relations": [{"id": "hex", "kind": "definition", "lhs": "P_hex", "rhs": "6*s", "operator": "=", "unit": "in", "source": "hexagon", "evidence": "six sides", "confidence": 1.0}],
+            "conditions": [],
+            "required_output": {"type": "quantity", "unit": "in", "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = normalize_problem_ir(ir)
+        self.assertEqual(normalized["givens"][0]["quantity"]["canonical_value"], 7.0)
+        result = verify_bidirectional(normalized, {"answer": 42, "canonical_answer": 42, "answer_type": "quantity", "unit": "in", "variables": {"P_hex": 42, "s": 7}})
+        self.assertEqual(result["status"], "pass", result)
+
+    def test_function_evaluations_are_flattened_for_verification(self):
+        ir = {
+            "target_unknown": {"name": "result", "symbol": "R", "unit": None, "dimension": "number"},
+            "givens": [{"name": "function", "symbol": "f", "value": "(3*x-2)/(x-2)", "unit": None, "role": "constant", "source": "f(x)"}],
+            "relations": [
+                {"id": "f_minus_2", "kind": "definition", "lhs": "f(-2)", "rhs": "(3*(-2)-2)/((-2)-2)", "operator": "=", "unit": None, "source": "f(-2)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "f_minus_1", "kind": "definition", "lhs": "f(-1)", "rhs": "(3*(-1)-2)/((-1)-2)", "operator": "=", "unit": None, "source": "f(-1)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "f_0", "kind": "definition", "lhs": "f(0)", "rhs": "(3*0-2)/(0-2)", "operator": "=", "unit": None, "source": "f(0)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "sum", "kind": "definition", "lhs": "R", "rhs": "f(-2)+f(-1)+f(0)", "operator": "=", "unit": None, "source": "sum", "evidence": "requested", "confidence": 1.0},
+            ],
+            "conditions": [],
+            "required_output": {"type": "number", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = normalize_problem_ir(ir)
+        result = verify_bidirectional(
+            normalized,
+            {"answer": "14/3", "canonical_answer": "14/3", "answer_type": "number", "unit": None, "variables": {"f_minus_2": 2, "f_minus_1": "5/3", "f_0": 1, "R": "14/3"}},
+        )
+        self.assertEqual(result["status"], "pass", result)
+
 
 if __name__ == "__main__":
     unittest.main()

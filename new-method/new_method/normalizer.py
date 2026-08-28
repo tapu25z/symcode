@@ -28,8 +28,20 @@ UNIT_ALIASES = {
     "radians": "rad", "radian": "rad",
     "units": "unit", "unit": "unit",
 }
-EXPR_REPLACEMENTS = {"×": "*", "·": "*", "÷": "/", "−": "-", "–": "-", "^": "**", "π": "pi"}
+EXPR_REPLACEMENTS = {
+    "×": "*", "·": "*", "÷": "/", "−": "-", "–": "-", "^": "**",
+    "π": "pi", "∞": "oo", "θ": "theta", "Θ": "Theta", "²": "**2", "³": "**3", "°": "",
+}
 UNIT_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z]+)(?:\^?(?P<power>-?\d+))?$")
+
+
+def normalize_unit(unit: str | None) -> str | None:
+    if unit is None:
+        return None
+    text = str(unit).strip().lower().replace(" ", "").replace("·", "*")
+    if not text:
+        return None
+    return text.replace("²", "^2").replace("³", "^3").replace("°", "degree")
 
 
 def parse_number(value: Any) -> float | None:
@@ -68,7 +80,9 @@ def unit_conversion(unit: str | None) -> tuple[str | None, float]:
     """Return canonical compound unit and multiplicative factor to canonical SI-like units."""
     if not unit:
         return unit, 1.0
-    cleaned = str(unit).strip().lower().replace(" ", "").replace("·", "*")
+    cleaned = normalize_unit(unit)
+    if not cleaned:
+        return unit, 1.0
     if cleaned == "%":
         return "ratio", 0.01
     if cleaned == "ratio":
@@ -106,7 +120,9 @@ def unit_conversion(unit: str | None) -> tuple[str | None, float]:
 def is_supported_unit(unit: str | None) -> bool:
     if unit is None or str(unit).strip() == "":
         return True
-    cleaned = str(unit).strip().lower().replace(" ", "").replace("·", "*")
+    cleaned = normalize_unit(unit)
+    if not cleaned:
+        return True
     if cleaned in {"%", "ratio"}:
         return True
     for side in cleaned.split("/"):
@@ -124,6 +140,7 @@ def is_supported_unit(unit: str | None) -> bool:
 
 def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
     raw, unit = split_quantity(value, unit)
+    unit = normalize_unit(unit)
     numeric = parse_number(raw)
     if numeric is None:
         return {"raw": value, "value": None, "unit": unit, "canonical_value": None, "canonical_unit": unit, "status": "non_numeric"}
@@ -134,8 +151,9 @@ def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
         return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "unknown_unit"}
     if unit == "%":
         return {"raw": value, "value": numeric, "unit": "%", "canonical_value": numeric / 100.0, "canonical_unit": "ratio", "status": "ok"}
-    canonical_unit, factor = unit_conversion(unit)
-    return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric * factor, "canonical_unit": canonical_unit, "status": "ok"}
+    # MATH benchmark relations are usually written in the displayed unit. Keep
+    # that magnitude stable; explicit conversions remain available downstream.
+    return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "ok"}
 
 
 def is_safe_symbolic_expression(value: Any) -> bool:
@@ -159,6 +177,9 @@ def normalize_expression(expression: Any) -> str:
         if source == "^":
             continue
         text = text.replace(source, target)
+    text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", text)
+    text = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"sqrt(\1)", text)
+    text = text.replace("\\pi", "pi").replace("\\infty", "oo")
     text = re.sub(r"\b(and|where|such that)\b", " ", text, flags=re.I)
 
     def replace_quantity(match: re.Match[str]) -> str:
@@ -168,7 +189,22 @@ def normalize_expression(expression: Any) -> str:
 
     text = re.sub(r"[-+]?(?:\d+(?:\.\d+)?|\d+\s*/\s*\d+(?:\.\d+)?)\s*[A-Za-z%]+(?:\^?-?\d+)?(?:/[A-Za-z%]+(?:\^?-?\d+)?)?(?![A-Za-z0-9_])", replace_quantity, text, flags=re.I)
     text = text.replace("^", "**")
+    text = _normalize_function_evaluations(text)
     return re.sub(r"\s+", " ", text)
+
+
+def _normalize_function_evaluations(text: str) -> str:
+    math_names = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+
+    def replacement(match: re.Match[str]) -> str:
+        name, value = match.group(1), match.group(2).replace(" ", "")
+        if name in math_names:
+            return match.group(0)
+        token = value.replace("-", "_minus_").replace("+", "")
+        token = re.sub(r"\W+", "_", token).strip("_")
+        return f"{name}_{token}"
+
+    return re.sub(r"\b([A-Za-z_]\w*)\s*\(\s*([+-]?\d+)\s*\)", replacement, text)
 
 
 def relation_symbols(lhs: str, rhs: str) -> list[str]:
@@ -185,7 +221,8 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
     for index, given in enumerate(ir.get("givens", [])):
         item = dict(given) if isinstance(given, Mapping) else {"value": given}
         symbol = str(item.get("symbol") or item.get("name") or f"given_{index}")
-        item["symbol"] = re.sub(r"\W+", "_", symbol).strip("_") or f"given_{index}"
+        item["symbol"] = re.sub(r"\W+", "_", normalize_expression(symbol)).strip("_") or f"given_{index}"
+        item["unit"] = normalize_unit(item.get("unit"))
         item["quantity"] = normalize_quantity(item.get("value", item.get("expression")), item.get("unit"))
         if item["quantity"].get("status") == "non_numeric" and item.get("role") in {"parameter", "variable"}:
             symbolic_value = str(item.get("value") or item["symbol"]).strip()
@@ -207,6 +244,7 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
         item["operator"] = str(item.get("operator") or "=")
         item["lhs"] = normalize_expression(item.get("lhs"))
         item["rhs"] = normalize_expression(item.get("rhs"))
+        item["unit"] = normalize_unit(item.get("unit"))
         item["symbols"] = relation_symbols(item["lhs"], item["rhs"])
         try:
             item["confidence"] = float(item.get("confidence", 1.0))
@@ -217,9 +255,21 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
             symbols[item["lhs"]] = item["lhs"]
     normalized["relations"] = relations
     target = dict(ir.get("target_unknown", {}))
-    target["symbol"] = re.sub(r"\W+", "_", str(target.get("symbol") or target.get("name") or "answer")).strip("_") or "answer"
+    target["symbol"] = re.sub(r"\W+", "_", normalize_expression(target.get("symbol") or target.get("name") or "answer")).strip("_") or "answer"
+    target["unit"] = normalize_unit(target.get("unit"))
     target["quantity"] = normalize_quantity(target.get("value"), target.get("unit")) if "value" in target else None
     normalized["target_unknown"] = target
+    required_output = dict(normalized.get("required_output", {}))
+    required_output["unit"] = normalize_unit(required_output.get("unit"))
+    output_type = str(required_output.get("type") or "").lower()
+    if output_type in {"complex", "expression"}:
+        required_output["type"] = "symbolic"
+    normalized["required_output"] = required_output
+    normalized["conditions"] = [
+        {**dict(item), "expr": normalize_expression(item.get("expr"))}
+        if isinstance(item, Mapping) else item
+        for item in normalized.get("conditions", [])
+    ]
     return normalized
 
 

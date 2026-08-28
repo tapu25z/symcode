@@ -31,3 +31,6 @@ venv.bak/
 # Temporary & Log files
 *.log
 *.tmp
+
+# Local benchmark outputs
+math500_symplanner_ir_ablation_n50.json
