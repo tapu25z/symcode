@@ -22,7 +22,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 def locate_directory(target_name: str) -> str:
     """Tim kiem thu muc muc tieu trong moi truong Kaggle hoac workspace cuc bo."""
-    for search_root in ["/kaggle/input", ".", "..", "kaggle2", "new-method"]:
+    for search_root in ["/kaggle/input", ".", "..", "kaggle2"]:
         if os.path.exists(search_root):
             for dirpath, dirnames, _ in os.walk(search_root):
                 if target_name in dirnames:

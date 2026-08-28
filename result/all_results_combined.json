@@ -36,12 +36,12 @@
           "exact_match_count": 276,
           "total_samples": 1094,
           "avg_generated_tokens": 7.2,
-          "avg_attempts": 1.0,
+          "avg_attempts": 1,
           "execution_success_rate": "N/A",
           "verification_success_rate": "N/A",
           "by_subject": {
             "Algebra": {
-              "accuracy_percent": 22.0,
+              "accuracy_percent": 22,
               "correct": 33,
               "total": 150
             },
@@ -56,7 +56,7 @@
               "total": 15
             },
             "Measurement & Time": {
-              "accuracy_percent": 28.0,
+              "accuracy_percent": 28,
               "correct": 28,
               "total": 100
             },
@@ -83,7 +83,7 @@
               "total": 483
             },
             "Level 3": {
-              "accuracy_percent": 10.0,
+              "accuracy_percent": 10,
               "correct": 29,
               "total": 290
             }
@@ -92,7 +92,7 @@
             "Algebra | Level 1": {
               "subject": "Algebra",
               "difficulty": "Level 1",
-              "accuracy_percent": 44.0,
+              "accuracy_percent": 44,
               "correct": 11,
               "total": 25
             },
@@ -134,7 +134,7 @@
             "Geometry | Level 1": {
               "subject": "Geometry",
               "difficulty": "Level 1",
-              "accuracy_percent": 0.0,
+              "accuracy_percent": 0,
               "correct": 0,
               "total": 4
             },
@@ -148,7 +148,7 @@
             "Geometry | Level 3": {
               "subject": "Geometry",
               "difficulty": "Level 3",
-              "accuracy_percent": 0.0,
+              "accuracy_percent": 0,
               "correct": 0,
               "total": 5
             },
@@ -169,7 +169,7 @@
             "Measurement & Time | Level 3": {
               "subject": "Measurement & Time",
               "difficulty": "Level 3",
-              "accuracy_percent": 0.0,
+              "accuracy_percent": 0,
               "correct": 0,
               "total": 24
             },
@@ -197,7 +197,7 @@
             "Ratios & Rates | Level 1": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 1",
-              "accuracy_percent": 50.0,
+              "accuracy_percent": 50,
               "correct": 5,
               "total": 10
             },
@@ -222,7 +222,7 @@
           "exact_match_count": 953,
           "total_samples": 1094,
           "avg_generated_tokens": 308.4,
-          "avg_attempts": 1.0,
+          "avg_attempts": 1,
           "execution_success_rate": "N/A",
           "verification_success_rate": "N/A",
           "by_subject": {
@@ -237,12 +237,12 @@
               "total": 566
             },
             "Geometry": {
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 15,
               "total": 15
             },
             "Measurement & Time": {
-              "accuracy_percent": 93.0,
+              "accuracy_percent": 93,
               "correct": 93,
               "total": 100
             },
@@ -278,7 +278,7 @@
             "Algebra | Level 1": {
               "subject": "Algebra",
               "difficulty": "Level 1",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 25,
               "total": 25
             },
@@ -313,28 +313,28 @@
             "Arithmetic | Level 3": {
               "subject": "Arithmetic",
               "difficulty": "Level 3",
-              "accuracy_percent": 75.0,
+              "accuracy_percent": 75,
               "correct": 102,
               "total": 136
             },
             "Geometry | Level 1": {
               "subject": "Geometry",
               "difficulty": "Level 1",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 4,
               "total": 4
             },
             "Geometry | Level 2": {
               "subject": "Geometry",
               "difficulty": "Level 2",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 6,
               "total": 6
             },
             "Geometry | Level 3": {
               "subject": "Geometry",
               "difficulty": "Level 3",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 5,
               "total": 5
             },
@@ -383,7 +383,7 @@
             "Ratios & Rates | Level 1": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 1",
-              "accuracy_percent": 90.0,
+              "accuracy_percent": 90,
               "correct": 9,
               "total": 10
             },
@@ -423,12 +423,12 @@
               "total": 566
             },
             "Geometry": {
-              "accuracy_percent": 80.0,
+              "accuracy_percent": 80,
               "correct": 12,
               "total": 15
             },
             "Measurement & Time": {
-              "accuracy_percent": 88.0,
+              "accuracy_percent": 88,
               "correct": 88,
               "total": 100
             },
@@ -464,7 +464,7 @@
             "Algebra | Level 1": {
               "subject": "Algebra",
               "difficulty": "Level 1",
-              "accuracy_percent": 96.0,
+              "accuracy_percent": 96,
               "correct": 24,
               "total": 25
             },
@@ -506,7 +506,7 @@
             "Geometry | Level 1": {
               "subject": "Geometry",
               "difficulty": "Level 1",
-              "accuracy_percent": 75.0,
+              "accuracy_percent": 75,
               "correct": 3,
               "total": 4
             },
@@ -520,7 +520,7 @@
             "Geometry | Level 3": {
               "subject": "Geometry",
               "difficulty": "Level 3",
-              "accuracy_percent": 80.0,
+              "accuracy_percent": 80,
               "correct": 4,
               "total": 5
             },
@@ -569,7 +569,7 @@
             "Ratios & Rates | Level 1": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 1",
-              "accuracy_percent": 90.0,
+              "accuracy_percent": 90,
               "correct": 9,
               "total": 10
             },
@@ -71478,7 +71478,7 @@
         "model_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
         "load_in_4bit": true,
         "max_new_tokens": 1024,
-        "temperature": 0.0,
+        "temperature": 0,
         "dataset_name": "gsm8k",
         "dataset_path": "/kaggle/input/datasets/huynhtaybui/symcode/kaggle/data/gsm8k/test.jsonl",
         "hf_fallback": "openai/gsm8k",
@@ -71494,7 +71494,7 @@
       },
       "summary": {
         "SymCode": {
-          "accuracy_percent": 86.0,
+          "accuracy_percent": 86,
           "exact_match_count": 86,
           "total_samples": 100,
           "avg_generated_tokens": 528.8,
@@ -71503,7 +71503,7 @@
           "verification_success_rate": "54.0%",
           "by_subject": {
             "Algebra": {
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 7,
               "total": 7
             },
@@ -71513,7 +71513,7 @@
               "total": 48
             },
             "Geometry": {
-              "accuracy_percent": 50.0,
+              "accuracy_percent": 50,
               "correct": 1,
               "total": 2
             },
@@ -71528,14 +71528,14 @@
               "total": 27
             },
             "Ratios & Rates": {
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 8,
               "total": 8
             }
           },
           "by_difficulty": {
             "Level 1": {
-              "accuracy_percent": 90.0,
+              "accuracy_percent": 90,
               "correct": 27,
               "total": 30
             },
@@ -71555,7 +71555,7 @@
               "total": 9
             },
             "Level 5": {
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 4,
               "total": 4
             }
@@ -71564,21 +71564,21 @@
             "Algebra | Level 1": {
               "subject": "Algebra",
               "difficulty": "Level 1",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 3,
               "total": 3
             },
             "Algebra | Level 2": {
               "subject": "Algebra",
               "difficulty": "Level 2",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 4,
               "total": 4
             },
             "Arithmetic | Level 1": {
               "subject": "Arithmetic",
               "difficulty": "Level 1",
-              "accuracy_percent": 95.0,
+              "accuracy_percent": 95,
               "correct": 19,
               "total": 20
             },
@@ -71599,28 +71599,28 @@
             "Arithmetic | Level 4": {
               "subject": "Arithmetic",
               "difficulty": "Level 4",
-              "accuracy_percent": 75.0,
+              "accuracy_percent": 75,
               "correct": 3,
               "total": 4
             },
             "Geometry | Level 2": {
               "subject": "Geometry",
               "difficulty": "Level 2",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 1,
               "total": 1
             },
             "Geometry | Level 4": {
               "subject": "Geometry",
               "difficulty": "Level 4",
-              "accuracy_percent": 0.0,
+              "accuracy_percent": 0,
               "correct": 0,
               "total": 1
             },
             "Measurement & Time | Level 1": {
               "subject": "Measurement & Time",
               "difficulty": "Level 1",
-              "accuracy_percent": 60.0,
+              "accuracy_percent": 60,
               "correct": 3,
               "total": 5
             },
@@ -71634,7 +71634,7 @@
             "Percentages & Finance | Level 1": {
               "subject": "Percentages & Finance",
               "difficulty": "Level 1",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 2,
               "total": 2
             },
@@ -71655,42 +71655,42 @@
             "Percentages & Finance | Level 4": {
               "subject": "Percentages & Finance",
               "difficulty": "Level 4",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 3,
               "total": 3
             },
             "Percentages & Finance | Level 5": {
               "subject": "Percentages & Finance",
               "difficulty": "Level 5",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 2,
               "total": 2
             },
             "Ratios & Rates | Level 2": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 2",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 3,
               "total": 3
             },
             "Ratios & Rates | Level 3": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 3",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 2,
               "total": 2
             },
             "Ratios & Rates | Level 4": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 4",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 1,
               "total": 1
             },
             "Ratios & Rates | Level 5": {
               "subject": "Ratios & Rates",
               "difficulty": "Level 5",
-              "accuracy_percent": 100.0,
+              "accuracy_percent": 100,
               "correct": 2,
               "total": 2
             }
@@ -116208,236 +116208,26 @@
       }
     },
     "pilot_tests": {
-      "math500_lvl5_5samples_pilot": {
-        "source": "result/(1-test method moi).json",
-        "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
-        "summary": {
-          "CoT": {
-            "accuracy_percent": 0.0,
-            "exact_match_count": 0,
-            "total_samples": 5,
-            "avg_generated_tokens": 786.2,
-            "avg_attempts": 1.0,
-            "execution_success_rate": "N/A",
-            "verification_success_rate": "N/A",
-            "by_subject": {
-              "Intermediate Algebra": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 2
-              },
-              "Number Theory": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Prealgebra": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            },
-            "by_difficulty": {
-              "Level 5": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 5
-              }
-            },
-            "by_subject_x_difficulty": {
-              "Intermediate Algebra | Level 5": {
-                "subject": "Intermediate Algebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 2
-              },
-              "Number Theory | Level 5": {
-                "subject": "Number Theory",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Prealgebra | Level 5": {
-                "subject": "Prealgebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus | Level 5": {
-                "subject": "Precalculus",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            }
-          },
-          "SymCode": {
-            "accuracy_percent": 40.0,
-            "exact_match_count": 2,
-            "total_samples": 5,
-            "avg_generated_tokens": 746.0,
-            "avg_attempts": 1.4,
-            "execution_success_rate": "100.0%",
-            "verification_success_rate": "20.0%",
-            "by_subject": {
-              "Intermediate Algebra": {
-                "accuracy_percent": 50.0,
-                "correct": 1,
-                "total": 2
-              },
-              "Number Theory": {
-                "accuracy_percent": 100.0,
-                "correct": 1,
-                "total": 1
-              },
-              "Prealgebra": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            },
-            "by_difficulty": {
-              "Level 5": {
-                "accuracy_percent": 40.0,
-                "correct": 2,
-                "total": 5
-              }
-            },
-            "by_subject_x_difficulty": {
-              "Intermediate Algebra | Level 5": {
-                "subject": "Intermediate Algebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 50.0,
-                "correct": 1,
-                "total": 2
-              },
-              "Number Theory | Level 5": {
-                "subject": "Number Theory",
-                "difficulty": "Level 5",
-                "accuracy_percent": 100.0,
-                "correct": 1,
-                "total": 1
-              },
-              "Prealgebra | Level 5": {
-                "subject": "Prealgebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus | Level 5": {
-                "subject": "Precalculus",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            }
-          },
-          "SymReasoner": {
-            "accuracy_percent": 0.0,
-            "exact_match_count": 0,
-            "total_samples": 5,
-            "avg_generated_tokens": 1199.4,
-            "avg_attempts": 2.0,
-            "execution_success_rate": "80.0%",
-            "verification_success_rate": "20.0%",
-            "by_subject": {
-              "Intermediate Algebra": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 2
-              },
-              "Number Theory": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Prealgebra": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            },
-            "by_difficulty": {
-              "Level 5": {
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 5
-              }
-            },
-            "by_subject_x_difficulty": {
-              "Intermediate Algebra | Level 5": {
-                "subject": "Intermediate Algebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 2
-              },
-              "Number Theory | Level 5": {
-                "subject": "Number Theory",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Prealgebra | Level 5": {
-                "subject": "Prealgebra",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              },
-              "Precalculus | Level 5": {
-                "subject": "Precalculus",
-                "difficulty": "Level 5",
-                "accuracy_percent": 0.0,
-                "correct": 0,
-                "total": 1
-              }
-            }
-          }
-        }
-      },
       "gsm8k_5samples_pilot": {
         "source": "result/(11).json",
         "model": "Qwen/Qwen2.5-7B-Instruct",
         "summary": {
           "Direct": {
-            "accuracy_percent": 40.0,
+            "accuracy_percent": 40,
             "exact_match_count": 2,
             "total_samples": 5,
             "avg_generated_tokens": 7.8,
-            "avg_attempts": 1.0,
+            "avg_attempts": 1,
             "execution_success_rate": "N/A",
             "verification_success_rate": "N/A",
             "by_subject": {
               "Arithmetic": {
-                "accuracy_percent": 50.0,
+                "accuracy_percent": 50,
                 "correct": 2,
                 "total": 4
               },
               "Percentages & Finance": {
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }
@@ -116449,12 +116239,12 @@
                 "total": 3
               },
               "Level 2": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Level 3": {
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }
@@ -116470,52 +116260,52 @@
               "Arithmetic | Level 2": {
                 "subject": "Arithmetic",
                 "difficulty": "Level 2",
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Percentages & Finance | Level 3": {
                 "subject": "Percentages & Finance",
                 "difficulty": "Level 3",
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }
             }
           },
           "CoT": {
-            "accuracy_percent": 100.0,
+            "accuracy_percent": 100,
             "exact_match_count": 5,
             "total_samples": 5,
             "avg_generated_tokens": 303.2,
-            "avg_attempts": 1.0,
+            "avg_attempts": 1,
             "execution_success_rate": "N/A",
             "verification_success_rate": "N/A",
             "by_subject": {
               "Arithmetic": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 4,
                 "total": 4
               },
               "Percentages & Finance": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               }
             },
             "by_difficulty": {
               "Level 1": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 3,
                 "total": 3
               },
               "Level 2": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Level 3": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               }
@@ -116524,42 +116314,42 @@
               "Arithmetic | Level 1": {
                 "subject": "Arithmetic",
                 "difficulty": "Level 1",
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 3,
                 "total": 3
               },
               "Arithmetic | Level 2": {
                 "subject": "Arithmetic",
                 "difficulty": "Level 2",
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Percentages & Finance | Level 3": {
                 "subject": "Percentages & Finance",
                 "difficulty": "Level 3",
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               }
             }
           },
           "SymCode": {
-            "accuracy_percent": 60.0,
+            "accuracy_percent": 60,
             "exact_match_count": 3,
             "total_samples": 5,
             "avg_generated_tokens": 198.8,
-            "avg_attempts": 1.0,
+            "avg_attempts": 1,
             "execution_success_rate": "100.0%",
             "verification_success_rate": "60.0%",
             "by_subject": {
               "Arithmetic": {
-                "accuracy_percent": 75.0,
+                "accuracy_percent": 75,
                 "correct": 3,
                 "total": 4
               },
               "Percentages & Finance": {
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }
@@ -116571,12 +116361,12 @@
                 "total": 3
               },
               "Level 2": {
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Level 3": {
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }
@@ -116592,14 +116382,14 @@
               "Arithmetic | Level 2": {
                 "subject": "Arithmetic",
                 "difficulty": "Level 2",
-                "accuracy_percent": 100.0,
+                "accuracy_percent": 100,
                 "correct": 1,
                 "total": 1
               },
               "Percentages & Finance | Level 3": {
                 "subject": "Percentages & Finance",
                 "difficulty": "Level 3",
-                "accuracy_percent": 0.0,
+                "accuracy_percent": 0,
                 "correct": 0,
                 "total": 1
               }

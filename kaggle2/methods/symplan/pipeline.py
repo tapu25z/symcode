@@ -1,4 +1,4 @@
-"""Reference orchestration for the new method.
+"""Reference orchestration for the SymPlan method.
 
 The class is intentionally dependency-injected: existing model and sandbox
 implementations can be plugged in without coupling this experiment to one SDK.
