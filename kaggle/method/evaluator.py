@@ -168,11 +168,14 @@ def load_dataset_file(
     file_or_hf_id: str,
     split: str = "test",
     num_samples: Optional[int] = None,
-    filter_levels: Optional[List[int]] = None
+    filter_levels: Optional[List[int]] = None,
+    tail: bool = False,
+    per_level_samples: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Nạp dữ liệu bài toán từ file JSONL cục bộ hoặc Hugging Face dataset.
     Trích xuất câu hỏi, đáp án chuẩn, chủ đề (subject) và độ khó (difficulty level).
+    Hỗ trợ trích xuất N mẫu cuối cùng (tail=True) hoặc N mẫu cho từng level (per_level_samples).
     """
     samples = []
     
@@ -221,9 +224,32 @@ def load_dataset_file(
                     continue
             samples.append(sample)
 
-    if num_samples is not None:
-        samples = samples[:num_samples]
-    
+    # Xử lý cắt mẫu theo per_level_samples hoặc num_samples (hỗ trợ cả mode tail - lấy mẫu từ cuối lên)
+    if per_level_samples is not None:
+        level_groups: Dict[Any, List[Dict[str, Any]]] = {}
+        for sample in samples:
+            lvl = sample.get("level")
+            if lvl not in level_groups:
+                level_groups[lvl] = []
+            level_groups[lvl].append(sample)
+        
+        selected_samples = []
+        for lvl in sorted(level_groups.keys(), key=lambda x: (x is None, x)):
+            group = level_groups[lvl]
+            if tail:
+                selected_samples.extend(group[-per_level_samples:])
+            else:
+                selected_samples.extend(group[:per_level_samples])
+        samples = selected_samples
+        print(f"[INFO] Da trich xuat N mau moi level (per_level_samples={per_level_samples}, tail={tail}): Tong {len(samples)} mau.")
+    elif num_samples is not None:
+        if tail:
+            samples = samples[-num_samples:]
+            print(f"[INFO] Da lay {len(samples)} mau CUOI CUNG (tail=True).")
+        else:
+            samples = samples[:num_samples]
+            print(f"[INFO] Da lay {len(samples)} mau DAU TIEN (tail=False).")
+
     if filter_levels is not None:
         print(f"[INFO] Da loc cho cac muc do {filter_levels}: {len(samples)} mau hop le.")
     else:
@@ -232,9 +258,7 @@ def load_dataset_file(
 
 
 def _load_existing_checkpoint(checkpoint_file: Optional[str], method_name: str) -> Dict[str, Any]:
-    """Đọc dữ liệu checkpoint đã lưu trước đó nếu tồn tại."""
-    if not checkpoint_file or not os.path.exists(checkpoint_file):
-        return {"data": {}, "method_results": []}
+
     
     try:
         with open(checkpoint_file, "r", encoding="utf-8") as f:

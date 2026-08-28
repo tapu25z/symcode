@@ -92,12 +92,23 @@ def build_legacy_7b_runner(
     **kwargs: Any,
 ):
     """Instantiate the existing model runner only when a real benchmark explicitly calls this factory."""
+    LLMRunner = None
     try:
-        from method import LLMRunner
-    except ImportError:
-        from kaggle.method import LLMRunner
+        from method.model import LLMRunner
+    except Exception:
+        try:
+            from kaggle.method.model import LLMRunner
+        except Exception:
+            try:
+                from method import LLMRunner
+            except Exception:
+                from kaggle.method import LLMRunner
     if LLMRunner is None:
-        raise RuntimeError("legacy LLMRunner dependencies are unavailable")
+        raise RuntimeError(
+            "legacy LLMRunner dependencies are unavailable. "
+            "Please ensure virtual environment is activated (`source venv/bin/activate`) "
+            "and dependencies are installed: `pip install torch transformers bitsandbytes accelerate`"
+        )
     return LLMRunner(
         model_id=model_id,
         load_in_4bit=load_in_4bit,
