@@ -728,11 +728,12 @@
         "problem": "Express $555_{10}$ in base $5$.",
         "ground_truth": "4210_{5}",
         "predicted": "4210_5",
-        "is_correct": false,
+        "is_correct": true,
         "generated_tokens": 348,
         "attempts": 1,
         "execution_status": "not_applicable",
-        "raw_output": "To express the decimal number \\( 555_{10} \\) in base \\( 5 \\), we need to convert it by repeatedly dividing the number by \\( 5 \\) and recording the remainders.\n\nStep 1: Divide \\( 555 \\) by \\( 5 \\).\n\\[ 555 \\div 5 = 111 \\]\nThe quotient is \\( 111 \\) and the remainder is \\( 0 \\).\n\nStep 2: Divide \\( 111 \\) by \\( 5 \\).\n\\[ 111 \\div 5 = 22 \\]\nThe quotient is \\( 22 \\) and the remainder is \\( 1 \\).\n\nStep 3: Divide \\( 22 \\) by \\( 5 \\).\n\\[ 22 \\div 5 = 4 \\]\nThe quotient is \\( 4 \\) and the remainder is \\( 2 \\).\n\nStep 4: Divide \\( 4 \\) by \\( 5 \\).\n\\[ 4 \\div 5 = 0 \\]\nThe quotient is \\( 0 \\) and the remainder is \\( 4 \\).\n\nNow, we collect all the remainders from the last division to the first, which gives us the base \\( 5 \\) representation of \\( 555_{10} \\).\n\nThus, the remainders are \\( 4, 2, 1, 0 \\).\n\nTherefore, the base \\( 5 \\) representation of \\( 555_{10} \\) is \\( 4210_5 \\).\n\n\\[\n\\boxed{4210_5}\n\\]"
+        "raw_output": "To express the decimal number \\( 555_{10} \\) in base \\( 5 \\), we need to convert it by repeatedly dividing the number by \\( 5 \\) and recording the remainders.\n\nStep 1: Divide \\( 555 \\) by \\( 5 \\).\n\\[ 555 \\div 5 = 111 \\]\nThe quotient is \\( 111 \\) and the remainder is \\( 0 \\).\n\nStep 2: Divide \\( 111 \\) by \\( 5 \\).\n\\[ 111 \\div 5 = 22 \\]\nThe quotient is \\( 22 \\) and the remainder is \\( 1 \\).\n\nStep 3: Divide \\( 22 \\) by \\( 5 \\).\n\\[ 22 \\div 5 = 4 \\]\nThe quotient is \\( 4 \\) and the remainder is \\( 2 \\).\n\nStep 4: Divide \\( 4 \\) by \\( 5 \\).\n\\[ 4 \\div 5 = 0 \\]\nThe quotient is \\( 0 \\) and the remainder is \\( 4 \\).\n\nNow, we collect all the remainders from the last division to the first, which gives us the base \\( 5 \\) representation of \\( 555_{10} \\).\n\nThus, the remainders are \\( 4, 2, 1, 0 \\).\n\nTherefore, the base \\( 5 \\) representation of \\( 555_{10} \\) is \\( 4210_5 \\).\n\n\\[\n\\boxed{4210_5}\n\\]",
+        "score_recovery_reason": "Base 5 digit array/format matches 4210_{5}"
       },
       {
         "problem": "Suzanne walks four miles every third day. What is the fewest number of miles she can walk in February?",

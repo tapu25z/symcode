@@ -1,0 +1,43 @@
+{
+  "dataset": "gsm8k",
+  "method": "SymCode",
+  "level": "Level 2",
+  "total_samples": 483,
+  "correct_count": 418,
+  "accuracy_percent": 86.54,
+  "avg_generated_tokens": 501.2,
+  "avg_attempts": 1.08,
+  "execution_success_rate": "99.6%",
+  "by_subject": {
+    "Algebra": {
+      "correct": 71,
+      "total": 78,
+      "accuracy_percent": 91.03
+    },
+    "Arithmetic": {
+      "correct": 186,
+      "total": 210,
+      "accuracy_percent": 88.57
+    },
+    "Geometry": {
+      "correct": 5,
+      "total": 6,
+      "accuracy_percent": 83.33
+    },
+    "Measurement & Time": {
+      "correct": 35,
+      "total": 38,
+      "accuracy_percent": 92.11
+    },
+    "Percentages & Finance": {
+      "correct": 84,
+      "total": 110,
+      "accuracy_percent": 76.36
+    },
+    "Ratios & Rates": {
+      "correct": 37,
+      "total": 41,
+      "accuracy_percent": 90.24
+    }
+  }
+}

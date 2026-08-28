@@ -1,0 +1,178 @@
+{
+  "dataset": "gsm8k",
+  "method": "Direct",
+  "overall": {
+    "dataset": "gsm8k",
+    "method": "Direct",
+    "level": "All Levels",
+    "total_samples": 1094,
+    "correct_count": 276,
+    "accuracy_percent": 25.23,
+    "avg_generated_tokens": 7.2,
+    "avg_attempts": 1.0,
+    "execution_success_rate": "N/A",
+    "by_subject": {
+      "Algebra": {
+        "correct": 33,
+        "total": 150,
+        "accuracy_percent": 22.0
+      },
+      "Arithmetic": {
+        "correct": 155,
+        "total": 566,
+        "accuracy_percent": 27.39
+      },
+      "Geometry": {
+        "correct": 1,
+        "total": 15,
+        "accuracy_percent": 6.67
+      },
+      "Measurement & Time": {
+        "correct": 28,
+        "total": 100,
+        "accuracy_percent": 28.0
+      },
+      "Percentages & Finance": {
+        "correct": 43,
+        "total": 196,
+        "accuracy_percent": 21.94
+      },
+      "Ratios & Rates": {
+        "correct": 16,
+        "total": 67,
+        "accuracy_percent": 23.88
+      }
+    }
+  },
+  "by_level": {
+    "Level 1": {
+      "dataset": "gsm8k",
+      "method": "Direct",
+      "level": "Level 1",
+      "total_samples": 321,
+      "correct_count": 145,
+      "accuracy_percent": 45.17,
+      "avg_generated_tokens": 7.2,
+      "avg_attempts": 1.0,
+      "execution_success_rate": "N/A",
+      "by_subject": {
+        "Algebra": {
+          "correct": 11,
+          "total": 25,
+          "accuracy_percent": 44.0
+        },
+        "Arithmetic": {
+          "correct": 101,
+          "total": 220,
+          "accuracy_percent": 45.91
+        },
+        "Geometry": {
+          "correct": 0,
+          "total": 4,
+          "accuracy_percent": 0.0
+        },
+        "Measurement & Time": {
+          "correct": 18,
+          "total": 38,
+          "accuracy_percent": 47.37
+        },
+        "Percentages & Finance": {
+          "correct": 10,
+          "total": 24,
+          "accuracy_percent": 41.67
+        },
+        "Ratios & Rates": {
+          "correct": 5,
+          "total": 10,
+          "accuracy_percent": 50.0
+        }
+      }
+    },
+    "Level 2": {
+      "dataset": "gsm8k",
+      "method": "Direct",
+      "level": "Level 2",
+      "total_samples": 483,
+      "correct_count": 102,
+      "accuracy_percent": 21.12,
+      "avg_generated_tokens": 7.2,
+      "avg_attempts": 1.0,
+      "execution_success_rate": "N/A",
+      "by_subject": {
+        "Algebra": {
+          "correct": 17,
+          "total": 78,
+          "accuracy_percent": 21.79
+        },
+        "Arithmetic": {
+          "correct": 39,
+          "total": 210,
+          "accuracy_percent": 18.57
+        },
+        "Geometry": {
+          "correct": 1,
+          "total": 6,
+          "accuracy_percent": 16.67
+        },
+        "Measurement & Time": {
+          "correct": 10,
+          "total": 38,
+          "accuracy_percent": 26.32
+        },
+        "Percentages & Finance": {
+          "correct": 27,
+          "total": 110,
+          "accuracy_percent": 24.55
+        },
+        "Ratios & Rates": {
+          "correct": 8,
+          "total": 41,
+          "accuracy_percent": 19.51
+        }
+      }
+    },
+    "Level 3": {
+      "dataset": "gsm8k",
+      "method": "Direct",
+      "level": "Level 3",
+      "total_samples": 290,
+      "correct_count": 29,
+      "accuracy_percent": 10.0,
+      "avg_generated_tokens": 7.3,
+      "avg_attempts": 1.0,
+      "execution_success_rate": "N/A",
+      "by_subject": {
+        "Algebra": {
+          "correct": 5,
+          "total": 47,
+          "accuracy_percent": 10.64
+        },
+        "Arithmetic": {
+          "correct": 15,
+          "total": 136,
+          "accuracy_percent": 11.03
+        },
+        "Geometry": {
+          "correct": 0,
+          "total": 5,
+          "accuracy_percent": 0.0
+        },
+        "Measurement & Time": {
+          "correct": 0,
+          "total": 24,
+          "accuracy_percent": 0.0
+        },
+        "Percentages & Finance": {
+          "correct": 6,
+          "total": 62,
+          "accuracy_percent": 9.68
+        },
+        "Ratios & Rates": {
+          "correct": 3,
+          "total": 16,
+          "accuracy_percent": 18.75
+        }
+      }
+    }
+  }
+}

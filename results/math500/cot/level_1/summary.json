@@ -1,0 +1,48 @@
+{
+  "dataset": "math500",
+  "method": "CoT",
+  "level": "Level 1",
+  "total_samples": 43,
+  "correct_count": 38,
+  "accuracy_percent": 88.37,
+  "avg_generated_tokens": 359.8,
+  "avg_attempts": 1.0,
+  "execution_success_rate": "N/A",
+  "by_subject": {
+    "Algebra": {
+      "correct": 16,
+      "total": 17,
+      "accuracy_percent": 94.12
+    },
+    "Counting & Probability": {
+      "correct": 1,
+      "total": 2,
+      "accuracy_percent": 50.0
+    },
+    "Geometry": {
+      "correct": 1,
+      "total": 2,
+      "accuracy_percent": 50.0
+    },
+    "Intermediate Algebra": {
+      "correct": 6,
+      "total": 7,
+      "accuracy_percent": 85.71
+    },
+    "Number Theory": {
+      "correct": 5,
+      "total": 5,
+      "accuracy_percent": 100.0
+    },
+    "Prealgebra": {
+      "correct": 7,
+      "total": 7,
+      "accuracy_percent": 100.0
+    },
+    "Precalculus": {
+      "correct": 2,
+      "total": 3,
+      "accuracy_percent": 66.67
+    }
+  }
+}
