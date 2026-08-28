@@ -56,6 +56,7 @@ The code MUST:
    - Never silently replace a diagram-dependent quantity with an arbitrary numeric guess. If the diagram is required, encode its stated coordinates/relations explicitly.
    - Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
    - Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+   - Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS. They contain exact math models, safe SymPy API formulas, or search procedures required for this specific problem.
 5. Before printing, add cheap internal checks whenever possible:
    - Substitute candidate solutions back into equations/inequalities.
    - For small combinatorics, brute-force enumerate and compare against any formula.
@@ -122,6 +123,7 @@ f-string.
 CRITICAL RULES:
 - Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
 - Never write infinite loops or unbounded while loops. Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+- Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS provided in the context to construct a correct solution.
 """
 
 # ==============================================================================

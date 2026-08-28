@@ -19,7 +19,7 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "inserting parentheses" in text:
         hints.append(
-            "For inserted-parentheses problems, use dynamic programming over the ordered numbers and operators. Split every interval at every operator, combine left/right value sets, and count distinct final values."
+            "For inserted-parentheses problems, do not try to parse strings of expressions. Use a clear dynamic programming or recursion style to compute all possible parenthesization values for the list of numbers and operators, then return the count of unique values."
         )
     if "round table" in text or "rotations of each other" in text:
         hints.append(
@@ -39,11 +39,11 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "double sum" in text or (r"\sum_{j" in question and r"\sum_{k" in question):
         hints.append(
-            "For double sums depending on j+k, group terms by n=j+k and count how many ordered pairs produce each n before simplifying into the named series variables."
+            "For double sums of the form \\sum_{j=1}^\\infty \\sum_{k=1}^\\infty 1/(j+k)^m, rewrite it as a single sum over n = j+k starting from n=2. To do this, group terms by n=j+k and count how many ordered pairs produce each n, which is (n-1). Thus, the sum is \\sum_{n=2}^\\infty (n-1)/n^m = \\sum_{n=2}^\\infty (1/n^{m-1} - 1/n^m). Express this in terms of the given series p and q by adjusting the index to start from 1 (e.g., \\sum_{n=2}^\\infty 1/n^2 = p - 1)."
         )
     if "is a factor of" in text and re.search(r"\bp\b|\bq\b|\br\b", text):
         hints.append(
-            "For polynomial divisibility with unknown coefficients, reduce the polynomial modulo the factor and set every remainder coefficient to zero."
+            "For polynomial divisibility with unknown coefficients (like p, q, r), use the remainder: rem_poly = sp.rem(poly, factor, x). Since the remainder must be 0 for all x, convert it to a polynomial sp.Poly(rem_poly, x) and solve for the unknown parameters by setting all coefficients to 0: sp.solve(sp.Poly(rem_poly, x).coeffs(), (p, q, r))."
         )
     if "sin" in text and re.search(r"\^\s*\{?\s*[5-9]\s*\}?", text) and "for all angles" in text:
         hints.append(
@@ -59,7 +59,7 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "compound interest" in text and "deposits" in text:
         hints.append(
-            "For repeated end-of-year deposits, compound earlier deposits for more periods than later deposits. A three-year end-of-year deposit plan has factors (1+r)^2, (1+r), and 1."
+            "For end-of-year savings plan of N years (e.g., n=3): at the end of year 3, the first deposit has been compounded for 2 years (P * (1+r)^2), the second for 1 year (P * (1+r)), and the third deposit is made at the end of year 3 with 0 years of compounding (P). The total sum is P * (1+r)^2 + P * (1+r) + P. Do not use the simple lump-sum formula P * (1+r)^3."
         )
     if "logarithms of the roots" in text:
         hints.append(
@@ -67,7 +67,7 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "functional equation" in text:
         hints.append(
-            "For polynomial-looking functional equations over all reals, assume f(t)=A*t**2+B*t+C, substitute x,y, equate coefficients, then apply the given value."
+            "To solve a functional equation of the form f(x) + f(y) = f(x+y) + ..., assume a polynomial form f(t) = A*t**2 + B*t + C. Compute lhs = f(x) + f(y) and rhs = f(x+y) + ..., then construct the difference diff = sp.expand(lhs - rhs). Since this holds for all x and y, convert it to a polynomial sp.Poly(diff, x, y) and solve for (A, B, C) by setting all its coefficients (using poly.coeffs()) to zero: sp.solve(sp.Poly(diff, x, y).coeffs(), (A, B, C))."
         )
     if "different battalions" in text or ("how many different" in text and "soldiers" in text):
         hints.append(
@@ -83,11 +83,15 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "gold coins" in text and "redistribute" in text and "bags" in text:
         hints.append(
-            "For redistribution divisibility, search totals that satisfy both the original equal-bag condition and the new equal-bag condition after adding the found bag."
+            "For the gold coins redistribution problem: if you had 7 bags of x coins each, the total coins before was 7*x. After finding a bag of 53 coins, the total is 7*x + 53. Since this total can be redistributed equally into 8 bags, 7*x + 53 must be a multiple of 8 (i.e., (7*x + 53) % 8 == 0). Also, total_after = 7*x + 53 > 200. Find the smallest integer x >= 1 satisfying both conditions, and return the number of coins before, which is 7*x."
         )
     if "reassigned to" in text:
         hints.append(
-            "For reassignment word problems, update both sides of the transfer: the receiver gains x while the giver loses x."
+            "For ratio word problems where items are reassigned: write the fraction with the receiver's new count in the numerator or denominator as specified. If A started with 16 and got x items from B (who started with 12), A's new count is 16 + x and B's new count is 12 - x. The ratio of A to B is (16 + x) / (12 - x). Make sure to update both giver and receiver correctly."
+        )
+    if "greatest possible value of the slope" in text or "least possible value of the slope" in text:
+        hints.append(
+            "To maximize or minimize the slope (y2 - y1) / (x2 - x1) between two points A=(x1, y1) and B=(x2, y2) constrained to rectangular regions, evaluate the slope for all pairs of vertices (corners) of both regions where x2 != x1, and find the maximum/minimum."
         )
     has_matrix_like = "matrix" in text or "pmatrix" in text or "begin{pmatrix}" in text
     has_norm_like = "norm" in text or "||" in text or "\\|" in text or "magnitude" in text
