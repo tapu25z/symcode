@@ -41,7 +41,7 @@ from .extractor import (
 from .sandbox import execute_code_safely
 from .verifier import verify_candidate_answer
 from .static_lint import lint_sympy_code
-from .target_contract import infer_target_spec, parse_planner_contract
+from .target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 
 try:
     from .model import LLMRunner
@@ -56,12 +56,28 @@ def _verification_rank(status: str) -> int:
 def _should_retry_symplanner(execution_status: str, candidate: Any, verification_status: str, feedback: Any) -> bool:
     if execution_status != "success" or candidate is None:
         return True
-    if verification_status == "fail":
-        return True
-    # Unknown is retried only when the verifier identified an actionable
-    # contract/diagram issue; generic syntactic uncertainty is not actionable.
     feedback_text = str(feedback or "").lower()
-    return verification_status == "unknown" and any(token in feedback_text for token in ("target requires", "diagram", "tuple", "symbolic", "base notation"))
+    actionable_tokens = (
+        "invalid token",
+        "unresolved free symbol",
+        "target requires",
+        "target must remain symbolic",
+        "base notation",
+        "coordinate tuple",
+        "non-negative count",
+        "integer count",
+        "probability must",
+        "undefined or infinite",
+        "empty candidate",
+        "did not print",
+        "no candidate",
+    )
+    if verification_status == "fail":
+        return any(token in feedback_text for token in actionable_tokens)
+    # Generic unknown means the verifier cannot prove the answer without ground
+    # truth. Retrying those cases usually burns tokens and can damage a good
+    # candidate, so retry only concrete output-contract issues.
+    return verification_status == "unknown" and any(token in feedback_text for token in ("target requires", "base notation", "coordinate tuple"))
 
 
 def _with_static_diagnostics(feedback: Any, code: str, execution_status: str, candidate: Any, verification_status: str) -> Any:
@@ -70,6 +86,21 @@ def _with_static_diagnostics(feedback: Any, code: str, execution_status: str, ca
         return feedback
     suffix = "Static diagnostics: " + "; ".join(findings)
     return f"{feedback or 'No verifier feedback.'} {suffix}"
+
+
+def _candidate_is_present(value: Any) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() not in {"", "none", "null", "invalid", "undefined", "nan"}
+
+
+def _symplanner_record_rank(record: Dict[str, Any]) -> tuple[int, int, int, int]:
+    return (
+        _verification_rank(record.get("verification_status")),
+        int(record.get("execution_status") == "success"),
+        int(_candidate_is_present(record.get("candidate_answer"))),
+        int(record.get("attempt", 0)),
+    )
 
 
 def _translate_legacy_verification_feedback(feedback: Any) -> Any:
@@ -713,7 +744,7 @@ def evaluate_symplanner(
         # successfully while silently degrading a previously valid answer.
         best_record = max(
             attempt_history,
-            key=lambda record: (_verification_rank(record.get("verification_status")), record.get("attempt", 0)),
+            key=_symplanner_record_rank,
             default={}
         )
         final_predicted = best_record.get("candidate_answer", candidate_ans)
@@ -731,6 +762,7 @@ def evaluate_symplanner(
             box_match = extract_boxed_content(planner_note)
             if box_match:
                 final_predicted = box_match
+        final_predicted = format_answer_for_contract(question, final_predicted, final_answer_type)
 
         is_correct = check_exact_match(final_predicted, gt)
 

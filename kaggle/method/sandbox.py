@@ -8,6 +8,7 @@ import json
 import math
 import queue
 import random
+import re
 import traceback
 import contextlib
 import concurrent.futures
@@ -81,6 +82,7 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
     
     exec_globals = {
         "__builtins__": __builtins__,
+        "json": json,
         "math": math,
         "random": random,
     }
@@ -99,7 +101,7 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
         exec_globals["np"] = np
         exec_globals["numpy"] = np
 
-    if mode == "symcode" and sympy is not None:
+    if mode in {"symcode", "symplanner"} and sympy is not None:
         exec_globals.update({
             "sympy": sympy,
             "sp": sympy,
@@ -142,7 +144,15 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
             "nan": nan
         })
 
+    original_json_dumps = json.dumps
+
+    def _json_dumps_with_default_str(*args, **kwargs):
+        kwargs.setdefault("default", str)
+        return original_json_dumps(*args, **kwargs)
+
     try:
+        if mode == "symplanner":
+            json.dumps = _json_dumps_with_default_str
         with contextlib.redirect_stdout(stdout_capture):
             exec(code, exec_globals)
         stdout_val = stdout_capture.getvalue()
@@ -151,6 +161,93 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
         tb_raw = traceback.format_exc()
         tb_clean = _clean_traceback_str(tb_raw)
         return {"status": "error", "stdout": stdout_capture.getvalue(), "traceback": tb_clean}
+    finally:
+        if mode == "symplanner":
+            json.dumps = original_json_dumps
+
+
+def _read_relaxed_json_value(raw_value: str) -> Any:
+    value = raw_value.strip().rstrip(",")
+    if not value:
+        return None
+    if value in {"null", "None"}:
+        return None
+    if value in {"true", "True"}:
+        return True
+    if value in {"false", "False"}:
+        return False
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        return value[1:-1]
+    try:
+        return json.loads(value)
+    except Exception:
+        return value
+
+
+def _extract_relaxed_json_field(text: str, key: str) -> Any:
+    match = re.search(rf'["\']{re.escape(key)}["\']\s*:', text)
+    if not match:
+        return None
+    idx = match.end()
+    while idx < len(text) and text[idx].isspace():
+        idx += 1
+    start = idx
+    quote = None
+    depth = 0
+    while idx < len(text):
+        char = text[idx]
+        if quote:
+            if char == quote and text[idx - 1] != "\\":
+                quote = None
+        elif char in {"'", '"'}:
+            quote = char
+        elif char in "[{(":
+            depth += 1
+        elif char in "]})":
+            if depth == 0 and char == "}":
+                break
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            break
+        idx += 1
+    return _read_relaxed_json_value(text[start:idx])
+
+
+def _parse_symplanner_structured_stdout(stdout: str) -> Optional[Dict[str, Any]]:
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        return None
+
+    candidates = [line for line in lines if line.startswith("{") and "answer" in line]
+    if not candidates and len(lines) == 1:
+        candidates = [lines[0]]
+
+    for candidate in reversed(candidates):
+        structured = None
+        try:
+            value = json.loads(candidate)
+            if isinstance(value, dict):
+                structured = value
+        except json.JSONDecodeError:
+            if candidate.startswith("{"):
+                answer = _extract_relaxed_json_field(candidate, "answer")
+                if answer is not None:
+                    structured = {
+                        "answer": answer,
+                        "canonical_answer": _extract_relaxed_json_field(candidate, "canonical_answer"),
+                        "answer_type": _extract_relaxed_json_field(candidate, "answer_type"),
+                        "unit": _extract_relaxed_json_field(candidate, "unit"),
+                        "variables": _extract_relaxed_json_field(candidate, "variables"),
+                    }
+        if isinstance(structured, dict) and "answer" in structured:
+            structured.setdefault("canonical_answer", str(structured.get("answer")))
+            structured.setdefault("answer_type", "number")
+            structured.setdefault("unit", None)
+            structured.setdefault("variables", {})
+            if structured.get("variables") is None:
+                structured["variables"] = {}
+            return structured
+    return None
 
 
 def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> Dict[str, Any]:
@@ -198,35 +295,19 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
 
     stdout = res.get("stdout", "")
     if mode == "symplanner":
+        structured = _parse_symplanner_structured_stdout(stdout)
+        if isinstance(structured, dict):
+            res["structured_output"] = structured
+            res["extracted_answer"] = structured.get("answer")
+            res["canonical_answer"] = structured.get("canonical_answer")
+            res["answer_type"] = structured.get("answer_type")
+            res["unit"] = structured.get("unit")
+            res["variables"] = structured.get("variables")
+            return res
         lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-        if len(lines) == 1:
-            try:
-                structured = json.loads(lines[0])
-            except json.JSONDecodeError:
-                structured = None
-            if isinstance(structured, dict) and "answer" in structured:
-                required = {"answer", "canonical_answer", "answer_type", "unit", "variables"}
-                missing = sorted(required - set(structured))
-                if missing:
-                    res["status"] = "error"
-                    res["traceback"] = f"Structured output missing fields: {', '.join(missing)}"
-                    res["extracted_answer"] = None
-                    return res
-                res["structured_output"] = structured
-                res["extracted_answer"] = structured.get("answer")
-                res["canonical_answer"] = structured.get("canonical_answer")
-                res["answer_type"] = structured.get("answer_type")
-                res["unit"] = structured.get("unit")
-                res["variables"] = structured.get("variables")
-                return res
-            if lines[0].startswith("{"):
-                res["status"] = "error"
-                res["traceback"] = "Invalid SymPlanner JSON output"
-                res["extracted_answer"] = None
-                return res
-        elif any(line.startswith("{") for line in lines):
+        if any(line.startswith("{") for line in lines):
             res["status"] = "error"
-            res["traceback"] = "SymPlanner output must contain exactly one JSON line"
+            res["traceback"] = "Invalid SymPlanner JSON output"
             res["extracted_answer"] = None
             return res
         # Backward-compatible fallback for old SymPlanner checkpoints/code.

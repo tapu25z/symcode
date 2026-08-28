@@ -9,7 +9,7 @@ from method.extractor import check_exact_match
 from method.prompts import build_symplanner_codegen_messages
 from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
-from method.target_contract import infer_target_spec, parse_planner_contract
+from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from method.verifier import verify_candidate_answer
 
 
@@ -24,6 +24,10 @@ class SymPlannerQualityTests(unittest.TestCase):
     def test_base_notation_is_not_collapsed_to_decimal(self):
         self.assertFalse(check_exact_match("52", "52_8"))
         self.assertTrue(check_exact_match("52_8", "52_8"))
+        self.assertEqual(
+            format_answer_for_contract(r"Find $6_8\cdot 7_8$. Express your answer in base $8$.", "52", "base_notation"),
+            "52_8",
+        )
 
 
     def test_verifier_fails_closed_for_numeric_guess_and_target_mismatch(self):
@@ -31,10 +35,14 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(status, "unknown")
         status, _ = verify_candidate_answer("Which student has the greatest average speed?", "3.6")
         self.assertEqual(status, "fail")
+        status, _ = verify_candidate_answer("Which student has the greatest average speed?", "Evelyn")
+        self.assertEqual(status, "unknown")
         status, _ = verify_candidate_answer("How many miles did she travel?", "1.25")
         self.assertEqual(status, "unknown")
         status, _ = verify_candidate_answer("Write the answer in terms of p and q.", "-zeta(3)+pi**2/6")
         self.assertEqual(status, "fail")
+        status, _ = verify_candidate_answer("Find all values of x that satisfy the equation.", "5")
+        self.assertEqual(status, "unknown")
 
 
     def test_planner_contract_recovers_truncated_plan(self):
@@ -63,3 +71,20 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(result["answer_type"], "number")
         invalid = execute_code_safely('print("{bad json}")', mode="symplanner")
         self.assertEqual(invalid["status"], "error")
+
+    def test_symplanner_sandbox_accepts_model_json_near_misses(self):
+        no_import = 'print(json.dumps({"answer": sp.Rational(14, 3), "canonical_answer": sp.Rational(14, 3), "answer_type": "number", "unit": None}))'
+        result = execute_code_safely(no_import, mode="symplanner")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["extracted_answer"], "14/3")
+        self.assertEqual(result["variables"], {})
+
+        jsonish = r'print("{\"answer\": 14/3, \"canonical_answer\": \"\\frac{14}{3}\", \"answer_type\": \"number\", \"unit\": null}")'
+        result = execute_code_safely(jsonish, mode="symplanner")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["extracted_answer"], "14/3")
+
+    def test_planner_note_does_not_pollute_numeric_target_inference(self):
+        note = '{"strategy":"symbolic equation solving","steps":["Express sin(A) and cos(A) in terms of tan(A)"],"answer_type":"number"}'
+        status, _ = verify_candidate_answer("What is tan A?", "2", planner_note=note)
+        self.assertEqual(status, "unknown")
