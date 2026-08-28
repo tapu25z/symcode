@@ -24,7 +24,6 @@ class LLMRunner:
         max_new_tokens: int = 1024,
         temperature: float = 0.0,
         top_p: float = 1.0,
-        max_input_tokens: int = 2560,
         device_map: str = "auto",
         hf_token: Optional[str] = None
     ):
@@ -32,7 +31,6 @@ class LLMRunner:
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
-        self.max_input_tokens = int(max_input_tokens)
         
         token = hf_token or os.environ.get("HF_TOKEN") or None
         cuda_avail = torch.cuda.is_available()
@@ -133,7 +131,7 @@ class LLMRunner:
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=self.max_input_tokens
+            max_length=2560
         ).to(self.model.device)
         input_len = inputs.input_ids.shape[1]
 
