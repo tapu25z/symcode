@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from new_method.normalizer import augment_ir_from_question, build_codegen_payload, is_supported_unit, normalize_problem_ir, validate_normalized_ir
 from new_method.problem_ir import normalize_ir_shape, validate_ir
 from new_method.relation_verifier import verify_bidirectional
+from new_method.direct_solver import try_direct_solve
 
 
 def valid_ir():
@@ -235,6 +236,52 @@ class ContractTests(unittest.TestCase):
             {"answer": "14/3", "canonical_answer": "14/3", "answer_type": "number", "unit": None, "variables": {"f_neg2": 2, "f_neg1": "5/3", "f_0": 1, "R": "14/3"}},
         )
         self.assertEqual(result["status"], "pass", result)
+
+    def test_direct_solver_handles_simple_divisor_count_ir(self):
+        ir = {
+            "target_unknown": {"name": "number of divisors", "symbol": "d", "unit": None, "dimension": "number"},
+            "givens": [{"name": "number", "symbol": "n", "value": 196, "unit": None, "role": "constant", "source": "196"}],
+            "relations": [
+                {"id": "prime_factorization", "kind": "definition", "lhs": "n", "rhs": "2^2 * 7^2", "operator": "=", "unit": None, "source": "prime factorization", "evidence": "196 = 2^2 * 7^2", "confidence": 1.0},
+                {"id": "divisor_count", "kind": "definition", "lhs": "d", "rhs": "(2+1)*(2+1)", "operator": "=", "unit": None, "source": "divisor count", "evidence": "number of divisors", "confidence": 1.0},
+            ],
+            "conditions": [{"kind": "positive", "expr": "d > 0", "source": "positive divisors"}],
+            "required_output": {"type": "number", "unit": None, "precision": "integer", "digits": None, "target_count": 1},
+        }
+        normalized = normalize_problem_ir(ir)
+        execution = try_direct_solve(normalized)
+        self.assertIsNotNone(execution)
+        self.assertEqual(execution["answer"], 9)
+        self.assertEqual(verify_bidirectional(normalized, execution)["status"], "pass")
+
+    def test_symbolic_series_identity_is_recovered_from_question(self):
+        question = r"""Define \[p = \sum_{k = 1}^\infty \frac{1}{k^2} \quad \text{and} \quad q = \sum_{k = 1}^\infty \frac{1}{k^3}.\]Find a way to write \[\sum_{j = 1}^\infty \sum_{k = 1}^\infty \frac{1}{(j + k)^3}\]in terms of $p$ and $q.$"""
+        ir = {
+            "target_unknown": {"name": "result", "symbol": "result", "unit": None, "dimension": "number"},
+            "givens": [{"name": "p", "symbol": "p", "value": None, "unit": None, "role": "constant", "source": "p"}, {"name": "q", "symbol": "q", "value": None, "unit": None, "role": "constant", "source": "q"}],
+            "relations": [{"id": "target", "kind": "definition", "lhs": "result", "rhs": r"\sum_{j=1}^\infty \sum_{k=1}^\infty \frac{1}{(j+k)^3}", "operator": "=", "unit": None, "source": "target", "evidence": "target", "confidence": 1.0}],
+            "conditions": [],
+            "required_output": {"type": "symbolic", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = augment_ir_from_question(question, normalize_problem_ir(ir))
+        execution = try_direct_solve(normalized)
+        self.assertIsNotNone(execution)
+        self.assertEqual(execution["answer"], "p - q")
+        self.assertEqual(verify_bidirectional(normalized, execution)["status"], "pass")
+
+    def test_asy_average_speed_graph_is_recovered_from_question(self):
+        question = r"""Which student has the greatest average speed? [asy]
+dot((1.25, 4.5)); label(scale(.85)*"Evelyn", (1.25, 4.8), N);
+dot((2.5, 2.2)); label(scale(.85)*"Briana", (2.5, 2.2), S);
+dot((4.25,5.2)); label(scale(.85)*"Carla", (4.25, 5.2), SE);
+dot((5.6, 2.8)); label(scale(.85)*"Debra", (5.6, 2.8), N);
+dot((6.8, 1.4)); label(scale(.85)*"Angela", (6.8, 1.4), E);
+[/asy]"""
+        normalized = augment_ir_from_question(question, normalize_problem_ir({"target_unknown": {"name": "answer", "symbol": "x", "unit": None, "dimension": None}, "givens": [], "relations": [], "conditions": [], "required_output": {"type": "number", "unit": None, "precision": "exact", "digits": None, "target_count": 1}}))
+        execution = try_direct_solve(normalized)
+        self.assertIsNotNone(execution)
+        self.assertEqual(execution["answer"], "Evelyn")
+        self.assertEqual(verify_bidirectional(normalized, execution)["status"], "pass")
 
     def test_cylinder_literals_are_recovered_from_problem_text(self):
         question = r"The volume of the cylinder shown is $45\pi$ cubic cm. What is the height in centimeters of the cylinder? [asy] label(\"$r=3$\",(0,0)); [/asy]"

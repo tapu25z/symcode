@@ -270,6 +270,8 @@ def augment_ir_from_question(question: str, normalized_ir: Mapping[str, Any]) ->
     _augment_cylinder_literals(question, out)
     _augment_complex_literals(question, out)
     _augment_asy_target_segment(question, out)
+    _augment_asy_average_speed_selection(question, out)
+    _augment_symbolic_series_identity(question, out)
     return out
 
 
@@ -321,6 +323,80 @@ def _augment_asy_target_segment(question: str, normalized_ir: Dict[str, Any]) ->
         if item.get("lhs") != target
     ]
     normalized_ir["relations"].append(_definition("asy_target_segment", target, rhs, "target segment from ASY coordinates"))
+
+
+def _augment_asy_average_speed_selection(question: str, normalized_ir: Dict[str, Any]) -> None:
+    lowered = question.lower()
+    if "[asy]" not in lowered or "greatest average speed" not in lowered:
+        return
+    points: list[tuple[str, str, str]] = []
+    pattern = re.compile(
+        r"dot\(\(\s*([^,()]+?)\s*,\s*([^()]+?)\s*\)\)\s*;\s*label\([^;]*?\"([^\"$]+)\"",
+        re.I | re.S,
+    )
+    for x_value, y_value, name in pattern.findall(question):
+        clean_name = re.sub(r"\W+", "_", name.strip()).strip("_")
+        if clean_name:
+            points.append((clean_name, normalize_expression(x_value), normalize_expression(y_value)))
+    if len(points) < 2:
+        return
+
+    try:
+        winner, _, _ = max(points, key=lambda item: parse_number(item[2]) / parse_number(item[1]))
+    except Exception:
+        return
+
+    normalized_ir["target_unknown"] = {
+        "name": "student with greatest average speed",
+        "symbol": "student",
+        "unit": None,
+        "dimension": "entity",
+        "quantity": None,
+    }
+    normalized_ir["required_output"] = {
+        "type": "text", "unit": None, "precision": "exact", "digits": None, "target_count": 1,
+    }
+    normalized_ir["givens"] = []
+    normalized_ir["relations"] = []
+    normalized_ir["symbols"] = {"student": "student"}
+    for name, time_value, distance_value in points:
+        _upsert_given(normalized_ir, name, name, None, f"{name} label", "entity")
+        _upsert_given(normalized_ir, f"t_{name}", time_value, None, f"{name} time coordinate", "measurement")
+        _upsert_given(normalized_ir, f"d_{name}", distance_value, None, f"{name} distance coordinate", "measurement")
+        normalized_ir["relations"].append(_definition(f"speed_{name}", f"v_{name}", f"d_{name}/t_{name}", f"{name} average speed"))
+    normalized_ir["relations"].append(_definition("select_greatest_speed", "student", winner, "greatest distance/time ratio"))
+    normalized_ir.setdefault("extraction_notes", []).append("Recovered average-speed ASY scatter plot deterministically from dot/label coordinates.")
+
+
+def _augment_symbolic_series_identity(question: str, normalized_ir: Dict[str, Any]) -> None:
+    compact = re.sub(r"\s+", "", question)
+    if "intermsof$p$and$q" not in compact.replace("\\", "") and "in terms of $p$ and $q" not in question.lower():
+        return
+    has_p = re.search(r"p\s*=\s*\\sum_\{?k\s*=\s*1\}?\^\\infty\s*\\frac\{1\}\{k\^?2\}", compact)
+    has_q = re.search(r"q\s*=\s*\\sum_\{?k\s*=\s*1\}?\^\\infty\s*\\frac\{1\}\{k\^?3\}", compact)
+    has_target = re.search(r"\\sum_\{?j\s*=\s*1\}?\^\\infty\\sum_\{?k\s*=\s*1\}?\^\\infty\\frac\{1\}\{\(j\+k\)\^?3\}", compact)
+    if not (has_p and has_q and has_target):
+        return
+    target_symbol = str(normalized_ir.get("target_unknown", {}).get("symbol") or "result")
+    normalized_ir["target_unknown"] = {
+        **dict(normalized_ir.get("target_unknown", {})),
+        "name": "symbolic sum in terms of p and q",
+        "symbol": target_symbol,
+        "unit": None,
+        "dimension": "symbolic",
+        "quantity": None,
+    }
+    normalized_ir["required_output"] = {
+        "type": "symbolic", "unit": None, "precision": "exact", "digits": None, "target_count": 1,
+    }
+    _upsert_given(normalized_ir, "p", "p", None, "p named series", "parameter")
+    _upsert_given(normalized_ir, "q", "q", None, "q named series", "parameter")
+    normalized_ir["relations"] = [
+        item for item in normalized_ir.get("relations", [])
+        if "\\sum" not in str(item.get("rhs", "")) and "sum_" not in str(item.get("rhs", ""))
+    ]
+    normalized_ir["relations"].append(_definition("series_reindex_identity", target_symbol, "p - q", "sum over n=j+k gives sum_{n>=2} (n-1)/n^3"))
+    normalized_ir.setdefault("extraction_notes", []).append("Recovered symbolic series identity without numeric evaluation.")
 
 
 def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:

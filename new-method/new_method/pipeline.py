@@ -6,6 +6,7 @@ import re
 from typing import Any, Callable, Mapping
 
 from .config import AblationConfig, resolve_ablation
+from .direct_solver import try_direct_solve
 from .normalizer import augment_ir_from_question, build_codegen_payload, normalize_problem_ir, validate_normalized_ir
 from .problem_ir import (
     acg_to_legacy_ir,
@@ -99,6 +100,26 @@ class SymPlannerIRPipeline:
             return self._invalid_ir(question, normalized, all_ir_errors, fatal_errors, acg_ir, solver_plan, self.ablation.name)
 
         payload = build_codegen_payload(normalized)
+        direct_execution = try_direct_solve(normalized) if self._should_try_direct_solve(normalized) else None
+        if direct_execution is not None:
+            verification = verify_bidirectional(normalized, direct_execution)
+            if verification["status"] == "pass":
+                attempt = {"attempt": 0, "execution": direct_execution, "verification": verification}
+                return {
+                    "status": "pass",
+                    "variant": self.ablation.name,
+                    "question": question,
+                    "ir": normalized,
+                    "acg_ir": acg_ir,
+                    "solver_plan": solver_plan,
+                    "payload": payload,
+                    "code": None,
+                    "schema_errors": all_ir_errors,
+                    "ir_repairs": [],
+                    "attempts": [attempt],
+                    "final": attempt,
+                }
+
         if acg_ir is not None:
             payload = {
                 **payload,
@@ -189,3 +210,17 @@ class SymPlannerIRPipeline:
             return True
         feedback = verification.get("feedback") or []
         return any("Missing canonical target answer" in str(item) for item in feedback)
+
+    @staticmethod
+    def _should_try_direct_solve(normalized: Mapping[str, Any]) -> bool:
+        notes = " ".join(str(item) for item in normalized.get("extraction_notes", []))
+        if "Recovered" in notes:
+            return True
+        for relation in normalized.get("relations", []):
+            text = " ".join(str(relation.get(key, "")) for key in ("id", "kind", "lhs", "rhs", "source"))
+            lowered = text.lower()
+            if ".subs(" in text:
+                return True
+            if "divisor" in lowered or "factorization" in lowered:
+                return True
+        return False
