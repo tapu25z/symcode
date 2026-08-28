@@ -24,14 +24,6 @@ def _legacy_scoring_helpers():
     return extract_ground_truth, check_exact_match, normalize_answer_str
 
 
-def _legacy_answer_verifier():
-    kaggle_dir = Path(__file__).resolve().parents[2] / "kaggle"
-    if str(kaggle_dir) not in sys.path:
-        sys.path.insert(0, str(kaggle_dir))
-    from method import verify_candidate_answer
-    return verify_candidate_answer
-
-
 def _load_checkpoint(path: str | None, method_name: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     if not path or not os.path.exists(path):
         return {}, []
@@ -60,10 +52,9 @@ def evaluate_ir_variant(
     dataset: list[dict[str, Any]],
     llm_runner: Any,
     sandbox_executor: Callable[..., Mapping[str, Any]],
-    variant: str = "IR-Full",
+    variant: str = "IR",
     timeout: int = 15,
     max_retries: int = 2,
-    max_ir_retries: int = 1,
     checkpoint_file: str | None = None,
     save_every: int = 5,
     token_budgets: StageTokenBudgets | None = None,
@@ -80,8 +71,7 @@ def evaluate_ir_variant(
     completed = {item.get("problem") for item in results}
     model = Legacy7BCoderAdapter(llm_runner, token_budgets)
     sandbox = LegacySandboxAdapter(sandbox_executor, timeout=timeout)
-    answer_verifier = _legacy_answer_verifier() if ABLATIONS[variant].pipeline == "lean" else None
-    pipeline = SymPlannerIRPipeline(model, sandbox, max_repairs=max_retries, max_ir_repairs=max_ir_retries, ablation=variant, answer_verifier=answer_verifier)
+    pipeline = SymPlannerIRPipeline(model, sandbox, max_repairs=max_retries, ablation=variant)
     new_count = 0
 
     print(f"\n==================== Bat dau danh gia Ablation: {variant} ({len(dataset)} mau) ====================")

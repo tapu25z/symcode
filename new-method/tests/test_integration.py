@@ -89,37 +89,39 @@ print(json.dumps({
         self.assertEqual(result["answer"], "sqrt(2)")
         self.assertEqual(result["variables"]["n"], 2)
 
-    def test_ablation_switch_separates_codegen_from_semantic_verifier(self):
+    def test_single_ir_pipeline_runs_bidirectional_verifier(self):
         responses = [json.dumps(VALID_IR), "print('code')"]
-        codegen_only = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(11), ablation="IR-Codegen")
-        self.assertEqual(codegen_only.run("answer is 10")["status"], "pass")
+        pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(11), max_repairs=0, ablation="IR")
+        self.assertEqual(pipeline.run("answer is 10")["status"], "fail")
         responses = [json.dumps(VALID_IR), "print('code')"]
-        verified = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(11), ablation="IR-BiVerify")
-        self.assertEqual(verified.run("answer is 10")["status"], "fail")
+        verified = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(10), ablation="IR")
+        result = verified.run("answer is 10")
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(len(result["ir_repairs"]), 0)
 
     def test_evaluator_emits_legacy_compatible_result_and_checkpoint(self):
-        runner = FakeRunner(["print('code')"])
+        runner = FakeRunner([json.dumps(VALID_IR), "print('code')"])
         sandbox = lambda code, **kwargs: {"status": "success", "stdout": json.dumps(structured_execution()) + "\n", "traceback": None}
         dataset = [{"question": "answer is 10", "answer": "10", "raw": {"answer": "10"}, "subject": "Algebra", "level": 1, "level_label": "Level 1"}]
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = str(Path(directory) / "result.json")
             results = evaluate_ir_variant(
-                dataset, runner, sandbox, variant="IR-Full", checkpoint_file=checkpoint,
+                dataset, runner, sandbox, variant="IR", checkpoint_file=checkpoint,
                 ground_truth_fn=lambda raw: str(raw["answer"]),
                 match_fn=lambda pred, gold: str(pred) == str(gold),
             )
             self.assertEqual(results[0]["verification_status"], "pass")
             self.assertTrue(results[0]["is_correct"])
-            self.assertEqual(results[0]["generated_tokens"], 7)
+            self.assertEqual(results[0]["generated_tokens"], 14)
             self.assertFalse(results[0]["invalid_ir"])
             self.assertTrue(Path(checkpoint).exists())
 
-    def test_strict_ir_variant_preserves_relation_verifier_path(self):
-        responses = [json.dumps(VALID_IR), "print('code')"]
-        pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(), ablation="IR-Strict")
+    def test_repairs_are_hard_capped_at_two(self):
+        responses = [json.dumps(VALID_IR), "print('code')", "print('repair1')", "print('repair2')"]
+        pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(11), max_repairs=99, ablation="IR")
         result = pipeline.run("answer is 10")
-        self.assertEqual(result["status"], "pass")
-        self.assertIsInstance(result["ir"], dict)
+        self.assertEqual(len(result["attempts"]), 3)
+        self.assertEqual(len(responses), 0)
 
     def test_math500_matrix_and_infinity_scoring(self):
         matrix_gold = r"\begin{pmatrix} -1 & 0 \\ 0 & -1 \end{pmatrix}"

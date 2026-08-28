@@ -128,7 +128,10 @@ def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
     if numeric is None:
         return {"raw": value, "value": None, "unit": unit, "canonical_value": None, "canonical_unit": unit, "status": "non_numeric"}
     if not is_supported_unit(unit):
-        return {"raw": value, "value": numeric, "unit": unit, "canonical_value": None, "canonical_unit": unit, "status": "unknown_unit"}
+        # Preserve the magnitude so an unfamiliar but dimensionally consistent
+        # unit does not turn a usable problem into invalid_ir. No conversion is
+        # claimed; the original unit remains visible to codegen and verifier.
+        return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric, "canonical_unit": unit, "status": "unknown_unit"}
     if unit == "%":
         return {"raw": value, "value": numeric, "unit": "%", "canonical_value": numeric / 100.0, "canonical_unit": "ratio", "status": "ok"}
     canonical_unit, factor = unit_conversion(unit)

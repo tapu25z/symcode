@@ -1,4 +1,4 @@
-# new-method — Lean SymPlanner
+# new-method — SymPlanner IR
 
 Đây là nhánh thử nghiệm độc lập cho SymPlanner. Các bản cũ không bị sửa; mã tham chiếu được lưu trong `legacy/`:
 
@@ -6,17 +6,15 @@
 - `legacy/task2/`: extraction/module2, chuẩn hóa đơn vị/module3, codegen/module4, executor, few-shot/RAG và verify.
 - `legacy/task2-tay/`: các pipeline extract/thinking hiện có.
 
-## Huong hien tai
+## Hướng hiện tại
 
-Duong chay chinh da duoc cat gon de tranh over-engineering:
+Chỉ còn một pipeline IR duy nhất:
 
-`question -> codegen JSON-contract Python -> sandbox execution -> lightweight verifier -> targeted repair`
+`question -> extract IR -> normalize IR -> plan/codegen -> sandbox -> bidirectional verify -> tối đa 2 code repair`
 
-`IR-Lite` va `IR-Full` hien la cung mot duong lean problem-to-code. Khong con buoc extract/repair IR bat buoc, nen loi schema khong lam ca mau thanh `invalid_ir` truoc khi sinh code. Code van in JSON mot dong gom `answer`, `canonical_answer`, `answer_type`, `unit`, `variables` de evaluator/scorer doc on dinh.
+Extractor chỉ chạy một lần và không có IR repair. Normalizer điền default cho lỗi hình thức nhỏ; chỉ IR không có target hoặc quan hệ dùng được mới bị đánh dấu `invalid_ir`. Code vẫn in JSON một dòng gồm `answer`, `canonical_answer`, `answer_type`, `unit`, `variables` để evaluator/scorer đọc ổn định.
 
-Verifier trong duong lean chi la guard nhe: runtime error, output JSON sai contract, `None`/`NaN`/vo cuc, free symbols ro rang, va mot so rang buoc mien gia tri doc lap. No khong co gang chung minh lai toan bo relation graph.
-
-Duong strict IR van duoc giu de nghien cuu/ablation duoi ten `IR-Strict`. Cac bien the `IR-Codegen` va `IR-BiVerify` van dung structured IR nhu truoc.
+Bidirectional verifier kiểm tra output contract, quan hệ theo hai chiều và conditions. Mọi lỗi sau sandbox đều dùng chung code repair, tối đa hai lần.
 
 ## Chạy thử tối thiểu
 
@@ -31,23 +29,19 @@ result = pipeline.run(question)
 
 Contract sandbox hiện tại là một JSON line gồm `answer`, `canonical_answer`, `answer_type`, `unit`, `variables`. Adapter trong `new_method/adapters.py` chuyển output của sandbox cũ sang contract này.
 
-## Benchmark và ablation
+## Benchmark
 
 Runner mới dùng cùng `Qwen/Qwen2.5-Coder-7B-Instruct`, dataset loader, exact-match và result schema với benchmark cũ:
 
 ```powershell
-python new-method/run_benchmark.py --dataset math500 --num-samples 50 --methods SymPlanner IR-Lite
+python new-method/run_benchmark.py --dataset math500 --num-samples 50 --methods SymPlanner IR
 ```
 
 - `SymPlanner`: baseline cũ.
-- `IR-Lite`: duong lean mac dinh, 1 codegen + toi da 1 repair theo default.
-- `IR-Full`: alias tuong thich nguoc cua `IR-Lite`, dung khi script cu da goi ten nay.
-- `IR-Codegen`: structured IR + normalization + codegen, chi kiem tra output contract.
-- `IR-BiVerify`: structured IR + bidirectional verifier, khong code repair.
-- `IR-Strict`: structured IR + bidirectional verifier + targeted repair day du nhu thiet ke cu.
+- `IR`: extractor + normalizer + plan/codegen + sandbox + bidirectional verifier + tối đa 2 code repair.
 
 Import hoặc chạy `--help` không tải model. Model chỉ được khởi tạo khi `main()` bắt đầu một benchmark thật.
 
 ## Trạng thái tích hợp
 
-Adapter model, sandbox, evaluator/checkpoint va runner ablation da co. Truoc full benchmark nen chay smoke 10 mau voi `IR-Lite` de so truc tiep voi baseline, sau do moi quyet dinh co can bat lai `IR-Strict` cho nhom bai nao hay khong.
+Adapter model, sandbox, evaluator/checkpoint và runner benchmark dùng chung với baseline. Nên chạy smoke 10 mẫu với `SymPlanner IR` trước khi chạy full benchmark.

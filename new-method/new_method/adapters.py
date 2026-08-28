@@ -36,7 +36,6 @@ _symplanner_json.dumps = _symplanner_safe_json_dumps
 @dataclass(frozen=True)
 class StageTokenBudgets:
     extractor: int = 1400
-    ir_repair: int = 1400
     codegen: int = 1800
     code_repair: int = 1800
 
@@ -61,13 +60,7 @@ class Legacy7BCoderAdapter:
 
     def _stage(self, messages: list[dict[str, str]]) -> str:
         system = str(messages[0].get("content", "")) if messages else ""
-        if "now repairing a candidate mathematical IR" in system:
-            return "ir_repair"
         if "repair a Python program" in system:
-            return "code_repair"
-        if "single-pass mathematical code solver" in system:
-            return "codegen"
-        if "repair a single Python/SymPy solution" in system:
             return "code_repair"
         if "normalized JSON payload" in system:
             return "codegen"
