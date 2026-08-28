@@ -9,8 +9,9 @@ from typing import Dict, Any, List, Tuple, Optional
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-# Thiết lập quản lý phân mảnh bộ nhớ GPU cho các phiên chạy benchmark dài
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# Thiết lập quản lý phân mảnh bộ nhớ GPU cho các phiên chạy benchmark dài (trên Linux)
+if os.name != "nt":
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 class LLMRunner:
@@ -73,7 +74,7 @@ class LLMRunner:
             "device_map": device_map,
             "low_cpu_mem_usage": True,
             "trust_remote_code": True,
-            "torch_dtype": compute_dtype
+            "dtype": compute_dtype
         }
         
         if bnb_config is not None:
@@ -84,11 +85,16 @@ class LLMRunner:
 
         try:
             self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
-        except Exception:
+        except Exception as err:
             # Fallback nếu SDPA không tương thích với một số phiên bản PyTorch cũ
             if "attn_implementation" in model_kwargs:
                 del model_kwargs["attn_implementation"]
-            self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+                if cuda_avail:
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                self.model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+            else:
+                raise err
 
         self.model.eval()
         print(f"[INFO] Mo hinh da duoc tai thanh cong tren thiet bi: {self.model.device}")

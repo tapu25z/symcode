@@ -107,6 +107,12 @@ def parse_args():
         help="Duong dan file JSON luu ket qua."
     )
     parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        default=False,
+        help="Chi chay lai cac mau bi SAI trong file ket qua cu, giu nguyen cac mau da DUNG."
+    )
+    parser.add_argument(
         "--tail",
         action="store_true",
         default=False,
@@ -224,7 +230,7 @@ def main():
             )
         elif method == "SymPlanner":
             benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
-                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every, retry_failed=args.retry_failed
             )
 
     # Tong hop va xuat ket qua

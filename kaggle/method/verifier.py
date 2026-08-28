@@ -53,7 +53,7 @@ def verify_candidate_answer(
     if cleaned_cand in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4 and not cleaned_cand.isalpha()):
         return (
             "fail",
-            f"Verification Error: Candidate answer '{cand_str}' is an unevaluated Python variable name. Evaluate the variable before printing it."
+            "Verification Error: Candidate answer '" + cand_str + "' is an unevaluated Python variable name. Actionable Fix: Compute the actual value of the variable first, then pass the evaluated variable to print(f'\\boxed{sp.latex(var)}')."
         )
 
     # 4. Kiểm tra miền giá trị và kiểu dữ liệu biểu tượng qua SymPy

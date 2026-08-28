@@ -19,7 +19,7 @@ Output ONLY this JSON object:
 {
   "target_unknown": "exact quantity or simplified expression to find",
   "target_type": "number | fraction | tuple | interval | set | entity_name | expression",
-  "domain_constraints": "positive integer, real number, 0 <= theta < 2*pi, etc.",
+  "domain_constraints": "positive integer, real number, 0 <= theta < 360, etc.",
   "given_constants": ["key numbers, parameters and relations from problem"],
   "strategy": "sequential arithmetic OR symbolic equation solving (sp.solve)",
   "steps": ["step 1", "step 2", "step 3"],
@@ -38,20 +38,24 @@ Given one math problem and planner notes, return ONLY executable Python code enc
 Do NOT write explanations. Do NOT output markdown text outside the code fence. Do NOT output <think> tags.
 
 The code MUST:
-1. import sympy as sp (and math, fractions if helpful).
+1. import sympy as sp, functools, math, fractions if helpful.
 2. Define given values and variables clearly with proper domain assumptions (e.g., sp.symbols('x', positive=True, real=True)).
 3. Compute the requested target quantity according to target_type and domain_constraints:
-   - For sequential word problems (GSM8K style): Compute step-by-step using Python/SymPy arithmetic.
-   - For algebraic systems (MATH style): Use sp.symbols(...) with domain assumptions and sp.solve(...).
+   - For sequential word problems: Compute step-by-step using Python/SymPy arithmetic.
+   - For algebraic systems: Use sp.symbols(...) with domain assumptions and sp.solve(...).
 4. STRICT SYMPY CODE RULES & ANTI-PATTERNS:
    - NEVER use integer division `//` inside SymPy equations or sp.Eq(). Use standard `/` or `sp.Rational(a, b)`.
    - ALWAYS check if a solution list is non-empty before indexing `[0]` (e.g., `ans = sol[0] if sol else None`).
    - For inequalities, use `sp.reduce_inequalities([cond1, cond2], x)` instead of bitwise operators `&`/`|`.
    - For variable substitutions, ALWAYS pass a dictionary: `expr.subs({x: val1, y: val2})`. NEVER pass tuples.
    - ALWAYS filter domain constraints explicitly (e.g., `[s for s in sols if s > 0]`).
-   - Never output `None`, `Invalid`, or undefined variables. Do NOT create conditional `if/else` checks that assign `None` or `Invalid`.
+   - ANTI-RECURSION RULE: For recursive functions f(n, m), ALWAYS add `@functools.lru_cache(None)` above definition or convert to iterative dynamic programming loop to avoid RecursionError.
+   - GEOMETRY & ANGLE RULE: For angle measures, enforce domain constraints (e.g., `angle = angle % 360`).
+   - TUPLE PARAMETER RULE: For ordered triples/tuples like (p, q, r), NEVER print symbolic variable names like `(a6, a3, a0)`. Solve for exact numeric values.
+   - Never output `None`, `Invalid`, or undefined variables. Do NOT create conditional `if/else` checks that assign `None`.
    - Never call `.evalf()` on Python standard `int` or `float`.
-5. FORMATTING & LATEX PRINTING:
+5. FORMATTING & SIMPLIFICATION & LATEX PRINTING:
+   - ALWAYS post-process final SymPy expression/number using `sp.nsimplify()`, `sp.radsimp()`, `sp.trigsimp()`, or `sp.expand_complex()` to simplify radicals and convert repeating decimals to exact fractions (e.g. 218.571428571429 -> 270/7).
    - Always print the final answer in LaTeX boxed format at the very end.
    - If `final_answer` is a SymPy object or expression, use `sp.latex(final_answer)`:
      `if isinstance(final_answer, (sp.Basic, sp.Matrix)): print(f"\\boxed{{{sp.latex(final_answer)}}}") else: print(f"\\boxed{{{final_answer}}}")`
@@ -81,18 +85,19 @@ Return ONLY corrected executable Python code enclosed in a single ```python ... 
 Do NOT write explanations. Do NOT output <think> tags.
 
 Fix the shown failure:
-- Syntax error / Indentation error / Runtime error (AttributeError, TypeError, IndexError)
+- Syntax error / Indentation error / Runtime error (AttributeError, TypeError, KeyError, RecursionError)
+- RecursionError: Add `@functools.lru_cache(None)` above recursive functions or rewrite using an iterative DP loop.
 - Misuse of `//` inside SymPy `sp.Eq()` or passing tuples to `.subs()`
 - Unevaluated Python variable name or missing `\boxed{}` output
 - Free variables remaining in answer when a concrete value is required
-- Verifier diagnosis feedback (e.g. missing target symbols like p, q, or probability out of bounds)
+- Verifier diagnosis feedback (e.g. missing target symbols, un-simplified radical/fraction, angle out of bounds)
 
 Requirements:
 1. Ensure the code computes a concrete numerical value, LaTeX-formatted expression, or simplified symbolic result.
 2. Follow STRICT SYMPY CODE RULES:
    - Safe solution list indexing (`sol[0] if sol else None`).
    - Pass dictionary to `.subs({x: val1})`.
-   - Use `sp.reduce_inequalities()` for inequality conditions.
+   - Post-process with `sp.nsimplify()`, `sp.radsimp()`, or `sp.trigsimp()`.
 3. Print ONLY the final answer in LaTeX boxed format:
    `if isinstance(final_answer, (sp.Basic, sp.Matrix)): print(f"\\boxed{{{sp.latex(final_answer)}}}") else: print(f"\\boxed{{{final_answer}}}")`
 """

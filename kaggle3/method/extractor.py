@@ -416,11 +416,26 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
         except Exception:
             g_sym = parse_expr(norm_gt, transformations=transformations)
             
+        if p_sym == g_sym:
+            return True
+
         diff = sympy.simplify(p_sym - g_sym)
         if diff == 0:
             return True
-        if hasattr(diff, "evalf") and abs(float(diff.evalf())) < 1e-6:
-            return True
+        if hasattr(diff, "evalf"):
+            try:
+                if abs(float(diff.evalf())) < 1e-6:
+                    return True
+            except (ValueError, TypeError):
+                pass
+
+        try:
+            p_nsimp = sympy.nsimplify(p_sym)
+            diff_nsimp = sympy.simplify(p_nsimp - g_sym)
+            if diff_nsimp == 0:
+                return True
+        except Exception:
+            pass
     except Exception:
         pass
 

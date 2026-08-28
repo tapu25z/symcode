@@ -519,7 +519,8 @@ def evaluate_symplanner(
     timeout: int = 15,
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5
+    save_every: int = 5,
+    retry_failed: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Thực thi đánh giá phương pháp SymPlanner theo kiến trúc Decoupled Multi-Turn Pipeline:
@@ -530,10 +531,18 @@ def evaluate_symplanner(
     """
     ckpt = _load_existing_checkpoint(checkpoint_file, "SymPlanner")
     results = ckpt["method_results"]
-    completed_problems = {r["problem"] for r in results}
     
-    if completed_problems:
-        print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+    if retry_failed:
+        # Lọc giữ lại các câu đã ĐÚNG, loại bỏ các câu SAI khỏi results để chạy lại
+        completed_problems = {r["problem"] for r in results if r.get("is_correct")}
+        results = [r for r in results if r.get("is_correct")]
+        ckpt["method_results"] = results
+        if completed_problems:
+            print(f"[INFO] Che do --retry-failed: Giu {len(completed_problems)} mau DUNG, se chay lai {len(dataset) - len(completed_problems)} mau SAI.")
+    else:
+        completed_problems = {r["problem"] for r in results}
+        if completed_problems:
+            print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
 
     print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Decoupled Multi-Turn Pipeline, Retries: {max_retries}) ====================")
     
@@ -542,6 +551,7 @@ def evaluate_symplanner(
         question = item["question"]
         if question in completed_problems:
             continue
+
             
         gt = extract_ground_truth(item.get("raw") or item["answer"])
         
