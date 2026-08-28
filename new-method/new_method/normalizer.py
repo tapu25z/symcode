@@ -182,12 +182,16 @@ def normalize_expression(expression: Any) -> str:
     text = text.replace("\\pi", "pi").replace("\\infty", "oo")
     text = re.sub(r"(?<=\d)\s+(?=(sqrt|sin|cos|tan|log|exp)\s*\()", "*", text)
     text = re.sub(r"(?<=\d)\s*pi\b", "*pi", text)
+    text = re.sub(r"(?<=\d)(?=pi\b)", "*", text)
     text = re.sub(r"(?<=[0-9)\]])\s*i\b", "*I", text)
+    text = re.sub(r"(?<=[0-9)\]])(?=I\b)", "*", text)
     text = re.sub(r"\bi\b", "I", text)
     text = re.sub(r"\b(and|where|such that)\b", " ", text, flags=re.I)
 
     def replace_quantity(match: re.Match[str]) -> str:
         quantity = normalize_quantity(match.group(0))
+        if quantity.get("status") == "unknown_unit":
+            return match.group(0)
         value = quantity.get("canonical_value")
         return str(value) if value is not None else match.group(0)
 
@@ -198,7 +202,7 @@ def normalize_expression(expression: Any) -> str:
 
 
 def _normalize_function_evaluations(text: str) -> str:
-    math_names = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+    math_names = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "factorint", "divisors", "oct", "bin", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 
     def replacement(match: re.Match[str]) -> str:
         name, value = match.group(1), match.group(2).replace(" ", "")
@@ -213,7 +217,7 @@ def _normalize_function_evaluations(text: str) -> str:
 
 def relation_symbols(lhs: str, rhs: str) -> list[str]:
     candidates = re.findall(r"\b[A-Za-z_]\w*\b", f"{lhs} {rhs}")
-    reserved = {"and", "or", "not", "True", "False", "pi", "e", "I", "oo", "sin", "cos", "tan", "sqrt", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix", "gcd", "lcm"}
+    reserved = {"and", "or", "not", "True", "False", "pi", "e", "I", "oo", "sin", "cos", "tan", "sqrt", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "factorint", "divisors", "oct", "bin", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
     return sorted({item for item in candidates if item not in reserved and not item.isdigit()})
 
 

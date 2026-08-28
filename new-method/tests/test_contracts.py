@@ -100,6 +100,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(validate_normalized_ir(normalized), [])
         self.assertEqual(normalized["givens"][0]["quantity"]["status"], "expression")
 
+    def test_symbolic_constants_are_not_coerced_as_unknown_units(self):
+        ir = valid_ir()
+        ir["givens"] = [{"name": "complex value", "symbol": "z", "value": "2I + 45*pi + sqrt(2)", "unit": None, "role": "constant", "source": "symbolic value"}]
+        normalized = normalize_problem_ir(ir)
+        self.assertEqual(normalized["givens"][0]["quantity"]["canonical_value"], "2*I + 45*pi + sqrt(2)")
+
     def test_integer_condition_accepts_int_idiom(self):
         normalized = normalize_problem_ir(valid_ir())
         normalized["conditions"] = [{"kind": "integer", "expr": "p == int(p)", "source": "integer answer"}]

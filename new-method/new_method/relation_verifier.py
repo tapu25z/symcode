@@ -18,7 +18,7 @@ NUMERIC_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
 STRUCTURED_OUTPUT_TYPES = {"symbolic", "tuple", "set", "interval", "matrix", "text"}
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]<>=!\s]+$")
-SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "pi", "e", "I", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "factorint", "divisors", "oct", "bin", "pi", "e", "I", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
@@ -49,6 +49,7 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
     text = re.sub(r"(?<=\d)\s+(?=(sqrt|sin|cos|tan|log|exp)\s*\()", "*", text)
     text = re.sub(r"(?<=\d)\s*pi\b", "*pi", text)
     text = re.sub(r"(?<=[0-9)\]])\s*i\b", "*I", text)
+    text = re.sub(r"(?<=[0-9)\]])(?=I\b)", "*", text)
     text = re.sub(r"\bi\b", "I", text)
     pattern = SAFE_CONDITION_RE if allow_condition else SAFE_EXPRESSION_RE
     if not text or not pattern.fullmatch(text) or "__" in text:
@@ -61,6 +62,7 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
         "max": sp.Max, "pi": sp.pi, "e": sp.E, "I": sp.I, "oo": sp.oo, "Tuple": sp.Tuple,
         "FiniteSet": sp.FiniteSet, "Interval": sp.Interval, "Union": sp.Union,
         "Matrix": sp.Matrix, "gcd": sp.gcd, "lcm": sp.ilcm,
+        "factorint": sp.factorint, "divisors": sp.divisors, "oct": oct, "bin": bin,
     })
     parsed = sp.sympify(text, locals=local_dict)
     if isinstance(parsed, tuple):

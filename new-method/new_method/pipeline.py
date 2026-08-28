@@ -12,6 +12,25 @@ from .prompts import codegen_prompt, extraction_prompt, repair_prompt
 from .relation_verifier import verify_bidirectional
 
 
+RUNTIME_HEADER = r"""import sympy as sp
+import math
+import json
+from fractions import Fraction
+
+def enc(v):
+    if isinstance(v, bool):
+        return v
+    if getattr(v, "is_Integer", False):
+        return int(v)
+    if isinstance(v, float):
+        return int(v) if v.is_integer() else v
+    return str(v) if isinstance(v, sp.Basic) else v
+
+def safe_eval(v):
+    return v if isinstance(v, sp.Basic) else sp.sympify(v)
+"""
+
+
 def strip_code_fence(text: str) -> str:
     """Accept plain Python or a markdown-fenced model response."""
     value = (text or "").strip()
@@ -127,7 +146,7 @@ class SymPlannerIRPipeline:
 
     def _execute(self, code: str) -> dict[str, Any]:
         try:
-            return dict(self.execute_code(code) or {})
+            return dict(self.execute_code(f"{RUNTIME_HEADER}\n{code}") or {})
         except Exception as exc:
             return {"execution_error": f"{type(exc).__name__}: {exc}"}
 

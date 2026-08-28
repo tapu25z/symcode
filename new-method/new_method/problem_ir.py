@@ -31,7 +31,7 @@ ALLOWED_PRECISIONS = {"exact", "integer", "decimal", "significant_figures"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]<>=!\s]+$")
-ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix", "gcd", "lcm"}
+ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "gcd", "lcm", "factorint", "divisors", "oct", "bin", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 REQUIRED_RELATION_FIELDS = {"id", "kind", "lhs", "rhs", "operator", "unit", "source", "evidence", "confidence"}
 REQUIRED_GIVEN_FIELDS = {"name", "symbol", "value", "unit", "role", "source"}
 REQUIRED_CONDITION_FIELDS = {"kind", "expr", "source"}
