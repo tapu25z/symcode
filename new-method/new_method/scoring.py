@@ -26,9 +26,19 @@ def _clean_gsm8k_str(text: str) -> str:
     return s.strip()
 
 
-def _sympify(text: str):
-    if sp is None or not text:
+def _sympify(text: Any):
+    if sp is None or text in (None, ""):
         return None
+    if isinstance(text, (list, tuple)):
+        parsed_items = []
+        for item in text:
+            parsed = _sympify(item)
+            if parsed is None:
+                return None
+            parsed_items.append(parsed)
+        return sp.Tuple(*parsed_items)
+    if isinstance(text, (sp.Basic, sp.MatrixBase, sp.Set)):
+        return text
     s = _clean_gsm8k_str(str(text))
     s = re.sub(r"\\(?:left|right|displaystyle|limits|textstyle|scriptstyle)", "", s)
     s = re.sub(r"\\(?:text|mathrm|mathbf|textbf|textit|operatorname|mbox)\s*\{([^}]+)\}", r"\1", s)
@@ -129,8 +139,10 @@ def check_math500_equivalence(
     for cand in candidates:
         if cand in (None, ""):
             continue
-        cand_str = str(cand)
-        cand_expr = _sympify(cand_str) or _sympify(legacy_normalize(cand_str))
+        cand_expr = _sympify(cand)
+        if cand_expr is None:
+            cand_str = str(cand)
+            cand_expr = _sympify(cand_str) or _sympify(legacy_normalize(cand_str))
         if cand_expr is not None and gold_expr is not None:
             if cand_expr == gold_expr:
                 return True

@@ -165,6 +165,25 @@ class ContractTests(unittest.TestCase):
         result = verify_bidirectional(normalize_problem_ir(ir), {"answer": "(3.0, 1.57079632679490)", "canonical_answer": "(3.0, 1.57079632679490)", "answer_type": "tuple", "unit": None, "variables": {"r": 3.0, "theta": 1.57079632679490}})
         self.assertEqual(result["status"], "pass", result)
 
+    def test_tuple_answer_accepts_json_list_contract(self):
+        ir = {
+            "target_unknown": {"name": "pair", "symbol": "P", "unit": None, "dimension": "tuple"},
+            "givens": [
+                {"name": "x", "symbol": "x", "value": 0, "unit": None, "role": "constant", "source": "(0,3)"},
+                {"name": "y", "symbol": "y", "value": 3, "unit": None, "role": "constant", "source": "(0,3)"},
+            ],
+            "relations": [
+                {"id": "radius", "kind": "definition", "lhs": "r", "rhs": "sqrt(x**2+y**2)", "operator": "=", "unit": None, "source": "polar", "evidence": "radius", "confidence": 1.0},
+                {"id": "angle", "kind": "definition", "lhs": "theta", "rhs": "pi/2", "operator": "=", "unit": None, "source": "polar", "evidence": "angle", "confidence": 1.0},
+                {"id": "pair", "kind": "definition", "lhs": "P", "rhs": "Tuple(r,theta)", "operator": "=", "unit": None, "source": "polar", "evidence": "requested pair", "confidence": 1.0},
+            ],
+            "conditions": [{"kind": "positive", "expr": "r>0", "source": "r>0"}, {"kind": "range", "expr": "theta<2*pi", "source": "theta range"}],
+            "required_output": {"type": "tuple", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        execution = {"answer": ["3.00000000000000", "pi/2"], "canonical_answer": ["3.00000000000000", "pi/2"], "answer_type": "tuple", "unit": None, "variables": {"r": "3.00000000000000", "theta": "pi/2"}}
+        result = verify_bidirectional(normalize_problem_ir(ir), execution)
+        self.assertEqual(result["status"], "pass", result)
+
     def test_display_units_keep_relation_magnitude(self):
         ir = {
             "target_unknown": {"name": "perimeter", "symbol": "P_hex", "unit": "in", "dimension": "length"},
@@ -195,6 +214,25 @@ class ContractTests(unittest.TestCase):
         result = verify_bidirectional(
             normalized,
             {"answer": "14/3", "canonical_answer": "14/3", "answer_type": "number", "unit": None, "variables": {"f_minus_2": 2, "f_minus_1": "5/3", "f_0": 1, "R": "14/3"}},
+        )
+        self.assertEqual(result["status"], "pass", result)
+
+    def test_subs_relation_rhs_is_evaluated_safely(self):
+        ir = {
+            "target_unknown": {"name": "result", "symbol": "R", "unit": None, "dimension": "number"},
+            "givens": [{"name": "function", "symbol": "f_x", "value": "(3*x-2)/(x-2)", "unit": None, "role": "constant", "source": "f(x)"}],
+            "relations": [
+                {"id": "f_neg2", "kind": "definition", "lhs": "f_neg2", "rhs": "f_x.subs(x, -2)", "operator": "=", "unit": None, "source": "f(-2)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "f_neg1", "kind": "definition", "lhs": "f_neg1", "rhs": "f_x.subs(x, -1)", "operator": "=", "unit": None, "source": "f(-1)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "f_0", "kind": "definition", "lhs": "f_0", "rhs": "f_x.subs(x, 0)", "operator": "=", "unit": None, "source": "f(0)", "evidence": "substitute", "confidence": 1.0},
+                {"id": "sum", "kind": "definition", "lhs": "R", "rhs": "f_neg2 + f_neg1 + f_0", "operator": "=", "unit": None, "source": "sum", "evidence": "requested", "confidence": 1.0},
+            ],
+            "conditions": [],
+            "required_output": {"type": "number", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        result = verify_bidirectional(
+            normalize_problem_ir(ir),
+            {"answer": "14/3", "canonical_answer": "14/3", "answer_type": "number", "unit": None, "variables": {"f_neg2": 2, "f_neg1": "5/3", "f_0": 1, "R": "14/3"}},
         )
         self.assertEqual(result["status"], "pass", result)
 

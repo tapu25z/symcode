@@ -114,6 +114,16 @@ print(json.dumps({'answer': enc(answer), 'canonical_answer': enc(answer), 'answe
         self.assertFalse(matched)
         self.assertFalse(any("non-Expr arguments in Mul" in str(item.message) for item in caught))
 
+    def test_json_list_tuple_scores_against_latex_tuple(self):
+        matched = check_math500_equivalence(
+            ["3.00000000000000", "pi/2"],
+            ["3.00000000000000", "pi/2"],
+            r"\left( 3, \frac{\pi}{2} \right)",
+            lambda left, right: str(left) == str(right),
+            lambda value: str(value).strip(),
+        )
+        self.assertTrue(matched)
+
 
 if __name__ == "__main__":
     unittest.main()

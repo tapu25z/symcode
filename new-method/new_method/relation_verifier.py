@@ -43,6 +43,8 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
         raise RuntimeError("sympy is not installed")
     if isinstance(value, sp.Basic):
         return value
+    if isinstance(value, (list, tuple)):
+        return sp.Tuple(*[_safe_sympify(item, allow_condition=allow_condition) for item in value])
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if not math.isfinite(float(value)):
             raise ValueError("non-finite numeric value")
@@ -150,6 +152,13 @@ def _substitutions(env: Mapping[str, Any], exclude: str | None = None) -> dict[A
 
 def _evaluate(expr: Any, env: Mapping[str, Any]) -> tuple[Any | None, str | None]:
     try:
+        subs_call = re.fullmatch(r"\s*([A-Za-z_]\w*)\.subs\(\s*([A-Za-z_]\w*)\s*,\s*(.+?)\s*\)\s*", str(expr))
+        if subs_call:
+            base_name, symbol_name, value_text = subs_call.groups()
+            base = _safe_sympify(env.get(base_name, base_name))
+            value = _safe_sympify(value_text, allow_condition=True).subs(_substitutions(env))
+            evaluated = base.subs(sp.Symbol(symbol_name), value)
+            return evaluated.subs(_substitutions(env)), None
         return _safe_sympify(expr).subs(_substitutions(env)), None
     except Exception as exc:
         return None, f"cannot parse expression {expr!r}: {exc}"
@@ -193,6 +202,8 @@ def _check_condition(condition: Mapping[str, Any], env: Mapping[str, Any]) -> tu
 
 def _reverse_checks(lhs: Any, rhs: Any, op: str, env: Mapping[str, Any]) -> list[Dict[str, Any]]:
     if sp is None or op not in {"=", "=="}:
+        return []
+    if ".subs(" in str(lhs) or ".subs(" in str(rhs):
         return []
     try:
         left, right = _safe_sympify(lhs), _safe_sympify(rhs)
