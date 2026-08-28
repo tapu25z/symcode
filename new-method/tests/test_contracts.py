@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from new_method.normalizer import build_codegen_payload, is_supported_unit, normalize_problem_ir, validate_normalized_ir
+from new_method.normalizer import augment_ir_from_question, build_codegen_payload, is_supported_unit, normalize_problem_ir, validate_normalized_ir
 from new_method.problem_ir import normalize_ir_shape, validate_ir
 from new_method.relation_verifier import verify_bidirectional
 
@@ -179,6 +179,58 @@ class ContractTests(unittest.TestCase):
             {"answer": "14/3", "canonical_answer": "14/3", "answer_type": "number", "unit": None, "variables": {"f_minus_2": 2, "f_minus_1": "5/3", "f_0": 1, "R": "14/3"}},
         )
         self.assertEqual(result["status"], "pass", result)
+
+    def test_cylinder_literals_are_recovered_from_problem_text(self):
+        question = r"The volume of the cylinder shown is $45\pi$ cubic cm. What is the height in centimeters of the cylinder? [asy] label(\"$r=3$\",(0,0)); [/asy]"
+        ir = {
+            "target_unknown": {"name": "height", "symbol": "h", "unit": "cm", "dimension": "length"},
+            "givens": [],
+            "relations": [{"id": "cylinder_volume", "kind": "definition", "lhs": "V", "rhs": "pi*r**2*h", "operator": "=", "unit": "cm³", "source": "volume", "evidence": "45pi", "confidence": 1.0}],
+            "conditions": [],
+            "required_output": {"type": "quantity", "unit": "cm", "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = augment_ir_from_question(question, normalize_problem_ir(ir))
+        givens = {item["symbol"]: item["quantity"]["canonical_value"] for item in normalized["givens"]}
+        self.assertEqual(givens["V"], "45*pi")
+        self.assertEqual(givens["r"], 3.0)
+        result = verify_bidirectional(normalized, {"answer": 5, "canonical_answer": 5, "answer_type": "quantity", "unit": "cm", "variables": {"V": "45*pi", "r": 3, "h": 5}})
+        self.assertEqual(result["status"], "pass", result)
+        wrong = verify_bidirectional(normalized, {"answer": 45 / (9 * math.pi), "canonical_answer": 45 / (9 * math.pi), "answer_type": "quantity", "unit": "cm", "variables": {"V": 45, "r": 3, "h": 45 / (9 * math.pi)}})
+        self.assertEqual(wrong["status"], "fail", wrong)
+
+    def test_asy_target_segment_replaces_bad_target_relation(self):
+        question = r"""Suppose $\sin D = 0.7$ in the diagram below. What is $DE$? [asy]
+pair D,E,F;
+F = (0,0); D = (sqrt(51),7); E = (0,7);
+[/asy]"""
+        ir = {
+            "target_unknown": {"name": "DE", "symbol": "DE", "unit": None, "dimension": "length"},
+            "givens": [{"name": "side EF", "symbol": "EF", "value": 7, "unit": None, "role": "measurement", "source": "side EF = 7"}],
+            "relations": [{"id": "bad_trig", "kind": "definition", "lhs": "DE", "rhs": "EF*sin_D", "operator": "=", "unit": None, "source": "right triangle", "evidence": "opposite over hypotenuse", "confidence": 0.98}],
+            "conditions": [],
+            "required_output": {"type": "quantity", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = augment_ir_from_question(question, normalize_problem_ir(ir))
+        self.assertEqual([item["id"] for item in normalized["relations"]], ["asy_target_segment"])
+        result = verify_bidirectional(normalized, {"answer": "sqrt(51)", "canonical_answer": "sqrt(51)", "answer_type": "quantity", "unit": None, "variables": {"DE": "sqrt(51)"}})
+        self.assertEqual(result["status"], "pass", result)
+        wrong = verify_bidirectional(normalized, {"answer": 4.9, "canonical_answer": 4.9, "answer_type": "quantity", "unit": None, "variables": {"DE": 4.9}})
+        self.assertEqual(wrong["status"], "fail", wrong)
+
+    def test_complex_i_values_do_not_crash_verifier(self):
+        ir = {
+            "target_unknown": {"name": "w", "symbol": "w", "unit": None, "dimension": "complex"},
+            "givens": [{"name": "z", "symbol": "z", "value": "2 + sqrt(2) - (3 + 3*sqrt(2))i", "unit": None, "role": "constant", "source": "z"}],
+            "relations": [{"id": "same", "kind": "definition", "lhs": "w", "rhs": "z", "operator": "=", "unit": None, "source": "same", "evidence": "same", "confidence": 1.0}],
+            "conditions": [],
+            "required_output": {"type": "symbolic", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
+        }
+        normalized = normalize_problem_ir(ir)
+        result = verify_bidirectional(
+            normalized,
+            {"answer": "2 + sqrt(2) - (3 + 3*sqrt(2))i", "canonical_answer": "2 + sqrt(2) - (3 + 3*sqrt(2))i", "answer_type": "symbolic", "unit": None, "variables": {"w": "2 + sqrt(2) - (3 + 3*sqrt(2))i"}},
+        )
+        self.assertIn(result["status"], {"pass", "unknown"})
 
 
 if __name__ == "__main__":

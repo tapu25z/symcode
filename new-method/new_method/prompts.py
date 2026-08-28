@@ -24,7 +24,10 @@ Hard rules:
 5. Put positivity, integer, distinctness, bounds and non-zero assumptions in conditions, not in prose.
 6. This pipeline supports exactly one target, which may be numeric, symbolic, tuple, set, interval, matrix or short categorical text. Set target_count to 1. Extract the requested display unit and precision; use digits only for decimal/significant_figures. Do not calculate the final value during extraction.
 7. If the question asks for a named person/object/category, set required_output.type="text" and make the target symbol represent that entity, not the numeric score used to choose it.
-8. If something is absent, use null or []. Every relation must include "unit": null when unitless. Never output markdown, comments or explanatory prose.
+8. Preserve multiplicative constants with pi and the imaginary unit exactly in computational form: 45*pi, 2-3*I, exp(I*pi/4). For complex-valued targets use required_output.type="symbolic".
+9. Treat ASY point assignments and labels as explicit givens. If the target is a segment length and both endpoint coordinates are present, prefer the coordinate distance relation over a trig shortcut.
+10. In right triangles, do not infer an unknown leg as known_side*sin(angle) unless that side is explicitly the hypotenuse. Encode sine/cosine as a ratio relation when the hypotenuse/opposite/adjacent is ambiguous.
+11. If something is absent, use null or []. Every relation must include "unit": null when unitless. Never output markdown, comments or explanatory prose.
 
 Example A:
 <problem>A triangle has base 2 m and height 3 m. Find its area.</problem>

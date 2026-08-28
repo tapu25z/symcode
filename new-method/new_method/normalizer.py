@@ -30,7 +30,7 @@ UNIT_ALIASES = {
 }
 EXPR_REPLACEMENTS = {
     "×": "*", "·": "*", "÷": "/", "−": "-", "–": "-", "^": "**",
-    "π": "pi", "∞": "oo", "θ": "theta", "Θ": "Theta", "²": "**2", "³": "**3", "°": "",
+    "π": "pi", "∞": "oo", "θ": "theta", "Θ": "Theta", "²": "**2", "³": "**3", "°": "", "𝑖": "I",
 }
 UNIT_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z]+)(?:\^?(?P<power>-?\d+))?$")
 
@@ -180,6 +180,10 @@ def normalize_expression(expression: Any) -> str:
     text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", text)
     text = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"sqrt(\1)", text)
     text = text.replace("\\pi", "pi").replace("\\infty", "oo")
+    text = re.sub(r"(?<=\d)\s+(?=(sqrt|sin|cos|tan|log|exp)\s*\()", "*", text)
+    text = re.sub(r"(?<=\d)\s*pi\b", "*pi", text)
+    text = re.sub(r"(?<=[0-9)\]])\s*i\b", "*I", text)
+    text = re.sub(r"\bi\b", "I", text)
     text = re.sub(r"\b(and|where|such that)\b", " ", text, flags=re.I)
 
     def replace_quantity(match: re.Match[str]) -> str:
@@ -209,8 +213,103 @@ def _normalize_function_evaluations(text: str) -> str:
 
 def relation_symbols(lhs: str, rhs: str) -> list[str]:
     candidates = re.findall(r"\b[A-Za-z_]\w*\b", f"{lhs} {rhs}")
-    reserved = {"and", "or", "not", "True", "False", "pi", "e", "sin", "cos", "tan", "sqrt", "exp", "log"}
+    reserved = {"and", "or", "not", "True", "False", "pi", "e", "I", "sin", "cos", "tan", "sqrt", "exp", "log"}
     return sorted({item for item in candidates if item not in reserved and not item.isdigit()})
+
+
+def _copy_normalized_ir(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {key: value for key, value in normalized_ir.items()}
+    out["givens"] = [dict(item) for item in normalized_ir.get("givens", [])]
+    out["relations"] = [dict(item) for item in normalized_ir.get("relations", [])]
+    out["symbols"] = dict(normalized_ir.get("symbols", {}))
+    out["target_unknown"] = dict(normalized_ir.get("target_unknown", {}))
+    out["required_output"] = dict(normalized_ir.get("required_output", {}))
+    out["conditions"] = [dict(item) if isinstance(item, Mapping) else item for item in normalized_ir.get("conditions", [])]
+    return out
+
+
+def _upsert_given(normalized_ir: Dict[str, Any], symbol: str, value: Any, unit: str | None, source: str, role: str = "constant") -> None:
+    symbol = re.sub(r"\W+", "_", normalize_expression(symbol)).strip("_") or symbol
+    quantity = normalize_quantity(value, unit)
+    if quantity.get("status") == "non_numeric" and is_safe_symbolic_expression(value):
+        symbolic_value = normalize_expression(value)
+        quantity = {"raw": value, "value": symbolic_value, "unit": normalize_unit(unit), "canonical_value": symbolic_value, "canonical_unit": normalize_unit(unit), "status": "expression"}
+    item = {"name": symbol, "symbol": symbol, "value": value, "unit": normalize_unit(unit), "role": role, "source": source, "quantity": quantity}
+    for index, existing in enumerate(normalized_ir.get("givens", [])):
+        if existing.get("symbol") == symbol:
+            normalized_ir["givens"][index] = {**existing, **item}
+            break
+    else:
+        normalized_ir.setdefault("givens", []).append(item)
+    normalized_ir.setdefault("symbols", {})[symbol] = symbol
+
+
+def _definition(id_: str, lhs: str, rhs: str, source: str, unit: str | None = None) -> Dict[str, Any]:
+    lhs, rhs = normalize_expression(lhs), normalize_expression(rhs)
+    return {
+        "id": id_, "kind": "definition", "lhs": lhs, "rhs": rhs,
+        "operator": "=", "unit": normalize_unit(unit), "source": source,
+        "evidence": source, "confidence": 1.0, "symbols": relation_symbols(lhs, rhs),
+    }
+
+
+def augment_ir_from_question(question: str, normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
+    """Patch a few explicit MATH literals that 7B extraction frequently drops."""
+    out = _copy_normalized_ir(normalized_ir)
+    _augment_cylinder_literals(question, out)
+    _augment_complex_literals(question, out)
+    _augment_asy_target_segment(question, out)
+    return out
+
+
+def _augment_cylinder_literals(question: str, normalized_ir: Dict[str, Any]) -> None:
+    if "cylinder" not in question.lower():
+        return
+    volume = re.search(r"volume\b.*?(?:is|=)\s*\$?\s*([0-9]+(?:\s*(?:\\pi|pi|π))?)\s*\$?\s*cubic\s*cm", question, re.I | re.S)
+    radius = re.search(r"\$r\s*=\s*([^$]+?)\$", question, re.I)
+    target_symbol = normalized_ir.get("target_unknown", {}).get("symbol")
+    if volume:
+        _upsert_given(normalized_ir, "V", normalize_expression(volume.group(1)), "cm^3", volume.group(0), "measurement")
+    if radius:
+        _upsert_given(normalized_ir, "r", normalize_expression(radius.group(1)), "cm", radius.group(0), "measurement")
+    if target_symbol:
+        normalized_ir["relations"] = [
+            item for item in normalized_ir.get("relations", [])
+            if item.get("id") != "cylinder_volume_from_problem"
+        ]
+        normalized_ir["relations"].append(_definition("cylinder_volume_from_problem", "V", f"pi*r**2*{target_symbol}", "cylinder volume from problem text", "cm^3"))
+
+
+def _augment_complex_literals(question: str, normalized_ir: Dict[str, Any]) -> None:
+    if "i" not in question:
+        return
+    for symbol in ("z", "c"):
+        match = re.search(rf"\${symbol}\s*=\s*([^$]+?)\$", question, re.I)
+        if match:
+            _upsert_given(normalized_ir, symbol, normalize_expression(match.group(1)), None, match.group(0))
+    if str(normalized_ir.get("target_unknown", {}).get("dimension") or "").lower() == "complex":
+        normalized_ir.setdefault("required_output", {})["type"] = "symbolic"
+
+
+def _augment_asy_target_segment(question: str, normalized_ir: Dict[str, Any]) -> None:
+    target = str(normalized_ir.get("target_unknown", {}).get("symbol") or "")
+    match = re.fullmatch(r"([A-Z])([A-Z])", target)
+    if not match or "[asy]" not in question:
+        return
+    points: dict[str, tuple[str, str]] = {}
+    for point, x_value, y_value in re.findall(r"\b([A-Z])\s*=\s*\(([^,;]+),([^;]+?)\);", question):
+        points[point] = (normalize_expression(x_value), normalize_expression(y_value))
+    left, right = match.groups()
+    if left not in points or right not in points:
+        return
+    x1, y1 = points[left]
+    x2, y2 = points[right]
+    rhs = f"sqrt((({x1})-({x2}))**2 + (({y1})-({y2}))**2)"
+    normalized_ir["relations"] = [
+        item for item in normalized_ir.get("relations", [])
+        if item.get("lhs") != target
+    ]
+    normalized_ir["relations"].append(_definition("asy_target_segment", target, rhs, "target segment from ASY coordinates"))
 
 
 def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:

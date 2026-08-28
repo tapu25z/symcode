@@ -6,7 +6,7 @@ import re
 from typing import Any, Callable, Mapping
 
 from .config import AblationConfig, resolve_ablation
-from .normalizer import build_codegen_payload, normalize_problem_ir, validate_normalized_ir
+from .normalizer import augment_ir_from_question, build_codegen_payload, normalize_problem_ir, validate_normalized_ir
 from .problem_ir import extract_json_object, normalize_ir_shape, validate_ir
 from .prompts import codegen_prompt, extraction_prompt, repair_prompt
 from .relation_verifier import verify_bidirectional
@@ -44,7 +44,7 @@ class SymPlannerIRPipeline:
         raw_ir = extract_json_object(self.llm_call(extraction_prompt(question)))
         ir = normalize_ir_shape(raw_ir)
         schema_errors = self._schema_errors(raw_ir, ir)
-        normalized = normalize_problem_ir(ir)
+        normalized = augment_ir_from_question(question, normalize_problem_ir(ir))
         normalization_errors = validate_normalized_ir(normalized)
         all_ir_errors = list(dict.fromkeys(schema_errors + normalization_errors))
 

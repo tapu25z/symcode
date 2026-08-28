@@ -18,7 +18,7 @@ NUMERIC_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
 STRUCTURED_OUTPUT_TYPES = {"symbolic", "tuple", "set", "interval", "matrix", "text"}
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]<>=!\s]+$")
-SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "pi", "e", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "pi", "e", "I", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
@@ -42,6 +42,14 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
             raise ValueError("non-finite numeric value")
         return sp.sympify(value)
     text = str(value).strip()
+    text = text.replace("π", "pi").replace("∞", "oo").replace("²", "**2").replace("³", "**3")
+    text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", text)
+    text = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"sqrt(\1)", text)
+    text = text.replace("\\pi", "pi").replace("\\infty", "oo")
+    text = re.sub(r"(?<=\d)\s+(?=(sqrt|sin|cos|tan|log|exp)\s*\()", "*", text)
+    text = re.sub(r"(?<=\d)\s*pi\b", "*pi", text)
+    text = re.sub(r"(?<=[0-9)\]])\s*i\b", "*I", text)
+    text = re.sub(r"\bi\b", "I", text)
     pattern = SAFE_CONDITION_RE if allow_condition else SAFE_EXPRESSION_RE
     if not text or not pattern.fullmatch(text) or "__" in text:
         raise ValueError("unsafe or unsupported expression")
@@ -50,7 +58,7 @@ def _safe_sympify(value: Any, allow_condition: bool = False):
     local_dict.update({
         "sqrt": sp.sqrt, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
         "exp": sp.exp, "log": sp.log, "abs": sp.Abs, "min": sp.Min,
-        "max": sp.Max, "pi": sp.pi, "e": sp.E, "oo": sp.oo, "Tuple": sp.Tuple,
+        "max": sp.Max, "pi": sp.pi, "e": sp.E, "I": sp.I, "oo": sp.oo, "Tuple": sp.Tuple,
         "FiniteSet": sp.FiniteSet, "Interval": sp.Interval, "Union": sp.Union,
         "Matrix": sp.Matrix,
     })
@@ -206,11 +214,12 @@ def _reverse_checks(lhs: Any, rhs: Any, op: str, env: Mapping[str, Any]) -> list
         name = str(symbol)
         if name not in env:
             continue
-        candidate = _safe_sympify(env[name])
-        if candidate == symbol:
-            # A free parameter is an input symbol, not a computed value to audit in reverse.
-            continue
+        candidate = env[name]
         try:
+            candidate = _safe_sympify(env[name])
+            if candidate == symbol:
+                # A free parameter is an input symbol, not a computed value to audit in reverse.
+                continue
             solutions = sp.solve(sp.Eq(left.subs(_substitutions(env, name)), right.subs(_substitutions(env, name))), symbol)
             if not solutions:
                 checks.append({"symbol": name, "status": "unknown", "candidate": str(candidate), "expected": []})
@@ -231,7 +240,8 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
         if value is not None:
             env[str(given.get("symbol"))] = value
     variables = execution.get("variables") if isinstance(execution.get("variables"), Mapping) else {}
-    env.update({str(key): value for key, value in variables.items()})
+    for key, value in variables.items():
+        env.setdefault(str(key), value)
     canonical_answer = execution.get("canonical_answer")
     target_symbol = str(normalized_ir.get("target_unknown", {}).get("symbol") or "answer")
     if _is_valid_canonical(canonical_answer, str(normalized_ir.get("required_output", {}).get("type") or "")):
