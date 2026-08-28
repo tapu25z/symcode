@@ -91,6 +91,8 @@ def verify_candidate_answer(
             return ("unknown", "Candidate coordinate tuple is well-formed.")
 
         # Parse biểu thức toán học
+
+        # Parse biểu thức toán học
         sym_obj = sympify(expr_str)
 
         # Kiểm tra giá trị vô cực hoặc NaN
@@ -111,10 +113,26 @@ def verify_candidate_answer(
                 f"Verification Error: Candidate answer '{cand_str}' still contains unresolved free symbol(s) ({symbols_str}). Solve the equations or compute the result step by step to obtain a concrete numeric value."
             )
 
+        # Ràng buộc "in terms of X, Y": Nếu đề yêu cầu biểu diễn theo biến p, q nhưng đáp án lại không chứa p, q
+        in_terms_match = re.search(r"(?:in terms of|express .* in terms of)\s+([a-zA-Z,\s\$\\\{\}]+)", q_lower)
+        if in_terms_match:
+            raw_vars = in_terms_match.group(1)
+            target_vars = [v.strip().replace("$", "").replace("\\", "") for v in re.findall(r"[a-zA-Z]", raw_vars)]
+            if target_vars:
+                cand_syms = {str(s) for s in sym_obj.free_symbols}
+                # Nếu đáp án hoàn toàn là số/hằng số mà không chứa biến được yêu cầu
+                if not any(tv in cand_syms for tv in target_vars):
+                    vars_str = ", ".join(target_vars)
+                    return (
+                        "fail",
+                        f"Verification Error: The problem explicitly asks to express the answer in terms of ({vars_str}), but the candidate answer '{cand_str}' contains none of these target symbols. Express your solution using symbols ({vars_str})."
+                    )
+
         # Ràng buộc số đếm / số lượng / số ước nguyên dương
         if any(term in q_lower for term in [
             "how many", "number of positive", "number of integers", 
-            "number of ways", "number of divisors", "number of solutions"
+            "number of ways", "number of divisors", "number of solutions",
+            "proper divisors", "divisors"
         ]):
             if sym_obj.is_number:
                 try:
@@ -149,10 +167,13 @@ def verify_candidate_answer(
                 except Exception:
                     pass
 
+        # Nếu đáp án là một số cụ thể (hằng số số thực / phân số / hằng số toán học)
+        if sym_obj.is_number:
+            return ("pass", f"Verification Passed: Candidate answer '{cand_str}' evaluates to a valid concrete numeric value/constant.")
+
     except Exception:
         # Nếu SymPy không parse được (ví dụ chuỗi chữ cái tên riêng như "Evelyn")
         if len(cand_str) > 0 and not any(ch in cand_str for ch in ["\n", "\r", "\t"]):
             return ("unknown", f"Candidate answer is a valid text entity ('{cand_str}').")
 
     return ("unknown", "Candidate answer is syntactically well-formed, but problem nature prevents automated symbolic proof without ground truth.")
-
