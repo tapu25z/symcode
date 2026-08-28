@@ -6,6 +6,7 @@ Bao gồm phân rã Subject x Difficulty, vòng lặp tự sửa lỗi SymCode v
 import os
 import gc
 import json
+import re
 import time
 from typing import Dict, Any, List, Optional
 
@@ -44,6 +45,110 @@ try:
     from .model import LLMRunner
 except ImportError:
     LLMRunner = Any
+
+
+def _translate_legacy_verification_feedback(feedback: Any) -> Any:
+    """Translate legacy Vietnamese verifier feedback to English for resumed checkpoints."""
+    if not isinstance(feedback, str):
+        return feedback
+
+    replacements = {
+        "Lỗi kiểm chứng: Không tìm thấy đáp án ứng viên hoặc mã nguồn không in ra định dạng \\boxed{...}.": (
+            "Verification Error: No candidate answer was found, or the code did not print a \\boxed{...} result."
+        ),
+        "Lỗi kiểm chứng: Cặp tọa độ rỗng.": "Verification Error: Empty coordinate tuple.",
+        "Kiểm chứng thành công: Thỏa mãn ràng buộc tọa độ cực (r > 0 và 0 <= theta < 2*pi).": (
+            "Verification Passed: Candidate answer satisfies polar-coordinate constraints (r > 0 and 0 <= theta < 2*pi)."
+        ),
+        "Cặp tọa độ cú pháp chuẩn.": "Candidate coordinate tuple is well-formed.",
+        "Kiểm chứng thành công: Đáp án thỏa mãn khoảng xác suất [0, 1].": (
+            "Verification Passed: Candidate answer satisfies probability bounds [0, 1]."
+        ),
+        "Đáp án hợp thức về mặt cú pháp nhưng đặc thù bài toán yêu cầu so khớp kết quả.": (
+            "Candidate answer is syntactically well-formed, but problem nature prevents automated symbolic proof without ground truth."
+        ),
+        "Mã nguồn không in ra kết quả định dạng \\boxed{}.": "Code did not print a \\boxed{} result.",
+        "Mã nguồn không in ra kết quả định dạng \\boxed{} hợp lệ.": "Code did not print a valid \\boxed{} result.",
+        "Mã nguồn sửa đổi không in ra kết quả định dạng \\boxed{}.": "Repaired code did not print a \\boxed{} result.",
+    }
+    if feedback in replacements:
+        return replacements[feedback]
+
+    patterns = [
+        (
+            r"^Kiểm chứng thành công: Đáp án (.+) là số nguyên không âm hợp lệ\.$",
+            r"Verification Passed: Candidate answer \1 is a valid non-negative integer count.",
+        ),
+        (
+            r"^Kiểm chứng thành công: Đại lượng hình học có giá trị dương \((.+)\)\.$",
+            r"Verification Passed: Geometric dimension is positive (\1).",
+        ),
+        (
+            r"^Đáp án là thực thể văn bản hợp lệ \('(.+)'\)\.$",
+            r"Candidate answer is a valid text entity ('\1').",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đáp án '(.+)' là token không hợp lệ \(None/Invalid/NaN/Error/Function Object\)\. Hãy tính toán ra giá trị cụ thể\.$",
+            r"Verification Error: Candidate answer '\1' is an invalid token (None/Invalid/NaN/Error/Function Object). Compute and print a concrete value.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đáp án '(.+)' chứa token không hợp lệ \(None/NaN/Error/Function Object\)\.$",
+            r"Verification Error: Candidate answer '\1' is an invalid token (None/NaN/Error/Function Object). Compute and print a concrete value.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đáp án '(.+)' là tên biến Python chưa được đánh giá thành giá trị cụ thể\. Hãy tính toán giá trị của biến trước khi in\.$",
+            r"Verification Error: Candidate answer '\1' is an unevaluated Python variable name. Evaluate the variable before printing it.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Bán kính cực r phải dương \(r > 0\), nhưng nhận được r = (.+)\.$",
+            r"Verification Error: The polar radius r must be positive (r > 0), but got r = \1.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Góc cực theta phải thỏa mãn 0 <= theta < 2\*pi, nhưng nhận được theta = (.+)\.$",
+            r"Verification Error: The polar angle theta must satisfy 0 <= theta < 2*pi, but got theta = \1.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đáp án đánh giá thành giá trị không xác định hoặc vô cực \((.+)\)\.$",
+            r"Verification Error: Candidate answer evaluates to an undefined or infinite value (\1).",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đáp án '(.+)' vẫn còn chứa biến tự do \((.+)\) chưa được giải thành số cụ thể\. Hãy giải hệ phương trình hoặc tính toán tuần tự để tìm giá trị số cụ thể\.$",
+            r"Verification Error: Candidate answer '\1' still contains unresolved free symbol(s) (\2). Solve the equations or compute the result step by step to obtain a concrete numeric value.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Bài toán yêu cầu số đếm không âm, nhưng kết quả nhận được là số âm \((.+)\)\.$",
+            r"Verification Error: This problem requires a non-negative count, but the result is negative (\1).",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Bài toán yêu cầu số đếm nguyên, nhưng kết quả nhận được không phải số nguyên \((.+)\)\.$",
+            r"Verification Error: This problem requires an integer count, but the result is not an integer (\1).",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Xác suất phải nằm trong đoạn \[0, 1\], nhưng kết quả là (.+)\.$",
+            r"Verification Error: Probability must lie in [0, 1], but the result is \1.",
+        ),
+        (
+            r"^Lỗi kiểm chứng: Đại lượng hình học \(độ dài/diện tích/chu vi\) phải dương, nhưng nhận được (.+)\.$",
+            r"Verification Error: Geometric quantity (length/area/perimeter) must be positive, but got \1.",
+        ),
+    ]
+    for pattern, replacement in patterns:
+        if re.match(pattern, feedback):
+            return re.sub(pattern, replacement, feedback)
+    return feedback
+
+
+def _normalize_legacy_verification_feedback(value: Any) -> Any:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "verification_feedback":
+                value[key] = _translate_legacy_verification_feedback(item)
+            else:
+                value[key] = _normalize_legacy_verification_feedback(item)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            value[index] = _normalize_legacy_verification_feedback(item)
+    return value
 
 
 def parse_difficulty_level(val: Any) -> Optional[int]:
@@ -134,6 +239,7 @@ def _load_existing_checkpoint(checkpoint_file: Optional[str], method_name: str) 
     try:
         with open(checkpoint_file, "r", encoding="utf-8") as f:
             data = json.load(f)
+            _normalize_legacy_verification_feedback(data)
             method_results = data.get("results", {}).get(method_name, [])
             return {"data": data, "method_results": method_results}
     except Exception:
@@ -155,12 +261,13 @@ def _save_intermediate_checkpoint(
         try:
             with open(checkpoint_file, "r", encoding="utf-8") as f:
                 existing_data = json.load(f)
+                _normalize_legacy_verification_feedback(existing_data)
         except Exception:
             existing_data = {}
             
     if "results" not in existing_data:
         existing_data["results"] = {}
-    existing_data["results"][method_name] = results
+    existing_data["results"][method_name] = _normalize_legacy_verification_feedback(results)
     
     if extra_meta:
         for k, v in extra_meta.items():
@@ -314,7 +421,7 @@ def evaluate_symcode(
                 )
             else:
                 verif_status = "fail"
-                verif_feedback = exec_res.get("traceback") or "Mã nguồn không in ra kết quả định dạng \\boxed{}."
+                verif_feedback = exec_res.get("traceback") or "Code did not print a \\boxed{} result."
                 
             attempt_record = {
                 "attempt": attempt,
@@ -448,7 +555,7 @@ def evaluate_symplanner(
             )
         else:
             verif_status = "fail"
-            verif_feedback = exec_res.get("traceback") or "Mã nguồn không in ra kết quả định dạng \\boxed{} hợp lệ."
+            verif_feedback = exec_res.get("traceback") or "Code did not print a valid \\boxed{} result."
             
         attempt_record = {
             "attempt": 1,
@@ -497,7 +604,7 @@ def evaluate_symplanner(
                 )
             else:
                 verif_status = "fail"
-                verif_feedback = exec_res.get("traceback") or "Mã nguồn sửa đổi không in ra kết quả định dạng \\boxed{}."
+                verif_feedback = exec_res.get("traceback") or "Repaired code did not print a \\boxed{} result."
                 
             retry_record = {
                 "attempt": attempt,
