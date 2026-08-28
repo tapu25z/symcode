@@ -20,7 +20,8 @@ REQUIRED_KEYS = ("target_unknown", "givens", "relations", "conditions", "require
 ALLOWED_RELATION_KINDS = {
     "equation", "inequality", "definition", "conservation", "proportion", "ordering",
     "system", "range", "identity", "congruence", "combinatorics", "geometry",
-    "sequence", "calculus", "property", "general", "mod", "count"
+    "sequence", "calculus", "property", "general", "mod", "count",
+    "sequential_step", "accumulation", "balance", "rate", "partition", "percentage", "conversion", "step", "calculation"
 }
 ALLOWED_ROLES = {"constant", "variable", "measurement", "derived", "parameter", "point", "function", "sequence", "set", "entity"}
 ALLOWED_OUTPUT_TYPES = {

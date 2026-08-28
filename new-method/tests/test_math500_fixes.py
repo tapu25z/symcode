@@ -1,6 +1,6 @@
 import unittest
 from new_method.scoring import check_math500_equivalence
-from new_method.normalizer import normalize_problem_ir, normalize_expression
+from new_method.normalizer import normalize_problem_ir, normalize_expression, normalize_quantity, split_quantity
 from new_method.pipeline import SymPlannerIRPipeline, RUNTIME_HEADER
 from new_method.relation_verifier import verify_bidirectional
 
@@ -50,10 +50,28 @@ class TestUniversalMathIR(unittest.TestCase):
             
             # 7. Intermediate Algebra large constants
             ("13535", 13535, "13535", True),
+
+            # 8. GSM8K specific ground truth formats
+            ("24", 24, "#### 24", True),
+            ("24.0", 24, "#### 24", True),
+            ("1200", 1200, "#### 1,200", True),
+            ("45", 45, "$45", True),
+            ("45", 45, "#### $45", True),
         ]
         for pred, canon, gold, exp in cases:
             res = check_math500_equivalence(pred, canon, gold, dummy_legacy_match, dummy_legacy_normalize)
             self.assertEqual(res, exp, f"Failed for pred={pred}, canon={canon}, gold={gold}")
+
+    def test_gsm8k_quantity_and_currency_parsing(self):
+        v1, u1 = split_quantity("$10")
+        self.assertEqual(float(v1), 10.0)
+        self.assertEqual(u1, "$")
+
+        q1 = normalize_quantity("$10")
+        self.assertEqual(q1["canonical_value"], 10.0)
+
+        q2 = normalize_quantity("3 packs")
+        self.assertEqual(q2["canonical_value"], 3.0)
 
     def test_normalizer_preserves_constants_across_domains(self):
         self.assertEqual(normalize_expression(r"45\pi"), "45*pi")
@@ -65,6 +83,21 @@ class TestUniversalMathIR(unittest.TestCase):
     def test_universal_pipeline_no_false_invalid_ir(self):
         pipeline = SymPlannerIRPipeline(lambda x: "{}", lambda x: {})
         
+        # Test GSM8K Multi-Step Store Profit IR
+        ir_gsm8k = {
+            "target_unknown": {"name": "total profit", "symbol": "profit"},
+            "givens": [
+                {"name": "packs bought", "symbol": "packs", "value": 3, "unit": "pack"},
+                {"name": "cost per pack", "symbol": "pack_cost", "value": 10, "unit": "$"},
+            ],
+            "relations": [
+                {"id": "cost_step", "kind": "sequential_step", "lhs": "total_cost", "rhs": "packs * pack_cost", "operator": "="},
+                {"id": "profit_balance", "kind": "balance", "lhs": "profit", "rhs": "54 - total_cost", "operator": "="}
+            ],
+            "required_output": {"type": "quantity", "unit": "$"},
+        }
+        self.assertEqual(pipeline._fatal_ir_errors(ir_gsm8k, []), [])
+
         # Test Number Theory IR
         ir_nt = {
             "target_unknown": {"name": "remainder", "symbol": "r"},

@@ -27,12 +27,19 @@ UNIT_ALIASES = {
     "degrees": "degree", "degree": "degree", "deg": "degree",
     "radians": "rad", "radian": "rad",
     "units": "unit", "unit": "unit",
+    "dollar": "$", "dollars": "$", "usd": "$", "cent": "cents",
+    "dozen": "dozen", "dozens": "dozen", "pair": "pair", "pairs": "pair",
+    "pack": "pack", "packs": "pack", "box": "box", "boxes": "box",
+    "day": "days", "days": "days", "week": "weeks", "weeks": "weeks",
+    "month": "months", "months": "months", "year": "years", "years": "years",
+    "page": "pages", "pages": "pages", "student": "students", "students": "students",
+    "dog": "dogs", "dogs": "dogs", "slice": "slices", "slices": "slices",
 }
 EXPR_REPLACEMENTS = {
     "×": "*", "·": "*", "÷": "/", "−": "-", "–": "-", "^": "**",
     "π": "pi", "∞": "oo", "θ": "theta", "Θ": "Theta", "²": "**2", "³": "**3", "°": "", "𝑖": "I",
 }
-UNIT_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z]+)(?:\^?(?P<power>-?\d+))?$")
+UNIT_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z$]+)(?:\^?(?P<power>-?\d+))?$")
 
 
 def normalize_unit(unit: str | None) -> str | None:
@@ -51,7 +58,7 @@ def parse_number(value: Any) -> float | None:
         return float(value)
     if not isinstance(value, str):
         return None
-    text = value.strip().replace(",", "")
+    text = value.strip().replace(",", "").replace("$", "")
     if text.endswith("%"):
         number = parse_number(text[:-1])
         return None if number is None else number / 100.0
@@ -69,7 +76,12 @@ def split_quantity(value: Any, unit: str | None = None) -> tuple[Any, str | None
         unit = value.get("unit", unit)
         value = value.get("value", value.get("amount"))
     if isinstance(value, str):
-        match = re.fullmatch(r"\s*([-+]?(?:\d[\d,]*(?:\.\d+)?|\d+\s*/\s*\d+(?:\.\d+)?))\s*([A-Za-z%]+(?:\^?-?\d+)?(?:/[A-Za-z%]+(?:\^?-?\d+)?)?)?\s*", value)
+        text = value.strip()
+        if text.startswith("$"):
+            unit = unit or "$"
+            text = text[1:].strip()
+            value = text
+        match = re.fullmatch(r"\s*([-+]?(?:\d[\d,]*(?:\.\d+)?|\d+\s*/\s*\d+(?:\.\d+)?))\s*([A-Za-z%$]+(?:\^?-?\d+)?(?:/[A-Za-z%$]+(?:\^?-?\d+)?)?)?\s*", text)
         if match:
             cand_val, embedded_unit = match.groups()
             if embedded_unit and embedded_unit.lower() not in {"pi", "e", "i", "oo"}:
