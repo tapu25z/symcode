@@ -9,16 +9,24 @@ from typing import Any, Dict, Mapping
 
 UNIT_FACTORS = {
     "mm": ("m", 0.001), "cm": ("m", 0.01), "m": ("m", 1.0), "km": ("m", 1000.0),
+    "in": ("m", 0.0254), "ft": ("m", 0.3048), "yd": ("m", 0.9144), "mi": ("m", 1609.344),
     "mg": ("g", 0.001), "g": ("g", 1.0), "kg": ("g", 1000.0),
     "ml": ("l", 0.001), "l": ("l", 1.0),
     "sec": ("s", 1.0), "s": ("s", 1.0), "min": ("s", 60.0), "h": ("s", 3600.0),
+    "degree": ("degree", 1.0), "rad": ("rad", 1.0), "unit": ("unit", 1.0),
 }
 UNIT_ALIASES = {
     "seconds": "s", "second": "s", "minutes": "min", "minute": "min",
-    "hours": "h", "hour": "h", "meters": "m", "meter": "m", "metres": "m",
+    "hours": "h", "hour": "h", "hrs": "h", "hr": "h",
+    "meters": "m", "meter": "m", "metres": "m",
     "centimeters": "cm", "centimeter": "cm", "kilometers": "km", "kilometer": "km",
+    "inches": "in", "inch": "in", "feet": "ft", "foot": "ft",
+    "yards": "yd", "yard": "yd", "miles": "mi", "mile": "mi",
     "grams": "g", "gram": "g", "kilograms": "kg", "kilogram": "kg",
     "liters": "l", "liter": "l", "litres": "l", "litre": "l",
+    "degrees": "degree", "degree": "degree", "deg": "degree",
+    "radians": "rad", "radian": "rad",
+    "units": "unit", "unit": "unit",
 }
 EXPR_REPLACEMENTS = {"×": "*", "·": "*", "÷": "/", "−": "-", "–": "-", "^": "**", "π": "pi"}
 UNIT_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z]+)(?:\^?(?P<power>-?\d+))?$")
@@ -127,6 +135,18 @@ def normalize_quantity(value: Any, unit: str | None = None) -> Dict[str, Any]:
     return {"raw": value, "value": numeric, "unit": unit, "canonical_value": numeric * factor, "canonical_unit": canonical_unit, "status": "ok"}
 
 
+def is_safe_symbolic_expression(value: Any) -> bool:
+    """Accept compact algebraic givens such as function formulas or expressions."""
+    if not isinstance(value, str):
+        return False
+    text = normalize_expression(value)
+    if not text:
+        return False
+    if any(token in text for token in ("\\", "$", "=", "<", ">", "{", "}")):
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9_+\-*/().,%\[\]\s]+", text)) and "__" not in text
+
+
 def normalize_expression(expression: Any) -> str:
     """Canonicalize an algebraic expression without evaluating symbols."""
     text = str(expression if expression is not None else "").strip()
@@ -167,6 +187,9 @@ def normalize_problem_ir(ir: Mapping[str, Any]) -> Dict[str, Any]:
         if item["quantity"].get("status") == "non_numeric" and item.get("role") in {"parameter", "variable"}:
             symbolic_value = str(item.get("value") or item["symbol"]).strip()
             item["quantity"] = {"raw": item.get("value"), "value": symbolic_value, "unit": item.get("unit"), "canonical_value": symbolic_value, "canonical_unit": item.get("unit"), "status": "symbolic"}
+        elif item["quantity"].get("status") == "non_numeric" and is_safe_symbolic_expression(item.get("value", item.get("expression"))):
+            symbolic_value = normalize_expression(item.get("value", item.get("expression")))
+            item["quantity"] = {"raw": item.get("value"), "value": symbolic_value, "unit": item.get("unit"), "canonical_value": symbolic_value, "canonical_unit": item.get("unit"), "status": "expression"}
         symbols[item["symbol"]] = item["symbol"]
         givens.append(item)
     normalized["givens"] = givens
@@ -204,7 +227,7 @@ def validate_normalized_ir(normalized_ir: Mapping[str, Any]) -> list[str]:
         quantity = given.get("quantity", {})
         if quantity.get("status") == "unknown_unit":
             errors.append(f"given[{index}] has unsupported unit: {quantity.get('unit')}")
-        elif quantity.get("status") == "symbolic" and given.get("role") in {"parameter", "variable"}:
+        elif quantity.get("status") in {"symbolic", "expression"}:
             pass
         elif quantity.get("canonical_value") is None:
             errors.append(f"given[{index}] is not a concrete numeric quantity")
@@ -223,7 +246,7 @@ def validate_normalized_ir(normalized_ir: Mapping[str, Any]) -> list[str]:
 def build_codegen_payload(normalized_ir: Mapping[str, Any]) -> Dict[str, Any]:
     """The only object passed to codegen; prose is deliberately excluded."""
     units = set(UNIT_FACTORS)
-    units.update({"%", "ratio", "cm^2", "m^2", "km/h", "m/s", "cm/s"})
+    units.update({"%", "ratio", "cm^2", "m^2", "in^2", "unit", "units", "degree", "degrees", "km/h", "km/hr", "m/s", "cm/s"})
     for given in normalized_ir.get("givens", []):
         units.update(filter(None, [given.get("unit"), given.get("quantity", {}).get("canonical_unit")]))
     units.update(filter(None, [normalized_ir.get("target_unknown", {}).get("unit"), normalized_ir.get("required_output", {}).get("unit")]))

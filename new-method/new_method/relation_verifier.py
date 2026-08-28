@@ -18,7 +18,7 @@ NUMERIC_OUTPUT_TYPES = {"number", "quantity", "ratio", "percentage"}
 STRUCTURED_OUTPUT_TYPES = {"symbolic", "tuple", "set", "interval", "matrix", "text"}
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%\[\]<>=!\s]+$")
-SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "pi", "e", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+SAFE_FUNCTION_NAMES = {"sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "pi", "e", "oo", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 
 
@@ -64,8 +64,16 @@ def _equivalent(left: Any, right: Any) -> bool:
     try:
         if left == right:
             return True
+        if isinstance(left, sp.MatrixBase) and isinstance(right, sp.MatrixBase) and left.shape == right.shape:
+            return all(_equivalent(a, b) for a, b in zip(list(left), list(right)))
+        if isinstance(left, (tuple, list, sp.Tuple)) and isinstance(right, (tuple, list, sp.Tuple)) and len(left) == len(right):
+            return all(_equivalent(a, b) for a, b in zip(left, right))
         if isinstance(left, sp.Set) and isinstance(right, sp.Set):
             return left.symmetric_difference(right) == sp.EmptySet
+        left_number, right_number = _number(left.evalf() if hasattr(left, "evalf") else left), _number(right.evalf() if hasattr(right, "evalf") else right)
+        if left_number is not None and right_number is not None:
+            scale = max(1.0, abs(left_number), abs(right_number))
+            return abs(left_number - right_number) <= 1e-8 * scale
         difference = sp.simplify(left - right)
         return difference == 0 or bool(getattr(difference, "equals", lambda _: False)(0))
     except Exception:
@@ -159,6 +167,29 @@ def _evaluate(expr: Any, env: Mapping[str, Any]) -> tuple[Any | None, str | None
         return None, f"cannot parse expression {expr!r}: {exc}"
 
 
+def _check_condition(condition: Mapping[str, Any], env: Mapping[str, Any]) -> tuple[str, str | None]:
+    expr = str(condition.get("expr") or "").strip()
+    kind = str(condition.get("kind") or "").strip().lower()
+    if kind == "integer":
+        match = re.fullmatch(r"([A-Za-z_]\w*)", expr) or re.fullmatch(r"([A-Za-z_]\w*)\s*==\s*int\s*\(\s*\1\s*\)", expr)
+        if match:
+            name = match.group(1)
+            if name not in env:
+                return "unknown", f"missing integer variable: {name}"
+            value = _safe_sympify(env[name])
+            if value.is_integer is True:
+                return "pass", None
+            if value.is_number and _number(value.evalf()) is not None:
+                return ("pass", None) if float(value.evalf()).is_integer() else ("fail", None)
+            return "unknown", f"unresolved integer value: {value}"
+    evaluated = _safe_sympify(expr, allow_condition=True).subs(_substitutions(env))
+    if evaluated in (True, sp.true):
+        return "pass", None
+    if evaluated in (False, sp.false):
+        return "fail", None
+    return "unknown", f"unresolved condition: {evaluated}"
+
+
 def _reverse_checks(lhs: Any, rhs: Any, op: str, env: Mapping[str, Any]) -> list[Dict[str, Any]]:
     if sp is None or op not in {"=", "=="}:
         return []
@@ -238,13 +269,7 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
     for index, condition in enumerate(normalized_ir.get("conditions", [])):
         expr = condition.get("expr")
         try:
-            evaluated = _safe_sympify(expr, allow_condition=True).subs(_substitutions(env))
-            if evaluated in (True, sp.true):
-                status, error = "pass", None
-            elif evaluated in (False, sp.false):
-                status, error = "fail", None
-            else:
-                status, error = "unknown", f"unresolved condition: {evaluated}"
+            status, error = _check_condition(condition, env)
         except Exception as exc:
             status, error = "unknown", str(exc)
         check = {"id": f"condition_{index}", "kind": condition.get("kind"), "expr": expr, "status": status, "error": error}

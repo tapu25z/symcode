@@ -1,6 +1,9 @@
 import json
+import contextlib
+import io
 import sys
 import tempfile
+import traceback
 import unittest
 from pathlib import Path
 
@@ -54,6 +57,33 @@ class IntegrationTests(unittest.TestCase):
         result = adapter("print('ignored')")
         self.assertEqual(result["answer"], 10)
         self.assertEqual(result["_sandbox_status"], "success")
+
+    def test_sandbox_adapter_serializes_raw_sympy_outputs(self):
+        def local_executor(code, **kwargs):
+            stream = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(stream):
+                    exec(code, {})
+                return {"status": "success", "stdout": stream.getvalue(), "traceback": None}
+            except Exception:
+                return {"status": "error", "stdout": stream.getvalue(), "traceback": traceback.format_exc()}
+
+        adapter = LegacySandboxAdapter(local_executor)
+        code = """
+import json
+import sympy as sp
+print(json.dumps({
+    "answer": sp.sqrt(2),
+    "canonical_answer": sp.sqrt(2),
+    "answer_type": "number",
+    "unit": None,
+    "variables": {"n": sp.Integer(2), "x": sp.sqrt(2)}
+}))
+"""
+        result = adapter(code)
+        self.assertEqual(result["_sandbox_status"], "success")
+        self.assertEqual(result["answer"], "sqrt(2)")
+        self.assertEqual(result["variables"]["n"], 2)
 
     def test_ablation_switch_separates_codegen_from_semantic_verifier(self):
         responses = [json.dumps(VALID_IR), "print('code')"]

@@ -28,7 +28,7 @@ ALLOWED_PRECISIONS = {"exact", "integer", "decimal", "significant_figures"}
 SYMBOL_RE = re.compile(r"^[A-Za-z_]\w*$")
 SAFE_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]\s]+$")
 SAFE_CONDITION_RE = re.compile(r"^[A-Za-z0-9_+\-*/().,%^\[\]<>=!\s]+$")
-ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
+ALLOWED_MATH_NAMES = {"pi", "e", "oo", "sqrt", "sin", "cos", "tan", "exp", "log", "abs", "min", "max", "int", "Tuple", "FiniteSet", "Interval", "Union", "Matrix"}
 REQUIRED_RELATION_FIELDS = {"id", "kind", "lhs", "rhs", "operator", "unit", "source", "evidence", "confidence"}
 REQUIRED_GIVEN_FIELDS = {"name", "symbol", "value", "unit", "role", "source"}
 REQUIRED_CONDITION_FIELDS = {"kind", "expr", "source"}
@@ -57,11 +57,11 @@ def _validate_expression(expression: Any, path: str, declared_symbols: set[str],
 
 def empty_ir() -> ProblemIR:
     return {
-        "target_unknown": {"name": "answer", "symbol": "x", "unit": None},
+        "target_unknown": {"name": "answer", "symbol": "x", "unit": None, "dimension": None},
         "givens": [],
         "relations": [],
         "conditions": [],
-        "required_output": {"type": "number", "unit": None, "precision": "exact", "target_count": 1},
+        "required_output": {"type": "number", "unit": None, "precision": "exact", "digits": None, "target_count": 1},
         "extraction_notes": [],
     }
 
@@ -90,6 +90,18 @@ def normalize_ir_shape(raw: Mapping[str, Any] | None) -> ProblemIR:
         out["conditions"] = raw["notes"]
     if out["target_unknown"].get("name") == "answer" and raw.get("target"):
         out["target_unknown"]["name"] = str(raw["target"])
+    out["target_unknown"].setdefault("unit", None)
+    out["target_unknown"].setdefault("dimension", None)
+    out["required_output"].setdefault("unit", out["target_unknown"].get("unit"))
+    out["required_output"].setdefault("precision", "exact")
+    out["required_output"].setdefault("digits", None)
+    out["required_output"].setdefault("target_count", 1)
+    for given in out["givens"]:
+        if isinstance(given, Mapping):
+            given.setdefault("unit", None)
+    for relation in out["relations"]:
+        if isinstance(relation, Mapping):
+            relation.setdefault("unit", None)
     return out
 
 

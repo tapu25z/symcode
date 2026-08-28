@@ -8,6 +8,29 @@ from typing import Any, Callable, Mapping
 
 
 LEGACY_7B_MODEL_ID = "Qwen/Qwen2.5-Coder-7B-Instruct"
+JSON_SERIALIZATION_PRELUDE = r"""
+import json as _symplanner_json
+_symplanner_original_json_dumps = _symplanner_json.dumps
+
+def _symplanner_json_default(obj):
+    try:
+        import sympy as _symplanner_sp
+        if isinstance(obj, _symplanner_sp.Integer):
+            return int(obj)
+        if isinstance(obj, _symplanner_sp.Float):
+            return float(obj)
+        if isinstance(obj, _symplanner_sp.Basic):
+            return str(obj)
+    except Exception:
+        pass
+    return str(obj)
+
+def _symplanner_safe_json_dumps(obj, *args, **kwargs):
+    kwargs.setdefault("default", _symplanner_json_default)
+    return _symplanner_original_json_dumps(obj, *args, **kwargs)
+
+_symplanner_json.dumps = _symplanner_safe_json_dumps
+"""
 
 
 @dataclass(frozen=True)
@@ -66,7 +89,7 @@ class LegacySandboxAdapter:
         self.timeout = int(timeout)
 
     def __call__(self, code: str) -> dict[str, Any]:
-        raw = dict(self.executor(code, mode="symcode", timeout=self.timeout) or {})
+        raw = dict(self.executor(f"{JSON_SERIALIZATION_PRELUDE}\n{code}", mode="symcode", timeout=self.timeout) or {})
         status = raw.get("status")
         stdout = str(raw.get("stdout") or "")
         if status != "success":

@@ -85,7 +85,7 @@ def evaluate_ir_variant(
         if question in completed:
             continue
         
-        print(f"\n[INFO] [{idx+1}/{len(dataset)}] [Lvl {item.get('level')} {item.get('subject')}] Đang chạy {variant}: {question[:80]}...")
+        print(f"\n[INFO] [{idx+1}/{len(dataset)}] [Lvl {item.get('level')} {item.get('subject')}] Running {variant}: {question[:80]}...")
         sys.stdout.flush()
         
         snapshot = model.snapshot()
@@ -143,7 +143,7 @@ def evaluate_ir_variant(
         completed.add(question)
         new_count += 1
 
-        match_icon = "✅ DUNG" if is_correct else "❌ SAI"
+        match_icon = "OK" if is_correct else "FAIL"
         print(f"  -> {match_icon} | KQ: `{predicted}` | GT: `{ground_truth}` | Status: {trace.get('status')} | {latency:.1f}s ({result['generated_tokens']} tokens)")
         sys.stdout.flush()
 
