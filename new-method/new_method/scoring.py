@@ -53,6 +53,13 @@ def _latex_matrix(text: str, normalize: Callable[[str], str]):
     return sp.Matrix(rows) if rows else None
 
 
+def _clean_base_suffix(text: str) -> str:
+    s = str(text or "").strip()
+    s = re.sub(r"_\{\s*\d+\s*\}", "", s)
+    s = re.sub(r"_\d+\b", "", s)
+    return s.strip()
+
+
 def check_math500_equivalence(
     predicted: Any,
     canonical_answer: Any,
@@ -66,6 +73,8 @@ def check_math500_equivalence(
     normalized_pred = legacy_normalize(pred_text).replace(r"\infty", "oo").replace("∞", "oo")
     normalized_gold = legacy_normalize(gold_text).replace(r"\infty", "oo").replace("∞", "oo")
     if normalized_pred == normalized_gold:
+        return True
+    if _clean_base_suffix(normalized_pred) == _clean_base_suffix(normalized_gold) and _clean_base_suffix(normalized_pred):
         return True
 
     # Check matrix equivalence

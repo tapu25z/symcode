@@ -266,11 +266,18 @@ def verify_bidirectional(normalized_ir: Mapping[str, Any], execution: Mapping[st
                     residual = str(sp.simplify(left_value - right_value))
                 except Exception:
                     residual = None
-            else:
+            elif op in OPS:
                 left_number, right_number = _number(left_value), _number(right_value)
                 passed = left_number is not None and right_number is not None and OPS[op](left_number, right_number)
                 residual = None if left_number is None or right_number is None else left_number - right_number
-            status = "pass" if passed else "fail"
+            elif op in {"%", "mod", "pmod"}:
+                left_number, right_number = _number(left_value), _number(right_value)
+                passed = left_number is not None and right_number is not None and (int(left_number) % int(right_number) == 0)
+                residual = None
+            else:
+                passed = False
+                status = "unknown"
+            status = "pass" if passed else ("unknown" if status == "unknown" else "fail")
         reverse = _reverse_checks(lhs, rhs, op, env)
         check = {"id": relation.get("id", f"relation_{index}"), "lhs": lhs, "rhs": rhs, "operator": op, "status": status, "residual": residual, "forward_error": left_error or right_error, "reverse": reverse}
         checks.append(check)

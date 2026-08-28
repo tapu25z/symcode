@@ -62,6 +62,8 @@ Required behavior:
    - COMPLEX NUMBERS: Format as exact algebraic form `"a + b*I"` or `"a + bi"` (e.g. `"-2 + 7*I"`, `"6 + 9*I"`).
    - MULTIPLE ROOTS: If there are multiple solutions (e.g. 3, 5, 7), format as a comma-separated string `"3, 5, 7"`.
    - BASE CONVERSIONS: For base-k numbers (e.g. base 8), compute and output the proper base representation (e.g. `52_8` or `oct(n)`).
+   - COMBINATORICS: For selections/battalions/teams, use combinations `math.comb(n, k)` and multiplication principle `math.comb(n1, k1) * math.comb(n2, k2)` instead of division. For circular tables of n items with k items seated together, use `math.factorial(n - k) * math.factorial(k)`.
+   - MODULAR ARITHMETIC: Use integer modulo `(a * b) % m`.
 5. Print exactly one line of JSON and nothing else, with exactly these keys:
    {"answer": number|string, "canonical_answer": number|string, "answer_type": string, "unit": string|null, "variables": {"symbol": number|string}}
    `answer` is the dataset-facing value: use exact forms such as "-125", "243/625", "11*sqrt(2)", "6 + 9*I", "(3, pi/2)", "{1,2}", "(2, oo)". `canonical_answer` is the verifier-facing value in canonical units or SymPy form: -125, Rational(243, 625), 11*sqrt(2), Tuple(3,pi/2), FiniteSet(1,2). `answer_type` must equal required_output.type. `unit` must equal required_output.unit. Variables may contain only declared symbols and canonical finite numeric/SymPy-compatible values. Convert SymPy objects to strings or standard types before json.dumps. Do not print Markdown, labels, debug logs, NaN or Infinity.

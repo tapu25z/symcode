@@ -98,6 +98,8 @@ def evaluate_ir_variant(
         verification = final.get("verification") if isinstance(final, Mapping) else {}
         verification = verification if isinstance(verification, Mapping) else {}
         predicted = execution.get("answer")
+        if predicted in (None, "") and execution.get("canonical_answer") not in (None, ""):
+            predicted = str(execution.get("canonical_answer"))
         raw_gold = item.get("raw") or item.get("answer") or ""
         ground_truth = ground_truth_fn(raw_gold)
         stage_tokens: dict[str, int] = defaultdict(int)

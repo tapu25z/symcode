@@ -2,6 +2,7 @@ import unittest
 from new_method.scoring import check_math500_equivalence
 from new_method.normalizer import normalize_problem_ir, normalize_expression
 from new_method.pipeline import SymPlannerIRPipeline, RUNTIME_HEADER
+from new_method.relation_verifier import verify_bidirectional
 
 
 def dummy_legacy_match(pred, gt):
@@ -31,6 +32,8 @@ class TestMath500Fixes(unittest.TestCase):
             ("83.0", 83, "83", True),
             ("3/2", "3/2", r"\frac{3}{2}", True),
             ("5", 5, "5", True),
+            ("52", "52", "52_8", True),
+            ("52_8", "52_8", "52_8", True),
         ]
         for pred, canon, gold, exp in cases:
             res = check_math500_equivalence(pred, canon, gold, dummy_legacy_match, dummy_legacy_normalize)
@@ -51,6 +54,27 @@ class TestMath500Fixes(unittest.TestCase):
         }
         fatal = pipeline._fatal_ir_errors(ir_valid, [])
         self.assertEqual(fatal, [])
+
+    def test_verifier_handles_modulo_and_unknown_operators_without_crash(self):
+        ir = {
+            "target_unknown": {"name": "remainder", "symbol": "r"},
+            "givens": [{"name": "n", "symbol": "n", "value": 2, "quantity": {"canonical_value": 2}}],
+            "relations": [
+                {"id": "r1", "lhs": "n", "rhs": "7", "operator": "%"}
+            ],
+            "conditions": [],
+            "required_output": {"type": "number"},
+        }
+        execution = {
+            "answer": 3,
+            "canonical_answer": 3,
+            "answer_type": "number",
+            "unit": None,
+            "variables": {"n": 2, "r": 3}
+        }
+        # Must not raise KeyError: '%'
+        res = verify_bidirectional(ir, execution)
+        self.assertIn(res["status"], ["pass", "fail", "unknown"])
 
 
 if __name__ == "__main__":
