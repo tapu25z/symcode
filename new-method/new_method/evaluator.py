@@ -75,10 +75,19 @@ def evaluate_ir_variant(
     pipeline = SymPlannerIRPipeline(model, sandbox, max_repairs=max_retries, max_ir_repairs=max_ir_retries, ablation=variant)
     new_count = 0
 
-    for item in dataset:
+    print(f"\n==================== Bat dau danh gia Ablation: {variant} ({len(dataset)} mau) ====================")
+    if completed:
+        print(f"[INFO] Da hoan thanh truoc do: {len(completed)}/{len(dataset)} mau.")
+    sys.stdout.flush()
+
+    for idx, item in enumerate(dataset):
         question = str(item.get("question") or item.get("problem") or "")
         if question in completed:
             continue
+        
+        print(f"\n[INFO] [{idx+1}/{len(dataset)}] [Lvl {item.get('level')} {item.get('subject')}] Đang chạy {variant}: {question[:80]}...")
+        sys.stdout.flush()
+        
         snapshot = model.snapshot()
         started = time.perf_counter()
         trace = pipeline.run(question)
@@ -133,8 +142,16 @@ def evaluate_ir_variant(
         results.append(result)
         completed.add(question)
         new_count += 1
-        if checkpoint_file and new_count % max(1, save_every) == 0:
-            _save_checkpoint(checkpoint_file, variant, results, {"ir_variants": sorted(ABLATIONS)})
+
+        match_icon = "✅ DUNG" if is_correct else "❌ SAI"
+        print(f"  -> {match_icon} | KQ: `{predicted}` | GT: `{ground_truth}` | Status: {trace.get('status')} | {latency:.1f}s ({result['generated_tokens']} tokens)")
+        sys.stdout.flush()
+
+        if save_every and new_count % save_every == 0:
+            _save_checkpoint(checkpoint_file, variant, results, {"last_saved": time.strftime("%Y-%m-%d %H:%M:%S")})
+            print(f"[INFO] Da luu checkpoint {variant}: {len(results)}/{len(dataset)} mau.")
+            sys.stdout.flush()
+            
     _save_checkpoint(checkpoint_file, variant, results, {"ir_variants": sorted(ABLATIONS)})
     return results
 
