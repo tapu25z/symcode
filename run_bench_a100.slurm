@@ -45,7 +45,11 @@ if [ ! -d "$VENV_PATH" ]; then
     pip install --upgrade pip setuptools wheel --quiet
     echo "📥 Đang tải PyTorch CUDA 12.1..."
     pip install torch --index-url https://download.pytorch.org/whl/cu121
-    pip install transformers>=4.40.0 accelerate>=0.28.0 bitsandbytes>=0.43.0 sympy>=1.12 datasets>=2.18.0 tqdm
+    if [ -f "kaggle/requirements.txt" ]; then
+        pip install -r kaggle/requirements.txt
+    else
+        pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm
+    fi
 else
     source $VENV_PATH/bin/activate
 fi
@@ -96,7 +100,7 @@ HAS_CUDA=$(python3 -c "import torch; print(torch.cuda.is_available())" 2>/dev/nu
 if [ "$HAS_CUDA" != "True" ]; then
     echo "⚠️ PyTorch chưa có CUDA! Đang tiến hành cài đặt lại PyTorch CUDA 12.1..."
     pip install torch --index-url https://download.pytorch.org/whl/cu121 --force-reinstall
-    pip install bitsandbytes>=0.43.0 accelerate>=0.28.0 --quiet
+    pip install "bitsandbytes>=0.43.0" "accelerate>=0.28.0" --quiet
 fi
 
 python3 -c "import torch; print('-> CUDA Available:', torch.cuda.is_available()); print('-> Device Name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"

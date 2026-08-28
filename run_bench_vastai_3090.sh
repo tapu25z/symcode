@@ -32,7 +32,11 @@ if [ ! -d "$VENV_DIR" ]; then
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
     
     echo "📥 Cài đặt các gói thư viện benchmark..."
-    pip install transformers>=4.40.0 accelerate>=0.28.0 bitsandbytes>=0.43.0 sympy>=1.12 datasets>=2.18.0 tqdm
+    if [ -f "kaggle/requirements.txt" ]; then
+        pip install -r kaggle/requirements.txt
+    else
+        pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm
+    fi
     echo "✅ Khởi tạo venv thành công!"
 else
     echo "🔄 Kích hoạt venv sẵn có tại: $VENV_DIR"
@@ -51,7 +55,7 @@ HAS_CUDA=$(python3 -c "import torch; print(torch.cuda.is_available())" 2>/dev/nu
 if [ "$HAS_CUDA" != "True" ]; then
     echo "⚠️ PyTorch chưa nhận CUDA! Đang tiến hành cài đặt lại PyTorch CUDA 12.4..."
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
-    pip install bitsandbytes>=0.43.0 accelerate>=0.28.0 --quiet
+    pip install "bitsandbytes>=0.43.0" "accelerate>=0.28.0" --quiet
 fi
 
 python3 -c "import torch; print('-> CUDA Available:', torch.cuda.is_available()); print('-> Device Count:', torch.cuda.device_count()); print('-> Device Name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
