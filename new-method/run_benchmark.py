@@ -24,10 +24,10 @@ from new_method.evaluator import compute_ir_diagnostics, evaluate_ir_variant
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="SymPlanner IR main-method and ablation benchmark")
+    parser = argparse.ArgumentParser(description="SymPlanner new-method benchmark")
     parser.add_argument("--dataset", choices=["math500", "gsm8k"], default="math500")
     parser.add_argument("--dataset-path", default=None)
-    parser.add_argument("--methods", nargs="+", choices=["SymPlanner", *ABLATIONS], default=["SymPlanner", "IR-Codegen", "IR-BiVerify", "IR-Full"])
+    parser.add_argument("--methods", nargs="+", choices=["SymPlanner", *ABLATIONS], default=["SymPlanner", "IR-Lite"])
     parser.add_argument("--num-samples", type=int, default=None)
     parser.add_argument("--filter-levels", nargs="+", type=int, default=None)
     parser.add_argument("--model-id", default=LEGACY_7B_MODEL_ID)
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--code-repair-tokens", type=int, default=1800)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max-retries", type=int, default=2)
+    parser.add_argument("--max-retries", type=int, default=1)
     parser.add_argument("--max-ir-retries", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=15)
     parser.add_argument("--save-every", type=int, default=5)

@@ -65,6 +65,10 @@ class Legacy7BCoderAdapter:
             return "ir_repair"
         if "repair a Python program" in system:
             return "code_repair"
+        if "single-pass mathematical code solver" in system:
+            return "codegen"
+        if "repair a single Python/SymPy solution" in system:
+            return "code_repair"
         if "normalized JSON payload" in system:
             return "codegen"
         return "extractor"

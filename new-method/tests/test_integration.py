@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kaggle"))
 
 from new_method.adapters import Legacy7BCoderAdapter, LegacySandboxAdapter, StageTokenBudgets
 from new_method.evaluator import evaluate_ir_variant
-from new_method.pipeline import SymPlannerIRPipeline
+from new_method.pipeline import SymPlannerIRPipeline, strip_code_fence
 from new_method.prompts import codegen_prompt, extraction_prompt
 from new_method.scoring import check_math500_equivalence
 from method import check_exact_match, normalize_answer_str
@@ -42,6 +42,10 @@ def structured_execution(answer=10):
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_strip_code_fence_extracts_embedded_python_block(self):
+        text = "Here is code:\n```python\nprint(1)\n```\n"
+        self.assertEqual(strip_code_fence(text), "print(1)")
+
     def test_legacy_model_adapter_uses_stage_budget_without_loading_model(self):
         runner = FakeRunner(["ir", "code"])
         adapter = Legacy7BCoderAdapter(runner, StageTokenBudgets(extractor=101, codegen=202))
@@ -94,7 +98,7 @@ print(json.dumps({
         self.assertEqual(verified.run("answer is 10")["status"], "fail")
 
     def test_evaluator_emits_legacy_compatible_result_and_checkpoint(self):
-        runner = FakeRunner([json.dumps(VALID_IR), "print('code')"])
+        runner = FakeRunner(["print('code')"])
         sandbox = lambda code, **kwargs: {"status": "success", "stdout": json.dumps(structured_execution()) + "\n", "traceback": None}
         dataset = [{"question": "answer is 10", "answer": "10", "raw": {"answer": "10"}, "subject": "Algebra", "level": 1, "level_label": "Level 1"}]
         with tempfile.TemporaryDirectory() as directory:
@@ -106,8 +110,16 @@ print(json.dumps({
             )
             self.assertEqual(results[0]["verification_status"], "pass")
             self.assertTrue(results[0]["is_correct"])
-            self.assertEqual(results[0]["generated_tokens"], 14)
+            self.assertEqual(results[0]["generated_tokens"], 7)
+            self.assertFalse(results[0]["invalid_ir"])
             self.assertTrue(Path(checkpoint).exists())
+
+    def test_strict_ir_variant_preserves_relation_verifier_path(self):
+        responses = [json.dumps(VALID_IR), "print('code')"]
+        pipeline = SymPlannerIRPipeline(lambda messages: responses.pop(0), lambda code: structured_execution(), ablation="IR-Strict")
+        result = pipeline.run("answer is 10")
+        self.assertEqual(result["status"], "pass")
+        self.assertIsInstance(result["ir"], dict)
 
     def test_math500_matrix_and_infinity_scoring(self):
         matrix_gold = r"\begin{pmatrix} -1 & 0 \\ 0 & -1 \end{pmatrix}"

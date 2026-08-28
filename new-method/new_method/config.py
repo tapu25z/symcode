@@ -6,21 +6,24 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class AblationConfig:
     name: str
+    pipeline: str = "ir"
     enable_ir_repair: bool = True
     enable_bidirectional_verifier: bool = True
     enable_code_repair: bool = True
 
 
 ABLATIONS = {
+    "IR-Lite": AblationConfig("IR-Lite", pipeline="lean", enable_ir_repair=False, enable_bidirectional_verifier=False, enable_code_repair=True),
+    "IR-Full": AblationConfig("IR-Full", pipeline="lean", enable_ir_repair=False, enable_bidirectional_verifier=False, enable_code_repair=True),
     "IR-Codegen": AblationConfig("IR-Codegen", enable_bidirectional_verifier=False, enable_code_repair=False),
     "IR-BiVerify": AblationConfig("IR-BiVerify", enable_bidirectional_verifier=True, enable_code_repair=False),
-    "IR-Full": AblationConfig("IR-Full", enable_bidirectional_verifier=True, enable_code_repair=True),
+    "IR-Strict": AblationConfig("IR-Strict", enable_bidirectional_verifier=True, enable_code_repair=True),
 }
 
 
 def resolve_ablation(value: str | AblationConfig | None) -> AblationConfig:
     if value is None:
-        return ABLATIONS["IR-Full"]
+        return ABLATIONS["IR-Lite"]
     if isinstance(value, AblationConfig):
         return value
     if value not in ABLATIONS:
