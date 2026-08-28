@@ -53,7 +53,7 @@ def build_problem_hints(question: str) -> list[str]:
         )
     if "double sum" in text or (r"\sum_{j" in question and r"\sum_{k" in question):
         hints.append(
-            "For double sums of the form \\sum_{j=1}^\\infty \\sum_{k=1}^\\infty 1/(j+k)^m, rewrite it as a single sum over n = j+k starting from n=2. To do this, group terms by n=j+k and count how many ordered pairs produce each n, which is (n-1). Thus, the sum is \\sum_{n=2}^\\infty (n-1)/n^m = \\sum_{n=2}^\\infty (1/n^{m-1} - 1/n^m). Express this in terms of the given series p and q by adjusting the index to start from 1 (e.g., \\sum_{n=2}^\\infty 1/n^2 = p - 1)."
+            "For double sums of the form \\sum_{j=1}^\\infty \\sum_{k=1}^\\infty 1/(j+k)^m, rewrite it as a single sum over n = j+k starting from n=2. To do this, group terms by n=j+k and count how many ordered pairs produce each n, which is (n-1). Thus, the sum is \\sum_{n=2}^\\infty (n-1)/n^m = \\sum_{n=2}^\\infty (1/n^{m-1} - 1/n^m). Express this in terms of the given series p and q by defining p and q as symbols: p, q = sp.symbols('p q'). Do not compute their numerical values. Since \\sum_{k=1}^\\infty 1/k^2 = zeta(2) and \\sum_{k=1}^\\infty 1/k^3 = zeta(3), substitute zeta(2) and zeta(3) with the symbols p and q (e.g. using .subs({sp.zeta(2): p, sp.zeta(3): q}))."
         )
     if "is a factor of" in text and re.search(r"\bp\b|\bq\b|\br\b", text):
         hints.append(
@@ -125,5 +125,10 @@ def build_problem_hints(question: str) -> list[str]:
         hints.append(
             "When ASY gives explicit point coordinates and asks for a segment length, compute the Euclidean distance between those named points."
         )
+    if "is a positive factor of" in text or "are factors of" in text:
+        if "!" in text or "factorial" in text:
+            hints.append(
+                "When finding the number of integer values of x such that x^k is a factor of a factorial (e.g. 10!): first find the prime factorization of the factorial. For each prime base p with exponent e, the exponent of p in x (let's say a) must satisfy k*a <= e, which means a can be any integer from 0 to e // k (so e // k + 1 possibilities). Multiply these possibilities (e // k + 1) for all prime factors to find the number of positive integer values of x."
+            )
 
     return hints
