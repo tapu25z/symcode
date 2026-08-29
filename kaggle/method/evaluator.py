@@ -622,25 +622,36 @@ def evaluate_symplanner(
         
         # -------------------------------------------------------------
         # TURN 1: PLANNER PHASE (Chỉ lập kế hoạch ngắn gọn, không sinh code)
+        # Bỏ qua Planner cho Level 1, 2, 3 để tối ưu hóa tốc độ và độ chính xác các câu dễ
         # -------------------------------------------------------------
-        planner_messages = build_planner_messages(question)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=384)
-        total_tokens += plan_tokens
-        raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
-        planner_note, planner_meta, planner_errors = parse_planner_contract(raw_plan, question)
-        if planner_errors:
-            # Do not feed truncated/non-JSON planner text into codegen. Preserve
-            # the raw response for diagnostics and pass a bounded safe fallback.
-            fallback_spec = infer_target_spec(question, planner_note)
-            planner_note = json.dumps({
-                "target_unknown": "infer from problem",
-                "given_constants": [],
-                "strategy": "solve directly from the problem",
-                "steps": [],
-                "pitfalls": planner_errors,
-                "answer_type": fallback_spec["answer_type"],
-            }, ensure_ascii=True)
-            planner_meta = {"answer_type": fallback_spec["answer_type"]}
+        level = item.get("level")
+        use_planner = True
+        if level is not None and level in (1, 2, 3):
+            use_planner = False
+        elif level is None:
+            use_planner = False  # Bỏ qua Planner cho gsm8k hoặc tập dữ liệu không phân cấp độ
+
+        if use_planner:
+            planner_messages = build_planner_messages(question)
+            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=384)
+            total_tokens += plan_tokens
+            raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
+            planner_note, planner_meta, planner_errors = parse_planner_contract(raw_plan, question)
+            if planner_errors:
+                # Do not feed truncated/non-JSON planner text into codegen. Preserve
+                # the raw response for diagnostics and pass a bounded safe fallback.
+                fallback_spec = infer_target_spec(question, planner_note)
+                planner_note = json.dumps({
+                    "target_unknown": "infer from problem",
+                    "given_constants": [],
+                    "strategy": "solve directly from the problem",
+                    "steps": [],
+                    "pitfalls": planner_errors,
+                    "answer_type": fallback_spec["answer_type"],
+                }, ensure_ascii=True)
+                planner_meta = {"answer_type": fallback_spec["answer_type"]}
+        else:
+            planner_note = ""
 
         # -------------------------------------------------------------
         # TURN 2: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
