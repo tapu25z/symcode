@@ -652,6 +652,8 @@ def evaluate_symplanner(
                 planner_meta = {"answer_type": fallback_spec["answer_type"]}
         else:
             planner_note = ""
+            planner_meta = {}
+            planner_errors = []
 
         # -------------------------------------------------------------
         # TURN 2: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
