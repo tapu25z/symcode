@@ -32,18 +32,18 @@ if [ ! -d "$VENV_DIR" ]; then
     echo "📥 [$(date '+%H:%M:%S')] Nâng cấp pip và cài đặt PyTorch CUDA..."
     pip install --upgrade pip setuptools wheel --quiet
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 || pip install torch --index-url https://download.pytorch.org/whl/cu121
-    
-    echo "📥 Cài đặt các gói thư viện benchmark..."
-    if [ -f "kaggle/requirements.txt" ]; then
-        pip install -r kaggle/requirements.txt
-    else
-        pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm
-    fi
-    echo "✅ Khởi tạo venv thành công!"
 else
     echo "🔄 Kích hoạt venv sẵn có tại: $VENV_DIR"
     source "$VENV_DIR/bin/activate"
 fi
+
+echo "📥 [$(date '+%H:%M:%S')] Kiểm tra và cập nhật các gói thư viện từ requirements.txt..."
+if [ -f "kaggle/requirements.txt" ]; then
+    pip install -r kaggle/requirements.txt --quiet
+else
+    pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm scipy numpy --quiet
+fi
+echo "✅ Chuẩn bị môi trường thành công!"
 
 # 4. Kiểm tra trạng thái GPU & PyTorch CUDA
 echo "🔍 [$(date '+%H:%M:%S')] Kiểm tra trạng thái GPU với nvidia-smi:"

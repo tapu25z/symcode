@@ -45,13 +45,15 @@ if [ ! -d "$VENV_PATH" ]; then
     pip install --upgrade pip setuptools wheel --quiet
     echo "📥 Đang tải PyTorch CUDA 12.1..."
     pip install torch --index-url https://download.pytorch.org/whl/cu121
-    if [ -f "kaggle/requirements.txt" ]; then
-        pip install -r kaggle/requirements.txt
-    else
-        pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm
-    fi
 else
     source $VENV_PATH/bin/activate
+fi
+
+echo "📥 [$(date '+%H:%M:%S')] Kiểm tra và cập nhật các gói thư viện từ requirements.txt..."
+if [ -f "kaggle/requirements.txt" ]; then
+    pip install -r kaggle/requirements.txt --quiet
+else
+    pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm scipy numpy --quiet
 fi
 
 # ---------------------------------------------------------
