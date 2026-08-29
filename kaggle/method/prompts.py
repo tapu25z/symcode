@@ -42,12 +42,11 @@ Do NOT write explanations. Do NOT output markdown text outside the code fence. D
 
 The code MUST:
 1. import sympy as sp and import json (plus math, fractions, itertools if helpful).
-2. Write a brief step-by-step mathematical reasoning (Chain of Thought) as Python comments at the very beginning of the code, mapping out the logic, variables, and formulas.
-3. Define given values and variables clearly.
-4. Compute the requested target quantity:
+2. Define given values and variables clearly.
+3. Compute the requested target quantity:
    - For sequential word problems (GSM8K style): Compute step-by-step using Python/SymPy arithmetic.
    - For algebraic systems (MATH style): Use sp.symbols(...) with domain assumptions and sp.solve(...).
-5. CRITICAL RULES:
+4. CRITICAL RULES:
    - Never output `None`, `Invalid`, or undefined variables.
    - Do NOT create conditional `if/else` checks that assign `None` or `Invalid`.
    - Never call `.evalf()` on Python standard `int` or `float`.
@@ -59,12 +58,12 @@ The code MUST:
    - Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
    - Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS. They contain exact math models, safe SymPy API formulas, or search procedures required for this specific problem.
    - Double check all mathematical operators (+, -, *, /) in the prompt against your generated code. For example, if the problem subtracts two fractions, write a minus sign (-), not a plus sign (+).
-6. Before printing, add cheap internal checks whenever possible:
+5. Before printing, add cheap internal checks whenever possible:
    - Substitute candidate solutions back into equations/inequalities.
    - For small combinatorics, brute-force enumerate and compare against any formula.
    - For symbolic identities, expand/simplify both sides at exact or multiple sample values.
    - For optimization/norm problems, compare analytic result against numeric samples.
-7. Print exactly one JSON line and nothing else at the very end:
+6. Print exactly one JSON line and nothing else at the very end:
    print(json.dumps({"answer": str(display_answer), "canonical_answer": str(canonical_answer), "answer_type": "<target type>", "unit": None, "variables": {}}, default=str))
    Do not use `.format(...)` or an f-string to hand-build JSON; braces in JSON conflict with those formatting methods.
    `answer_type` must match the OUTPUT CONTRACT.
@@ -77,13 +76,12 @@ Do NOT write explanations. Do NOT output <think> tags.
 
 The code MUST:
 1. import sympy as sp (and math, fractions if helpful).
-2. Write a brief step-by-step mathematical reasoning (Chain of Thought) as Python comments at the very beginning of the code, mapping out the logic, variables, and formulas.
-3. Define all given quantities and formulate equations accurately.
-4. Solve for the target quantity symbolically or numerically.
-5. Never call `.evalf()` on standard Python int/float.
-6. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
-7. Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
-8. Print ONLY the final answer in LaTeX boxed format at the end:
+2. Define all given quantities and formulate equations accurately.
+3. Solve for the target quantity symbolically or numerically.
+4. Never call `.evalf()` on standard Python int/float.
+5. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+6. Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+7. Print ONLY the final answer in LaTeX boxed format at the end:
    print(f"\\boxed{{{final_answer}}}")
 """
 

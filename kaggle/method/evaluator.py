@@ -790,29 +790,8 @@ def evaluate_symplanner(
             box_match = extract_boxed_content(planner_note)
             if box_match:
                 final_predicted = box_match
-
-        # Kích hoạt CoT Fallback nếu SymPlanner bị lỗi thực thi, lỗi kiểm chứng, hoặc đáp án rỗng
-        should_cot_fallback = False
-        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
-            should_cot_fallback = True
-        elif final_exec_status != "success":
-            should_cot_fallback = True
-        elif final_verif_status == "fail":
-            should_cot_fallback = True
-
-        if should_cot_fallback:
-            cot_messages = build_prompt_messages("CoT", question)
-            cot_raw, cot_tokens = llm.generate_chat(cot_messages)
-            total_tokens += cot_tokens
-            raw_outputs.append(f"### Turn 5 (CoT Fallback):\n{cot_raw}")
-            cot_ans = extract_answer_fallback(cot_raw)
-            if cot_ans is not None and str(cot_ans).strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
-                final_predicted = cot_ans
-                final_exec_status = "cot_fallback"
-                final_verif_status = "not_applicable"
-                final_verif_feedback = "Fallback triggered: SymPlanner failed, CoT used instead."
-
         final_predicted = format_answer_for_contract(question, final_predicted, final_answer_type)
+
         is_correct = check_exact_match(final_predicted, gt)
 
         results.append({
