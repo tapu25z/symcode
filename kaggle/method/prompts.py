@@ -57,6 +57,7 @@ The code MUST:
    - Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
    - Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
    - Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS. They contain exact math models, safe SymPy API formulas, or search procedures required for this specific problem.
+   - Double check all mathematical operators (+, -, *, /) in the prompt against your generated code. For example, if the problem subtracts two fractions, write a minus sign (-), not a plus sign (+).
 5. Before printing, add cheap internal checks whenever possible:
    - Substitute candidate solutions back into equations/inequalities.
    - For small combinatorics, brute-force enumerate and compare against any formula.

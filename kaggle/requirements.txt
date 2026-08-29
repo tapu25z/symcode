@@ -5,3 +5,5 @@ bitsandbytes>=0.43.0
 sympy>=1.12
 datasets>=2.18.0
 tqdm
+scipy
+numpy

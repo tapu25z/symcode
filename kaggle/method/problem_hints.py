@@ -130,5 +130,29 @@ def build_problem_hints(question: str) -> list[str]:
             hints.append(
                 "When finding the number of integer values of x such that x^k is a factor of a factorial (e.g. 10!): first find the prime factorization of the factorial. For each prime base p with exponent e, the exponent of p in x (let's say a) must satisfy k*a <= e, which means a can be any integer from 0 to e // k (so e // k + 1 possibilities). Multiply these possibilities (e // k + 1) for all prime factors to find the number of positive integer values of x."
             )
+    if "third side" in text or "sides measuring" in text or "triangle has sides" in text:
+        hints.append(
+            "For triangle side length bounds, apply the strict triangle inequality: abs(a - b) < c < a + b. The third side must be strictly greater than abs(a - b) and strictly less than a + b. Do not include boundary values."
+        )
+    if "arrange the letters" in text or "permutations of" in text:
+        hints.append(
+            "For arranging letters of a word, identify all repeated letters. The number of arrangements is n! / (n1! * n2! * ...), where n is the total number of letters, and n1, n2, ... are the counts of each repeated letter. Make sure to divide by the factorial of the counts of all repeated letters."
+        )
+    if "cents" in text or "dollar" in text:
+        hints.append(
+            "When converting between currencies (dollars and cents) or units, verify if your equations are already formulated in the target unit. If equations use cents (e.g. 124 cents instead of 1.24 dollars), the solved variable is already in cents; do not multiply by 100 again."
+        )
+    if "simplify" in text and any(trig in text for trig in ("sin", "cos", "sec", "csc", "tan", "cot")):
+        hints.append(
+            "For trigonometric simplifications, use sp.trigsimp(expr) or sp.simplify(expr) to reduce the expression to its simplest form (e.g. cot(x) or sin(x)). Ensure you formulate fractions and common denominators correctly using basic trig definitions."
+        )
+    if "shortest distance" in text and "visit" in text:
+        hints.append(
+            "For a path visiting all N points (Hamiltonian path), the route contains exactly N-1 edges. Do not close the loop (do not add the edge returning to the starting point) unless a cycle/closed loop is explicitly requested."
+        )
+    if "weigh" in text or "weighs" in text or "equal in weight" in text:
+        hints.append(
+            "When solving underdetermined systems of equations (where the number of variables is greater than the number of equations), sp.solve returns a list of dicts with parameterized solutions. To find the ratio of two variables T and S, solve for T in terms of S, or substitute a dummy value (e.g. S=1) into the system to find the numerical values of the other variables before dividing."
+        )
 
     return hints
