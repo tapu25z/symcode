@@ -70,7 +70,8 @@ Rules:
 7. Any reasoning comment must start with "# Step <number>:".
 8. At the end, print exactly one JSON line with keys answer, canonical_answer, answer_type, unit, and variables using json.dumps(..., default=str).
 9. Match the OUTPUT REQUIREMENT, including text, symbolic, tuple, set, matrix, and base notation targets.
-10. Pay close attention to the MATHEMATICAL RULES FOR THIS PROBLEM TYPE appended to the planner notes."""
+10. Pay close attention to the MATHEMATICAL RULES FOR THIS PROBLEM TYPE appended to the planner notes.
+11. Whenever possible, write the solver with a cross-verification path (e.g., verifying a symbolic solution with a numerical grid search/simulation loop, or verifying a formula against a brute-force count) to catch algebraic or formulation errors before printing the final answer."""
 
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -120,7 +121,8 @@ Rules:
 - Print exactly one JSON line with keys answer, canonical_answer, answer_type,
   unit, and variables using json.dumps(..., default=str).
 - Match the OUTPUT REQUIREMENT.
-- Follow the MATHEMATICAL RULES FOR THIS PROBLEM TYPE appended to the planner notes."""
+- Follow the MATHEMATICAL RULES FOR THIS PROBLEM TYPE appended to the planner notes.
+- Use a cross-verification path (verifying symbolic solution with simulation loop or numerical search) to ensure algebraic and logical correctness."""
 
 # ==============================================================================
 # 4. BASELINE PROMPTS (Direct & CoT)
@@ -236,10 +238,11 @@ def get_subject_specific_rules(subject: str, question: str) -> list[str]:
     if "algebra" in sub or "equation" in q_lower or "polynomial" in q_lower:
         rules.append("Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear equations, multivariate systems of high degree, or high-degree polynomials (degree >= 3) to prevent hangs. Instead, use numerical solvers (e.g., sp.Poly(eq, x).nroots(), scipy if available, or fsolve).")
         rules.append("Never call heavy symbolic solvers (like sp.solve, solveset) inside a large loop (e.g., >10 iterations) to avoid execution timeouts; solve symbolically first or use analytical filters.")
+        rules.append("For double summations or series of the form sum_{j=1..oo} sum_{k=1..oo} f(j+k), simplify it into a single sum by letting n = j+k and counting the number of pairs (j,k) that sum to n (which is n-1 for positive integers). Then evaluate the single sum.")
 
     # 3. Counting & Probability
     if "counting" in sub or "probability" in sub or "ways" in q_lower or "permutation" in q_lower or "combination" in q_lower:
-        rules.append("For round table seating or cyclic arrangements, remember to account for division by N or treat as (N-1)!. If items must sit together, multiply by internal permutations of the block (e.g., K!).")
+        rules.append("For seating N people around a round table (circular permutations): 1) Total unrestricted arrangements is (N-1)!. Do NOT divide by N again if you already used (N-1)!. 2) If a block of K people must sit together, treat the block as 1 unit; the number of circular arrangements of the N-K+1 units is (N-K)!, and multiply by K! for internal permutations of the block. 3) If K people must NOT sit next to each other, first arrange the other N-K people in a circle in (N-K-1)! ways, creating N-K spaces; then choose K spaces to place them in binom(N-K, K) * K! ways.")
         rules.append("For selecting subsets or combinations, use sympy.binomial(n, k) or math.comb(n, k). For small spaces, you can use itertools.permutations or combinations to brute-force and count.")
 
     # 4. Number Theory / Prealgebra
