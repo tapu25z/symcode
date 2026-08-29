@@ -196,8 +196,6 @@ def build_symplanner_codegen_messages(question: str, planner_note: str = "") -> 
     plan_block = planner_note.strip() or "Planner note unavailable. Solve directly from first principles."
     target_spec = infer_target_spec(question, planner_note)
     target_block = json.dumps(target_spec, sort_keys=True)
-    hints = build_problem_hints(question)
-    hints_block = "\n".join(f"- {hint}" for hint in hints) if hints else "- No extra pattern hint."
     user_content = f"""# PROBLEM
 {question}
 
@@ -206,9 +204,6 @@ def build_symplanner_codegen_messages(question: str, planner_note: str = "") -> 
 
 # OUTPUT CONTRACT
 {target_block}
-
-# PROBLEM-SPECIFIC IMPLEMENTATION HINTS
-{hints_block}
 
 Return executable Python code only enclosed in ```python ... ```. Do not write explanations."""
     return [
@@ -251,8 +246,6 @@ def build_symplanner_debug_messages(
     feedback_text = "\n".join(feedback_lines)
     plan_block = planner_note.strip() or "N/A"
     target_block = json.dumps(infer_target_spec(question, planner_note), sort_keys=True)
-    hints = build_problem_hints(question)
-    hints_block = "\n".join(f"- {hint}" for hint in hints) if hints else "- No extra pattern hint."
 
     user_text = f"""# PROBLEM
 {question}
@@ -262,9 +255,6 @@ def build_symplanner_debug_messages(
 
 # OUTPUT CONTRACT
 {target_block}
-
-# PROBLEM-SPECIFIC IMPLEMENTATION HINTS
-{hints_block}
 
 # PREVIOUS CODE
 ```python
