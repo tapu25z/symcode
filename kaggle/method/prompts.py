@@ -216,8 +216,19 @@ def get_subject_specific_rules(subject: str, question: str) -> list[str]:
     rules = []
     
     # 1. Geometry / Precalculus / Coordinate-related rules
-    if "geometry" in sub or "precalculus" in sub or "[asy]" in q_lower or "coordinate" in q_lower or "triangle" in q_lower:
-        rules.append("GEOMETRIC COORDINATIZATION RULE: For abstract triangle/polygon geometry problems involving ratios, areas, or coordinates of special points (like centroids, orthocenters, midpoints, or parallel lines), do not rely on manual geometric ratios. Instead, assign concrete coordinates to the vertices (e.g., placing one vertex at (0,0) and aligning others with axes) and use SymPy to analytically calculate the coordinates of all points and solve for areas/lengths using coordinate geometry formulas.")
+    is_geom_subject = "geometry" in sub or "precalculus" in sub
+    is_geom_keywords = any(kw in q_lower for kw in ["triangle", "polygon", "circle", "quadrilateral", "parallelogram", "heptagon", "hexagon", "angle", "line equation", "centroid", "median", "rotation", "rotate"])
+    is_graph_speed_time = any(kw in q_lower for kw in ["speed", "average speed", "training run", "cross-country"])
+    
+    if (is_geom_subject or is_geom_keywords) and not is_graph_speed_time:
+        # Check if coordinates are already given in the question (matching a pattern like (3, 4) or (-5, 6))
+        has_given_coordinates = bool(re.search(r"\(\s*-?\d+\s*,\s*-?\d+\s*\)", question))
+        
+        if not has_given_coordinates:
+            rules.append("GEOMETRIC COORDINATIZATION RULE: For abstract triangle/polygon geometry problems involving ratios, areas, or coordinates of special points (like centroids, orthocenters, midpoints, or parallel lines) where no concrete coordinates are given, assign concrete coordinates to the vertices (e.g., placing one vertex at (0,0) and aligning others with axes) and use SymPy to analytically calculate the coordinates of all points and solve for areas/lengths using coordinate geometry formulas.")
+        else:
+            rules.append("GEOMETRIC COORDINATIZATION RULE: Since coordinates are already given in the problem, use the given coordinates directly instead of translating or re-assigning them to (0,0) to avoid transcription and mapping errors.")
+            
         rules.append("For coordinate geometries and 3D line equations (e.g., symmetric equations like 2x = 3y = -z), do not compute direction vectors manually. Write SymPy code to solve the equations for two distinct coordinate points (e.g., setting x=0 and x=1) and subtract them to get the direction vector.")
         rules.append("If the problem contains an [asy] block, read the coordinates of points (e.g., A = (x, y)) directly from the Asymptote code and use standard distance/geometric formulas in Python to solve or verify the answer.")
         

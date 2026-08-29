@@ -69,9 +69,21 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertNotIn('"answer_type": "text"', messages[-1]["content"])
 
     def test_subject_specific_rules_injection(self):
+        # 1. Geometry with abstract vertices triggers the usual coordinatization rule
         messages = build_symplanner_codegen_messages("Solve the triangle area.", "{}", subject="Geometry")
         self.assertIn("GEOMETRIC COORDINATIZATION RULE", messages[-1]["content"])
+        self.assertIn("assign concrete coordinates", messages[-1]["content"])
         
+        # 2. Geometry with concrete coordinates triggers the warning rule
+        messages = build_symplanner_codegen_messages("The parallelogram vertices are (1, 2) and (3, 4).", "{}", subject="Geometry")
+        self.assertIn("GEOMETRIC COORDINATIZATION RULE", messages[-1]["content"])
+        self.assertIn("Since coordinates are already given", messages[-1]["content"])
+
+        # 3. Algebra with speed graph doesn't trigger geometry rules
+        messages = build_symplanner_codegen_messages("Find the average speed of the training run.", "{}", subject="Algebra")
+        self.assertNotIn("GEOMETRIC COORDINATIZATION RULE", messages[-1]["content"])
+
+        # 4. Algebra triggers algebra-specific rules
         messages = build_symplanner_codegen_messages("Solve the equation x^3 = 8.", "{}", subject="Algebra")
         self.assertIn("Avoid using sp.solve()", messages[-1]["content"])
 
