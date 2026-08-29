@@ -24,6 +24,8 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertTrue(check_exact_match(["5.00000000000000"], "x=5"))
         self.assertTrue(check_exact_match("x=5", "5"))
         self.assertTrue(check_exact_match(["3.00000000000000", "1.57079632679490"], r"\left( 3, \frac{\pi}{2} \right)"))
+        self.assertTrue(check_exact_match("4/3", r"\frac43"))
+        self.assertTrue(check_exact_match("1/2", r"\frac12"))
 
 
     def test_base_notation_is_not_collapsed_to_decimal(self):

@@ -155,4 +155,25 @@ def build_problem_hints(question: str) -> list[str]:
             "When solving underdetermined systems of equations (where the number of variables is greater than the number of equations), sp.solve returns a list of dicts with parameterized solutions. To find the ratio of two variables T and S, solve for T in terms of S, or substitute a dummy value (e.g. S=1) into the system to find the numerical values of the other variables before dividing."
         )
 
+    if "is a parabola, circle, ellipse, hyperbola" in text:
+        hints.append(
+            "For classifying conic sections of the form Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0: calculate the discriminant delta = B**2 - 4*A*C. If delta < 0, the conic is an ellipse (or a circle if B==0 and A==C). If delta == 0, it is a parabola. If delta > 0, it is a hyperbola. Ensure you extract the coefficients A (coefficient of x**2), B (coefficient of x*y), and C (coefficient of y**2) correctly after expanding the equation."
+        )
+    if "sum of the roots" in text or "product of the roots" in text or "sum of roots" in text or "product of roots" in text:
+        hints.append(
+            "For the sum or product of roots of a polynomial equation, use Vieta's formulas directly instead of solving for the roots individually: for a polynomial ax^n + bx^(n-1) + ... = 0, the sum of roots is -b/a. If you do solve and sum/multiply the roots, always call sp.simplify(result) to reduce any complex symbolic radical expressions."
+        )
+    if "roots of unity" in text or ("complex number" in text and "omega" in text):
+        hints.append(
+            "For expressions involving roots of unity (e.g. omega**3 = 1): define omega as a symbol, and express other powers in terms of omega (e.g. omega**2 is omega**2). Do not solve for omega numerically and substitute different roots into different parts of the expression. Simplify the expression algebraically first using sp.simplify(expr) or polynomial division/relations (e.g., omega**2 + omega + 1 = 0)."
+        )
+    if "domain of the function" in text or "real number value" in text or "range of the function" in text:
+        hints.append(
+            "To find the domain of a real function: for square roots sqrt(g(x)), solve g(x) >= 0. For denominators h(x), find where h(x) != 0. Note: do not use Python's != operator directly with SymPy symbols (e.g. h(x) != 0 evaluates eagerly to True). Use sp.Ne(h(x), 0) instead. To solve inequalities, use sp.solve(g(x) >= 0, x) or sp.solveset(g(x) >= 0, x, domain=sp.S.Reals)."
+        )
+    if "integers from" in text and ("different integers" in text or "represent four different" in text):
+        hints.append(
+            "When equations represent integers in a bounded range (e.g., from 1 to 9): if the system is underdetermined, solve the equations to express the variables in terms of a free parameter. Then, iterate through all possible integer values for the free parameter in the given range and check which parameter value makes all variables distinct integers within the range."
+        )
+
     return hints

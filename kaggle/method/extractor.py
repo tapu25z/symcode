@@ -267,6 +267,10 @@ def _normalize_fractions(text: str) -> str:
     """
     Chuyển đổi đệ quy các phân số LaTeX (\\frac, \\dfrac, \\tfrac, \\cfrac) thành dạng (a)/(b).
     """
+    # 1. First handle single-character fractions without braces (e.g. \frac43 -> ((4)/(3)))
+    text = re.sub(r"\\(?:d|t|c)?frac\s*([0-9a-zA-Z])\s*([0-9a-zA-Z])", r"((\1)/(\2))", text)
+    
+    # 2. Then handle standard brace fractions
     pattern = r"\\(?:d|t|c)?frac\s*\{((?:[^{}]|\{[^{}]*\})*)\}\s*\{((?:[^{}]|\{[^{}]*\})*)\}"
     prev = ""
     curr = text
