@@ -46,7 +46,11 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
     ))
     if asks_text_entity and not re.search(r"\bfor which\b", text):
         spec["answer_type"] = "text"
+    elif re.search(r"\b(even|odd|neither)\b", text) or "true or false" in text:
+        spec["answer_type"] = "text"
     elif re.search(r"\bin terms of\b|\bexpress .* using\b|\bpolynomial in\b|\bfunction .* of\b", text):
+        spec["answer_type"] = "symbolic"
+    elif re.search(r"\b(simplify|expand|factor)\b", text) and re.search(r"\b[a-z]\b", text):
         spec["answer_type"] = "symbolic"
     elif re.search(
         r"\bfind\s+(?:all\s+|the\s+)?(?:values|roots|solutions|zeros)\b|\benter\s+all\b|\bwhat\s+are\s+(?:the\s+)?(?:roots|solutions|zeros)\b",
@@ -55,7 +59,7 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
         spec["answer_type"] = "set"
     elif re.search(r"\b(matrix|determinant|eigenvalue)\b", text):
         spec["answer_type"] = "matrix"
-    elif not asks_numeric_value and re.search(r"\b(polar coordinates?|ordered pair|ordered triple|ordered quadruple|coordinate pair|coordinates of)\b", text):
+    elif not asks_numeric_value and re.search(r"\b(polar coordinates?|ordered pair|ordered triple|ordered quadruple|coordinate pair|coordinates of|coordinates of the point|find the point|what point)\b", text):
         spec["answer_type"] = "tuple"
     elif re.search(r"\b(base|binary|octal|hexadecimal|base-\d+)\b", text) and re.search(r"\b(write|express|convert|in base)\b", text):
         spec["answer_type"] = "base_notation"
