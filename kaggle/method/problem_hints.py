@@ -167,13 +167,17 @@ def build_problem_hints(question: str) -> list[str]:
         hints.append(
             "For expressions involving roots of unity (e.g. omega**3 = 1): define omega as a symbol, and express other powers in terms of omega (e.g. omega**2 is omega**2). Do not solve for omega numerically and substitute different roots into different parts of the expression. Simplify the expression algebraically first using sp.simplify(expr) or polynomial division/relations (e.g., omega**2 + omega + 1 = 0)."
         )
-    if "domain of the function" in text or "real number value" in text or "range of the function" in text:
+    if "domain of the function" in text or "real number value" in text or "range of the function" in text or "multiple of" in text:
         hints.append(
-            "To find the domain of a real function: for square roots sqrt(g(x)), solve g(x) >= 0. For denominators h(x), find where h(x) != 0. Note: do not use Python's != operator directly with SymPy symbols (e.g. h(x) != 0 evaluates eagerly to True). Use sp.Ne(h(x), 0) instead. To solve inequalities, use sp.solve(g(x) >= 0, x) or sp.solveset(g(x) >= 0, x, domain=sp.S.Reals)."
+            "To find the domain of a real function: for square roots sqrt(g(x)), solve g(x) >= 0. For denominators h(x), find where h(x) != 0. Note: do not use Python's == or != or % operators directly with SymPy symbols inside conditional loops or lists (e.g. h(x) != 0 or G % 13 == 0 evaluates eagerly to a Python boolean). Use sp.Eq(G % 13, 0) and sp.Ne(h(x), 0) instead. To solve inequalities, use sp.solve(g(x) >= 0, x) or sp.solveset(g(x) >= 0, x, domain=sp.S.Reals)."
         )
     if "integers from" in text and ("different integers" in text or "represent four different" in text):
         hints.append(
             "When equations represent integers in a bounded range (e.g., from 1 to 9): if the system is underdetermined, solve the equations to express the variables in terms of a free parameter. Then, iterate through all possible integer values for the free parameter in the given range and check which parameter value makes all variables distinct integers within the range."
+        )
+    if ("assume" in text or "for all values of" in text) and re.search(r"\b[a-z]\b", text) and ("equation" in text or "solution" in text):
+        hints.append(
+            "When an inequality, equation comparison, or identity holds for all values of a parameter in a range (e.g. 0 < r < 3): do not leave the parameter as a free symbol during numerical solving (like fsolve). Substitute a sample numerical value for the parameter in that range (e.g. r = 1.5) to solve the equations and make the comparison numerically."
         )
 
     return hints
