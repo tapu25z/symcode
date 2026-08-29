@@ -627,11 +627,19 @@ def evaluate_symplanner(
         # Bỏ qua Planner cho Level 1, 2, 3 để tối ưu hóa tốc độ và độ chính xác các câu dễ
         # -------------------------------------------------------------
         level = item.get("level")
+        subject_name = str(item.get("subject") or "").strip().lower()
         use_planner = True
         if level is not None and level in (1, 2, 3):
             use_planner = False
+            # Force planner for complex subjects
+            if any(s in subject_name for s in ["geometry", "counting", "probability", "precalculus", "intermediate algebra"]):
+                use_planner = True
         elif level is None:
             use_planner = False  # Bỏ qua Planner cho gsm8k hoặc tập dữ liệu không phân cấp độ
+            
+        # Force planner if diagram / asymptote is present
+        if "[asy]" in question.lower() or "diagram" in question.lower():
+            use_planner = True
 
         if use_planner:
             planner_messages = build_planner_messages(question)
