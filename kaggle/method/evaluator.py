@@ -633,7 +633,7 @@ def evaluate_symplanner(
 
         if use_planner:
             planner_messages = build_planner_messages(question)
-            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=384)
+            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
             total_tokens += plan_tokens
             raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
             planner_note, planner_meta, planner_errors = parse_planner_contract(raw_plan, question)

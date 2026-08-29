@@ -4,7 +4,6 @@ Direct, CoT, SymCode và SymPlanner (Decoupled Divide-and-Plan Pipeline: Planner
 """
 
 import re
-import json
 from typing import Dict, List, Optional, Any
 
 from .target_contract import infer_target_spec
@@ -14,66 +13,39 @@ from .problem_hints import build_problem_hints
 # 1. PLANNER PROMPTS (Turn 1: Phân tích & Lập kế hoạch ngắn gọn, không sinh code)
 # ==============================================================================
 
-PLANNER_SYSTEM_PROMPT = r"""You are a careful mathematical planner.
+PLANNER_SYSTEM_PROMPT = r"""You are a mathematical planner for a Python/SymPy solver.
 
-Think through the problem, then output a compact structured plan that will be used by a separate code generator.
-The plan must be short, practical, and precise. Do NOT generate Python code.
+Return ONLY these labeled lines:
+# Target: quantity to find
+# Given: important values and relations
+# Step 1: ...
+# Step 2: ...
+# Step 3: ...
+# Answer type: number|symbolic|tuple|set|matrix|text|base_notation
 
-Output ONLY this JSON object:
-{
-  "target_unknown": "exact quantity or simplified expression to find",
-  "given_constants": ["key numbers, parameters and relations from problem"],
-  "strategy": "sequential arithmetic OR symbolic equation solving (sp.solve)",
-  "steps": ["step 1", "step 2", "step 3"],
-  "pitfalls": ["unit/sign/rounding/free-variable pitfalls to avoid"],
-  "answer_type": "number|symbolic|tuple|set|matrix|text|base_notation"
-}
-
-Keep the final JSON under 120 words."""
+Rules:
+- Keep every line short and factual.
+- Do not write Python code, JSON, markdown, or <think> tags.
+- Use fewer steps when the problem is simple."""
 
 # ==============================================================================
 # 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
 # ==============================================================================
 
-SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
+SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are a Python/SymPy solver.
 
-Given one math problem and planner notes, return ONLY executable Python code enclosed in a single ```python ... ``` block.
-Do NOT write explanations. Do NOT output markdown text outside the code fence. Do NOT output <think> tags.
+Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
-The code MUST:
-1. import sympy as sp and import json (plus math, fractions, itertools if helpful).
-2. Define given values and variables clearly.
-3. Compute the requested target quantity:
-   - For sequential word problems (GSM8K style): Compute step-by-step using Python/SymPy arithmetic.
-   - For algebraic systems (MATH style): Use sp.symbols(...) with domain assumptions and sp.solve(...).
-4. NEUROSYMBOLIC DUAL-PATH PROGRAMMING & SELF-CONSISTENCY:
-   - Whenever possible (especially for counting, probability, modular arithmetic, and optimization), write the solver with two independent paths:
-     * Path A (Analytical/Symbolic): Use SymPy equations, Vieta's formulas, or algebra.
-     * Path B (Empirical/Simulation/Search): Use a brute-force search loop, Monte Carlo simulation, or range iteration to verify Path A.
-   - Compare the results of both paths. If they differ, print the empirical search result or the one that satisfies all constraints.
-   - Guard symbolic solving calls (e.g., sp.solve) with try-except blocks. If SymPy fails, raise an exception, or returns empty/invalid results, automatically fallback to a robust numerical solver (e.g. fsolve, minimize) or bounded brute-force search loop inside the Python script to find the answer.
-5. CRITICAL RULES:
-   - Never output `None`, `Invalid`, or undefined variables.
-   - Do NOT create conditional `if/else` checks that assign `None` or `Invalid`.
-   - Never call `.evalf()` on Python standard `int` or `float`.
-   - Prefer exact SymPy/Rational arithmetic. Do not convert to float unless the problem explicitly asks for a decimal approximation.
-   - Always solve for the requested target in the required output type; never print an intermediate quantity.
-   - Respect the target output type inferred from the question: text/entity names must not be replaced by a numeric score; symbolic targets must preserve named parameters; sets must include all solutions; tuples must contain all coordinates; base notation must be preserved.
-   - Never silently replace a diagram-dependent quantity with an arbitrary numeric guess. If the diagram is required, encode its stated coordinates/relations explicitly.
-   - Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
-   - Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
-   - Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS. They contain exact math models, safe SymPy API formulas, or search procedures required for this specific problem.
-   - Double check all mathematical operators (+, -, *, /) in the prompt against your generated code. For example, if the problem subtracts two fractions, write a minus sign (-), not a plus sign (+).
-6. Before printing, add cheap internal checks whenever possible:
-   - Substitute candidate solutions back into equations/inequalities.
-   - For small combinatorics, brute-force enumerate and compare against any formula.
-   - For symbolic identities, expand/simplify both sides at exact or multiple sample values.
-   - For optimization/norm problems, compare analytic result against numeric samples.
-7. Print exactly one JSON line and nothing else at the very end:
-   print(json.dumps({"answer": str(display_answer), "canonical_answer": str(canonical_answer), "answer_type": "<target type>", "unit": None, "variables": {}}, default=str))
-   Do not use `.format(...)` or an f-string to hand-build JSON; braces in JSON conflict with those formatting methods.
-   `answer_type` must match the OUTPUT CONTRACT.
-"""
+Rules:
+1. Import sympy as sp and json. Use exact arithmetic, especially sp.Rational; use floats only when requested.
+2. Solve the requested target, not an intermediate value. Follow the problem and planner steps.
+3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
+4. Use finite loops only. Never use an unbounded while loop.
+5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
+6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
+7. Any reasoning comment must start with "# Step <number>:".
+8. At the end, print exactly one JSON line with keys answer, canonical_answer, answer_type, unit, and variables using json.dumps(..., default=str).
+9. Match the OUTPUT REQUIREMENT, including text, symbolic, tuple, set, matrix, and base notation targets."""
 
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -97,43 +69,32 @@ The code MUST:
 # 3. DEBUG / REPAIR PROMPTS (Turn 3: Sửa lỗi mã nguồn có chủ đích)
 # ==============================================================================
 
-DEBUG_SYSTEM_PROMPT = r"""You are fixing Python/SymPy code for a math problem.
+DEBUG_SYSTEM_PROMPT = r"""You are repairing Python/SymPy code for a math problem.
 
-Return ONLY corrected executable Python code enclosed in a single ```python ... ``` block.
-Do NOT write explanations. Do NOT output <think> tags.
+Return ONLY corrected executable Python code in one ```python ... ``` block.
+Fix the reported issue and keep correct code. Do not explain or output <think> tags.
 
-Fix the shown failure:
-- Syntax error / Indentation error
-- Runtime error / AttributeError (e.g. calling .evalf() on int/float)
-- Free variables remaining in answer (e.g., answer contains symbols like '48 - 6*z')
-- Empty stdout or wrong output format
-- Answer evaluated to None / Invalid
+Rules:
+- Recompute the target; do not hard-code an answer.
+- Use exact arithmetic where possible and handle fragile solver failures.
+- Use finite loops only; never use an unbounded while loop.
+- Any reasoning comment must start with "# Step <number>:".
+- Print only the required final result."""
 
-Requirements:
-1. Ensure the code computes a concrete numerical value or simplified expression.
-2. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
-3. Never write infinite loops or unbounded while loops. Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
-4. Print ONLY the final answer in LaTeX boxed format:
-   print(f"\\boxed{{{final_answer}}}")
-"""
+SYMPLANNER_DEBUG_SYSTEM_PROMPT = r"""You are repairing Python/SymPy code for a math problem.
 
-SYMPLANNER_DEBUG_SYSTEM_PROMPT = r"""You are fixing Python/SymPy code for a math problem.
+Return ONLY corrected executable Python code in one ```python ... ``` block.
+Fix the reported execution or verification issue. Recompute the target; do not
+hard-code an answer. Keep correct code and make the smallest useful repair.
 
-Return ONLY corrected executable Python code enclosed in a single ```python ... ``` block.
-Do NOT write explanations or <think> tags.
-
-Fix the shown execution, contract, or verifier failure. Recompute the answer from
-the problem; do not hard-code a replacement. Print exactly one JSON line with
-exactly answer, canonical_answer, answer_type, unit, and variables. Keep the
-answer_type required by the OUTPUT CONTRACT and do not print debug output. Use
-print(json.dumps(..., default=str)); do not hand-format JSON with .format or an
-f-string.
-
-CRITICAL RULES:
-- Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
-- Never write infinite loops or unbounded while loops. Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
-- Read and strictly apply the # PROBLEM-SPECIFIC IMPLEMENTATION HINTS provided in the context to construct a correct solution.
-"""
+Rules:
+- Use exact arithmetic where possible and handle fragile solver failures.
+- Use finite loops only; never use an unbounded while loop.
+- Any reasoning comment must start with "# Step <number>:".
+- Do not print debug text or intermediate values.
+- Print exactly one JSON line with keys answer, canonical_answer, answer_type,
+  unit, and variables using json.dumps(..., default=str).
+- Match the OUTPUT REQUIREMENT."""
 
 # ==============================================================================
 # 4. BASELINE PROMPTS (Direct & CoT)
@@ -187,22 +148,34 @@ def build_planner_messages(question: str) -> List[Dict[str, str]]:
     """Xây dựng thông điệp cho Turn 1: Lập kế hoạch phân tích đề bài."""
     return [
         {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\nThink if needed, then output the compact JSON plan only. Do not write code."}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\nReturn the labeled plan only."}
     ]
+
+
+def format_output_requirement(target_spec: Dict[str, Any]) -> str:
+    """Render the output contract as short natural-language lines for small models."""
+    unit = target_spec.get("unit") if target_spec.get("unit") is not None else "None"
+    diagram = "yes" if target_spec.get("diagram_required") else "no"
+    return "\n".join([
+        "# OUTPUT REQUIREMENT",
+        f"- Answer type: {target_spec.get('answer_type', 'number')}",
+        f"- Unit: {unit}",
+        f"- Diagram relations required: {diagram}",
+    ])
 
 
 def build_symplanner_codegen_messages(question: str, planner_note: str = "") -> List[Dict[str, str]]:
     """Xây dựng thông điệp cho Turn 2: Sinh mã nguồn Python/SymPy từ đề bài + Kế hoạch."""
     plan_block = planner_note.strip() or "Planner note unavailable. Solve directly from first principles."
     target_spec = infer_target_spec(question, planner_note)
-    target_block = json.dumps(target_spec, sort_keys=True)
+    target_block = format_output_requirement(target_spec)
     user_content = f"""# PROBLEM
 {question}
 
 # PLANNER NOTES
 {plan_block}
 
-# OUTPUT CONTRACT
+# OUTPUT REQUIREMENT
 {target_block}
 
 Return executable Python code only enclosed in ```python ... ```. Do not write explanations."""
@@ -245,7 +218,7 @@ def build_symplanner_debug_messages(
 
     feedback_text = "\n".join(feedback_lines)
     plan_block = planner_note.strip() or "N/A"
-    target_block = json.dumps(infer_target_spec(question, planner_note), sort_keys=True)
+    target_block = format_output_requirement(infer_target_spec(question, planner_note))
 
     user_text = f"""# PROBLEM
 {question}
@@ -253,7 +226,7 @@ def build_symplanner_debug_messages(
 # PLANNER NOTES
 {plan_block}
 
-# OUTPUT CONTRACT
+# OUTPUT REQUIREMENT
 {target_block}
 
 # PREVIOUS CODE

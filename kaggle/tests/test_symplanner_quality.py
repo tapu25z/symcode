@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
-from method.prompts import build_symplanner_codegen_messages
+from method.prompts import build_symplanner_codegen_messages, build_symplanner_debug_messages
 from method.problem_hints import build_problem_hints
 from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
@@ -62,10 +62,37 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(infer_target_spec("Convert the point to polar coordinates")["answer_type"], "tuple")
 
 
-    def test_codegen_prompt_contains_target_contract(self):
+    def test_codegen_prompt_contains_compact_output_requirement(self):
         messages = build_symplanner_codegen_messages("Which student has the greatest speed?", "{}")
-        self.assertIn("OUTPUT CONTRACT", messages[-1]["content"])
-        self.assertIn('"answer_type": "text"', messages[-1]["content"])
+        self.assertIn("OUTPUT REQUIREMENT", messages[-1]["content"])
+        self.assertIn("Answer type: text", messages[-1]["content"])
+        self.assertNotIn('"answer_type": "text"', messages[-1]["content"])
+
+
+    def test_planner_accepts_compact_labeled_format(self):
+        raw = """# Target: the fastest student
+# Given: each student's distance and time
+# Step 1: compute each average speed
+# Step 2: compare the speeds
+# Step 3: choose the greatest speed
+# Answer type: text"""
+        note, parsed, errors = parse_planner_contract(raw, "Which student has the greatest speed?")
+        self.assertTrue(note)
+        self.assertFalse(errors)
+        self.assertEqual(parsed["target_unknown"], "the fastest student")
+        self.assertEqual(parsed["answer_type"], "text")
+        self.assertEqual(len(parsed["steps"]), 3)
+
+
+    def test_debug_prompt_uses_compact_output_requirement(self):
+        messages = build_symplanner_debug_messages(
+            "What is 2 + 2?",
+            "print(2 + )",
+            execution_status="error",
+            error_tb="SyntaxError",
+        )
+        self.assertIn("OUTPUT REQUIREMENT", messages[-1]["content"])
+        self.assertNotIn('"answer_type":', messages[-1]["content"])
 
 
     def test_problem_hints_are_answer_free_but_algorithmic(self):

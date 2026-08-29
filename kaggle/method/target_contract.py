@@ -16,12 +16,15 @@ PLANNER_TYPE_ALIASES = {
     "integer": "number",
     "polynomial": "symbolic",
     "expression": "symbolic",
+    "base notation": "base_notation",
 }
 
 
 def _explicit_planner_answer_type(planner_note: str) -> str | None:
     text = str(planner_note or "")
     match = re.search(r'["\']answer_type["\']\s*:\s*["\']([^"\']+)["\']', text)
+    if not match:
+        match = re.search(r"^\s*#\s*Answer\s+type\s*:\s*([^\r\n]+)", text, flags=re.IGNORECASE | re.MULTILINE)
     if not match:
         return None
     answer_type = match.group(1).strip().lower().replace("-", "_")
@@ -70,23 +73,73 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
     return spec
 
 
+def _parse_labeled_planner(text: str) -> dict[str, Any] | None:
+    """Parse the compact line format used by the <=8B planner."""
+    has_label = re.search(
+        r"^\s*#\s*(?:Target|Given|Step\s+\d+|Answer\s+type)\s*:",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not has_label:
+        return None
+
+    def field(label: str) -> str:
+        match = re.search(
+            rf"^\s*#\s*{label}\s*:\s*([^\r\n]*)",
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        return match.group(1).strip() if match else ""
+
+    given_text = field("Given")
+    given = [part.strip() for part in given_text.split(";") if part.strip()] or ([given_text] if given_text else [])
+    steps = [
+        match.group(1).strip()
+        for match in re.finditer(
+            r"^\s*#\s*Step\s+\d+\s*:\s*([^\r\n]*)",
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if match.group(1).strip()
+    ]
+    answer_type = field(r"Answer\s+type").lower().replace("-", "_")
+    answer_type = PLANNER_TYPE_ALIASES.get(answer_type, answer_type)
+    return {
+        "target_unknown": field("Target"),
+        "given_constants": given,
+        "strategy": "",
+        "steps": steps,
+        "pitfalls": [],
+        "answer_type": answer_type,
+    }
+
+
 def parse_planner_contract(raw_plan: str, question: str = "") -> tuple[str, dict[str, Any], list[str]]:
-    """Parse planner JSON and repair only safe missing metadata locally."""
+    """Parse compact labeled planner output, with backward-compatible JSON support."""
     text = str(raw_plan or "").strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+    if "<think>" in text:
+        text = text.split("<think>", 1)[0].strip()
+    if "</think>" in text:
+        text = text.split("</think>", 1)[-1].strip()
     fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
     candidate = fenced.group(1).strip() if fenced else text
     errors: list[str] = []
     parsed: dict[str, Any] = {}
-    try:
-        value = json.loads(candidate)
-        if isinstance(value, Mapping):
-            parsed = dict(value)
-        else:
-            errors.append("planner output must be a JSON object")
-    except json.JSONDecodeError as exc:
-        errors.append(f"planner JSON parse failed: {exc.msg}")
-    required = ("target_unknown", "given_constants", "strategy", "steps", "pitfalls", "answer_type")
-    errors.extend(f"planner missing key: {key}" for key in required if key not in parsed)
+    labeled = _parse_labeled_planner(candidate)
+    if labeled is not None:
+        parsed = labeled
+    else:
+        try:
+            value = json.loads(candidate)
+            if isinstance(value, Mapping):
+                parsed = dict(value)
+            else:
+                errors.append("planner output must be a JSON object")
+        except json.JSONDecodeError as exc:
+            errors.append(f"planner JSON parse failed: {exc.msg}")
+        required = ("target_unknown", "given_constants", "strategy", "steps", "pitfalls", "answer_type")
+        errors.extend(f"planner missing key: {key}" for key in required if key not in parsed)
     inferred = infer_target_spec(question, candidate)
     answer_type = str(parsed.get("answer_type", "")).strip().lower().replace("-", "_")
     answer_type = PLANNER_TYPE_ALIASES.get(answer_type, answer_type)
@@ -94,8 +147,6 @@ def parse_planner_contract(raw_plan: str, question: str = "") -> tuple[str, dict
         parsed["answer_type"] = answer_type
     else:
         parsed["answer_type"] = inferred["answer_type"]
-        if "answer_type" not in parsed:
-            errors.append("planner answer_type is missing")
     for key in ("given_constants", "steps", "pitfalls"):
         if key in parsed and not isinstance(parsed[key], list):
             errors.append(f"planner {key} must be a list")
