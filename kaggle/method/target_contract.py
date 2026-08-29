@@ -76,7 +76,7 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
 def _parse_labeled_planner(text: str) -> dict[str, Any] | None:
     """Parse the compact line format used by the <=8B planner."""
     has_label = re.search(
-        r"^\s*#\s*(?:Target|Given|Step\s+\d+|Answer\s+type)\s*:",
+        r"^\s*#\s*(?:Subject|Target|Given|Step\s+\d+|Answer\s+type)\s*:",
         text,
         flags=re.IGNORECASE | re.MULTILINE,
     )
@@ -105,6 +105,7 @@ def _parse_labeled_planner(text: str) -> dict[str, Any] | None:
     answer_type = field(r"Answer\s+type").lower().replace("-", "_")
     answer_type = PLANNER_TYPE_ALIASES.get(answer_type, answer_type)
     return {
+        "subject": field("Subject").lower(),
         "target_unknown": field("Target"),
         "given_constants": given,
         "strategy": "",
@@ -172,7 +173,7 @@ def target_contract_feedback(question: str, candidate_answer: Any, planner_note:
         if not (answer.startswith(("[", "{")) or "," in answer):
             return "unknown", "Verification Unknown: scalar answer is possible for a single-solution set request."
     elif spec["answer_type"] == "tuple":
-        if not (answer.startswith("(") and answer.endswith(")")):
+        if not ((answer.startswith("(") and answer.endswith(")")) or (answer.startswith("[") and answer.endswith("]"))):
             return "fail", "Verification Error: target requires a coordinate tuple."
     elif spec["answer_type"] == "base_notation":
         if not re.search(r"[_\\]", answer):

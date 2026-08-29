@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
-from method.prompts import build_symplanner_codegen_messages, build_symplanner_debug_messages
+from method.prompts import build_symplanner_codegen_messages, build_symplanner_debug_messages, build_planner_review_messages
 from method.problem_hints import build_problem_hints
 from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
@@ -68,9 +68,24 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("Answer type: text", messages[-1]["content"])
         self.assertNotIn('"answer_type": "text"', messages[-1]["content"])
 
+    def test_subject_specific_rules_injection(self):
+        messages = build_symplanner_codegen_messages("Solve the triangle area.", "{}", subject="Geometry")
+        self.assertIn("GEOMETRIC COORDINATIZATION RULE", messages[-1]["content"])
+        
+        messages = build_symplanner_codegen_messages("Solve the equation x^3 = 8.", "{}", subject="Algebra")
+        self.assertIn("Avoid using sp.solve()", messages[-1]["content"])
+
+    def test_planner_review_messages_creation(self):
+        rules = ["Use coordinate geometry."]
+        messages = build_planner_review_messages("Triangle problem", "Initial plan", rules)
+        self.assertEqual(len(messages), 2)
+        self.assertIn("Use coordinate geometry.", messages[-1]["content"])
+        self.assertIn("Initial plan", messages[-1]["content"])
+
 
     def test_planner_accepts_compact_labeled_format(self):
-        raw = """# Target: the fastest student
+        raw = """# Subject: geometry
+# Target: the fastest student
 # Given: each student's distance and time
 # Step 1: compute each average speed
 # Step 2: compare the speeds
@@ -79,6 +94,7 @@ class SymPlannerQualityTests(unittest.TestCase):
         note, parsed, errors = parse_planner_contract(raw, "Which student has the greatest speed?")
         self.assertTrue(note)
         self.assertFalse(errors)
+        self.assertEqual(parsed.get("subject"), "geometry")
         self.assertEqual(parsed["target_unknown"], "the fastest student")
         self.assertEqual(parsed["answer_type"], "text")
         self.assertEqual(len(parsed["steps"]), 3)
@@ -108,6 +124,10 @@ class SymPlannerQualityTests(unittest.TestCase):
     def test_static_lint_catches_known_sympy_hazards(self):
         findings = lint_sympy_code("sol = sp.solve(eq, x)[0]\nvalue = x.evalf()\nprint('{\"answer\": {}}'.format(value))")
         self.assertGreaterEqual(len(findings), 3)
+
+    def test_static_lint_catches_recursion_hazard(self):
+        findings = lint_sympy_code("def eval_expr(sub_expr):\n    return eval_expr(sub_expr[:-1])")
+        self.assertTrue(any("recursive function call detected" in f for f in findings))
 
     def test_symplanner_sandbox_enforces_structured_output(self):
         code = 'import json; print(json.dumps({"answer":"5","canonical_answer":"5","answer_type":"number","unit":None,"variables":{}}))'

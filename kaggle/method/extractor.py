@@ -336,6 +336,11 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     # SymPy uses ``I`` for the imaginary unit; normalize common LaTeX/plain-text variants.
     s = re.sub(r"(?<![A-Za-z])i(?![A-Za-z])", "I", s)
     
+    # Normalize LaTeX symbols, pm, infinity, and other backslash commands
+    s = re.sub(r'\\pm\b', 'pm', s)
+    s = re.sub(r'\\?infty\b', 'oo', s)
+    s = re.sub(r'\\([a-zA-Z]+)', r'\1', s)
+    
     # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 -> 1200)
     s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
     
@@ -410,6 +415,43 @@ def _collection_parts(text: str) -> Optional[List[str]]:
     return parts if len(parts) > 1 else None
 
 
+def _expand_pm(s: str) -> List[str]:
+    # Expand \pm / pm notation into a list of plus and minus choices
+    s_clean = re.sub(r'\\pm\b', 'pm', s)
+    if 'pm' in s_clean:
+        parts = s_clean.split('pm')
+        if len(parts) == 2:
+            left = parts[0].strip()
+            right = parts[1].strip()
+            if not left:
+                left = "0"
+            return [f"({left})+({right})", f"({left})-({right})"]
+    return [s]
+
+
+def _parse_set_or_interval(text: str):
+    import sympy
+    import re
+    s = text.strip()
+    s = re.sub(r'\\?infty\b', 'oo', s)
+    s = re.sub(r'\\([a-zA-Z]+)', r'\1', s)
+    if len(s) >= 5 and s[0] in r"([\]" and s[-1] in r")]\[":
+        left_bracket = s[0]
+        right_bracket = s[-1]
+        inner = s[1:-1]
+        parts = _split_top_level(inner)
+        if len(parts) == 2:
+            try:
+                left_val = _parse_math_expression(parts[0])
+                right_val = _parse_math_expression(parts[1])
+                left_open = left_bracket in "(]"
+                right_open = right_bracket in ")["
+                return sympy.Interval(left_val, right_val, left_open=left_open, right_open=right_open)
+            except Exception:
+                pass
+    return _parse_math_expression(text)
+
+
 def check_exact_match(pred: Optional[str], gt: str) -> bool:
     """
     Kiểm tra độ chính xác tuyệt đối (Exact Match) giữa câu trả lời dự đoán và đáp án chuẩn.
@@ -453,6 +495,28 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
     except Exception:
         pass
 
+    # Order-independent collection / list / set / pm matching
+    gt_pm = _expand_pm(norm_gt)
+    pred_pm = _expand_pm(norm_pred)
+    if len(gt_pm) > 1 or len(pred_pm) > 1:
+        p_parts = _collection_parts(norm_pred) if len(pred_pm) == 1 else pred_pm
+        g_parts = _collection_parts(norm_gt) if len(gt_pm) == 1 else gt_pm
+        if p_parts and g_parts and len(p_parts) == len(g_parts):
+            matched = [False] * len(g_parts)
+            all_matched = True
+            for p in p_parts:
+                found = False
+                for idx, g in enumerate(g_parts):
+                    if not matched[idx] and check_exact_match(p, g):
+                        matched[idx] = True
+                        found = True
+                        break
+                if not found:
+                    all_matched = False
+                    break
+            if all_matched:
+                return True
+
     try:
         import sympy
         pred_parts = _collection_parts(norm_pred)
@@ -462,10 +526,35 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
                 return check_exact_match(pred_parts[0], norm_gt)
             if gt_parts and not pred_parts and len(gt_parts) == 1:
                 return check_exact_match(norm_pred, gt_parts[0])
-            if pred_parts and gt_parts and len(pred_parts) == len(gt_parts) and all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
+            if pred_parts and gt_parts and len(pred_parts) == len(gt_parts):
+                # Order-independent check for standard collections
+                matched = [False] * len(gt_parts)
+                all_matched = True
+                for p in pred_parts:
+                    found = False
+                    for idx, g in enumerate(gt_parts):
+                        if not matched[idx] and check_exact_match(p, g):
+                            matched[idx] = True
+                            found = True
+                            break
+                    if not found:
+                        all_matched = False
+                        break
+                if all_matched:
+                    return True
+                    
+        p_sym = _parse_set_or_interval(norm_pred)
+        g_sym = _parse_set_or_interval(norm_gt)
+        
+        # Explicit checks for sympy Set / Interval objects to avoid TypeError on subtraction
+        if isinstance(p_sym, sympy.Set) and isinstance(g_sym, sympy.Set):
+            if p_sym == g_sym:
                 return True
-        p_sym = _parse_math_expression(norm_pred)
-        g_sym = _parse_math_expression(norm_gt)
+            if isinstance(p_sym, sympy.Interval) and isinstance(g_sym, sympy.Interval):
+                if p_sym.start == g_sym.start and p_sym.end == g_sym.end:
+                    return True
+            return False
+            
         diff = sympy.simplify(p_sym - g_sym)
         if diff == 0:
             return True

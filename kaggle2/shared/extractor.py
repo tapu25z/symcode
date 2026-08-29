@@ -284,11 +284,26 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     if ans is None:
         return ""
     
+    if isinstance(ans, (list, tuple, set)):
+        items = list(ans)
+        left, right = ("(", ")") if isinstance(ans, tuple) else ("[", "]")
+        return left + ",".join(normalize_answer_str(item) for item in items) + right
+
     s = str(ans).strip()
     boxed = extract_boxed_content(s)
     if boxed is not None:
         s = boxed
         
+    if s.startswith(("[", "(")) and s.endswith(("]", ")")):
+        try:
+            import ast
+            literal = ast.literal_eval(s)
+            if isinstance(literal, (list, tuple)) and not any(isinstance(item, (list, tuple, dict, set)) for item in literal):
+                left, right = ("(", ")") if isinstance(literal, tuple) else ("[", "]")
+                return left + ",".join(normalize_answer_str(item) for item in literal) + right
+        except Exception:
+            pass
+            
     s = re.sub(r"^[a-zA-Z](?:\([a-zA-Z0-9_, ]+\))?\s*=\s*", "", s).strip()
     s = re.sub(r"^ans(?:wer)?\s*=\s*", "", s, flags=re.IGNORECASE).strip()
 
@@ -314,6 +329,11 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     
     s = s.replace(r"\cdot", "*").replace(r"\times", "*").replace(r"\div", "/")
     
+    # Normalize LaTeX symbols, pm, infinity, and other backslash commands
+    s = re.sub(r'\\pm\b', 'pm', s)
+    s = re.sub(r'\\?infty\b', 'oo', s)
+    s = re.sub(r'\\([a-zA-Z]+)', r'\1', s)
+    
     # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 -> 1200)
     s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
     
@@ -334,6 +354,79 @@ def normalize_answer_str(ans: Optional[str]) -> str:
         pass
 
     return s
+
+
+def _expand_pm(s: str) -> List[str]:
+    # Expand \pm / pm notation into a list of plus and minus choices
+    s_clean = re.sub(r'\\pm\b', 'pm', s)
+    if 'pm' in s_clean:
+        parts = s_clean.split('pm')
+        if len(parts) == 2:
+            left = parts[0].strip()
+            right = parts[1].strip()
+            if not left:
+                left = "0"
+            return [f"({left})+({right})", f"({left})-({right})"]
+    return [s]
+
+
+def _split_top_level(text: str, separator: str = ",") -> List[str]:
+    """Split a tuple/set/list without breaking nested function arguments."""
+    parts: List[str] = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == separator and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    parts.append(text[start:].strip())
+    return [part for part in parts if part]
+
+
+def _parse_math_expression(text: str):
+    import sympy
+    from sympy.parsing.sympy_parser import (
+        convert_xor,
+        implicit_multiplication_application,
+        parse_expr,
+        standard_transformations,
+    )
+    local_dict = {
+        "pi": sympy.pi,
+        "sqrt": sympy.sqrt,
+        "I": sympy.I,
+        "E": sympy.E,
+        "oo": sympy.oo,
+    }
+    transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
+    return parse_expr(text, local_dict=local_dict, transformations=transformations, evaluate=True)
+
+
+def _parse_set_or_interval(text: str):
+    import sympy
+    import re
+    s = text.strip()
+    s = re.sub(r'\\?infty\b', 'oo', s)
+    s = re.sub(r'\\([a-zA-Z]+)', r'\1', s)
+    if len(s) >= 5 and s[0] in r"([\]" and s[-1] in r")]\[":
+        left_bracket = s[0]
+        right_bracket = s[-1]
+        inner = s[1:-1]
+        parts = _split_top_level(inner)
+        if len(parts) == 2:
+            try:
+                left_val = _parse_math_expression(parts[0])
+                right_val = _parse_math_expression(parts[1])
+                left_open = left_bracket in "(]"
+                right_open = right_bracket in ")["
+                return sympy.Interval(left_val, right_val, left_open=left_open, right_open=right_open)
+            except Exception:
+                pass
+    return _parse_math_expression(text)
 
 
 def check_exact_match(pred: Optional[str], gt: str) -> bool:
@@ -379,25 +472,83 @@ def check_exact_match(pred: Optional[str], gt: str) -> bool:
     except Exception:
         pass
 
+    # Order-independent collection / list / set / pm matching
+    gt_pm = _expand_pm(norm_gt)
+    pred_pm = _expand_pm(norm_pred)
+    if len(gt_pm) > 1 or len(pred_pm) > 1:
+        p_parts = [p.strip() for p in norm_pred[1:-1].split(",") if p.strip()] if len(pred_pm) == 1 else pred_pm
+        g_parts = [p.strip() for p in norm_gt[1:-1].split(",") if p.strip()] if len(gt_pm) == 1 else gt_pm
+        if p_parts and g_parts and len(p_parts) == len(g_parts):
+            matched = [False] * len(g_parts)
+            all_matched = True
+            for p in p_parts:
+                found = False
+                for idx, g in enumerate(g_parts):
+                    if not matched[idx] and check_exact_match(p, g):
+                        matched[idx] = True
+                        found = True
+                        break
+                if not found:
+                    all_matched = False
+                    break
+            if all_matched:
+                return True
+
     if (norm_pred.startswith("(") and norm_pred.endswith(")") and 
         norm_gt.startswith("(") and norm_gt.endswith(")")):
         pred_parts = [p.strip() for p in norm_pred[1:-1].split(",") if p.strip()]
         gt_parts = [p.strip() for p in norm_gt[1:-1].split(",") if p.strip()]
         if len(pred_parts) == len(gt_parts) and len(pred_parts) > 0:
-            if all(check_exact_match(p, g) for p, g in zip(pred_parts, gt_parts)):
+            # Order-independent check for tuple
+            matched = [False] * len(gt_parts)
+            all_matched = True
+            for p in pred_parts:
+                found = False
+                for idx, g in enumerate(gt_parts):
+                    if not matched[idx] and check_exact_match(p, g):
+                        matched[idx] = True
+                        found = True
+                        break
+                if not found:
+                    all_matched = False
+                    break
+            if all_matched:
                 return True
 
     if (norm_pred.startswith("{") and norm_pred.endswith("}") and 
         norm_gt.startswith("{") and norm_gt.endswith("}")):
-        pred_items = {normalize_answer_str(p) for p in norm_pred[1:-1].split(",") if p.strip()}
-        gt_items = {normalize_answer_str(g) for g in norm_gt[1:-1].split(",") if g.strip()}
-        if pred_items == gt_items:
-            return True
+        pred_items = [normalize_answer_str(p) for p in norm_pred[1:-1].split(",") if p.strip()]
+        gt_items = [normalize_answer_str(g) for g in norm_gt[1:-1].split(",") if g.strip()]
+        if len(pred_items) == len(gt_items):
+            matched = [False] * len(gt_items)
+            all_matched = True
+            for p in pred_items:
+                found = False
+                for idx, g in enumerate(gt_items):
+                    if not matched[idx] and check_exact_match(p, g):
+                        matched[idx] = True
+                        found = True
+                        break
+                if not found:
+                    all_matched = False
+                    break
+            if all_matched:
+                return True
 
     try:
         import sympy
-        p_sym = sympy.sympify(norm_pred)
-        g_sym = sympy.sympify(norm_gt)
+        p_sym = _parse_set_or_interval(norm_pred)
+        g_sym = _parse_set_or_interval(norm_gt)
+        
+        # Explicit checks for sympy Set / Interval objects to avoid TypeError on subtraction
+        if isinstance(p_sym, sympy.Set) and isinstance(g_sym, sympy.Set):
+            if p_sym == g_sym:
+                return True
+            if isinstance(p_sym, sympy.Interval) and isinstance(g_sym, sympy.Interval):
+                if p_sym.start == g_sym.start and p_sym.end == g_sym.end:
+                    return True
+            return False
+            
         diff = sympy.simplify(p_sym - g_sym)
         if diff == 0:
             return True

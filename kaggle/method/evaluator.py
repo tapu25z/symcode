@@ -26,6 +26,8 @@ from .prompts import (
     build_retry_prompt_messages,
     build_symplanner_retry_prompt_messages,
     build_planner_messages,
+    build_planner_review_messages,
+    get_subject_specific_rules,
     clean_planner_note,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages
@@ -636,6 +638,20 @@ def evaluate_symplanner(
             raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
             total_tokens += plan_tokens
             raw_outputs.append(f"### Turn 1 (Planner Note):\n{raw_plan}")
+            
+            # Parse initial plan to extract predicted subject
+            initial_note, initial_meta, initial_errors = parse_planner_contract(raw_plan, question)
+            subject = item.get("subject") or initial_meta.get("subject") or ""
+
+            # Turn 1.5: Plan Review / Refinement Phase
+            specific_rules = get_subject_specific_rules(subject, question)
+            if specific_rules:
+                review_messages = build_planner_review_messages(question, raw_plan, specific_rules)
+                refined_plan, review_tokens = llm.generate_chat(review_messages, max_new_tokens_override=256)
+                total_tokens += review_tokens
+                raw_outputs.append(f"### Turn 1.5 (Refined Planner Note):\n{refined_plan}")
+                raw_plan = refined_plan
+
             planner_note, planner_meta, planner_errors = parse_planner_contract(raw_plan, question)
             if planner_errors:
                 # Do not feed truncated/non-JSON planner text into codegen. Preserve
@@ -716,7 +732,8 @@ def evaluate_symplanner(
                 candidate_answer=candidate_ans,
                 verification_status=verif_status,
                 verification_feedback=verif_feedback,
-                planner_note=planner_note
+                planner_note=planner_note,
+                subject=item.get("subject", "")
             )
             raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
             total_tokens += dbg_tokens
