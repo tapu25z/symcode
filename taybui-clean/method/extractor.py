@@ -341,8 +341,9 @@ def normalize_answer_str(ans: Optional[str]) -> str:
     s = re.sub(r'\\?infty\b', 'oo', s)
     s = re.sub(r'\\([a-zA-Z]+)', r'\1', s)
     
-    # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 -> 1200)
-    s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
+    # Loại bỏ dấu phẩy ngăn cách hàng nghìn (ví dụ 1,200 hoặc 1,450,000 -> số liền)
+    while re.search(r"(\d),(\d{3})(?!\d)", s):
+        s = re.sub(r"(\d),(\d{3})(?!\d)", r"\1\2", s)
     
     s = re.sub(r"\s+", "", s)
     

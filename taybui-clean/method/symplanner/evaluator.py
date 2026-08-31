@@ -11,6 +11,8 @@ def evaluate(
     checkpoint_file: Optional[str] = None,
     save_every: int = 5,
     verbose: bool = True,
+    ablation: str = "full",
+    method_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     from ..evaluator import evaluate_symplanner
 
@@ -22,4 +24,6 @@ def evaluate(
         checkpoint_file=checkpoint_file,
         save_every=save_every,
         verbose=verbose,
+        ablation=ablation,
+        method_name=method_name,
     )

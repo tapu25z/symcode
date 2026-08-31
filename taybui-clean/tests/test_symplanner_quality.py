@@ -12,10 +12,25 @@ from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
 from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from method.verifier import verify_candidate_answer
+from method.evaluator import evaluate_symplanner
 from method.direct import build_messages as build_direct_messages
 from method.cot import build_messages as build_cot_messages
 from method.symcode import build_messages as build_symcode_messages
 from method.symplanner import build_extract_messages as build_symplanner_folder_extract_messages, build_codegen_messages as build_symplanner_folder_codegen_messages
+
+
+class FakeAblationLLM:
+    def __init__(self):
+        self.calls = []
+
+    def generate_chat(self, messages, **kwargs):
+        self.calls.append(messages)
+        prompt = messages[-1]["content"]
+        if "Write the plan only" in prompt:
+            return "1. Add the two numbers.\n2. Print the sum.", 5
+        if "Return executable Python code" in prompt:
+            return '```python\nprint("\\\\boxed{4}")\n```', 7
+        return "# Target: the sum\n# Given: 2 and 2\n# Constraints: none", 3
 
 
 class SymPlannerQualityTests(unittest.TestCase):
@@ -37,6 +52,7 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertTrue(check_exact_match(["3.00000000000000", "1.57079632679490"], r"\left( 3, \frac{\pi}{2} \right)"))
         self.assertTrue(check_exact_match("4/3", r"\frac43"))
         self.assertTrue(check_exact_match("1/2", r"\frac12"))
+        self.assertTrue(check_exact_match("1,450,000", "1450000"))
 
     def test_base_notation_is_not_collapsed_to_decimal(self):
         self.assertFalse(check_exact_match("52", "52_8"))
@@ -86,6 +102,32 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("# EXTRACTED STATE", messages[-1]["content"])
         self.assertIn("# Target: area", messages[-1]["content"])
 
+    def test_symplanner_ablation_turn_counts(self):
+        dataset = [{"question": "What is 2 + 2?", "answer": "#### 4", "subject": "Arithmetic"}]
+
+        cases = [
+            ("extract_only", 2, True, False),
+            ("plan_only", 2, False, True),
+            ("none", 1, False, False),
+        ]
+        for ablation, expected_calls, use_extract, use_plan in cases:
+            with self.subTest(ablation=ablation):
+                llm = FakeAblationLLM()
+                results = evaluate_symplanner(
+                    dataset,
+                    llm,
+                    max_retries=0,
+                    verbose=False,
+                    ablation=ablation,
+                    method_name=f"Test{ablation}",
+                )
+                self.assertEqual(len(llm.calls), expected_calls)
+                self.assertTrue(results[0]["is_correct"])
+                self.assertEqual(results[0]["symplanner_ablation"], ablation)
+                self.assertEqual(results[0]["symplanner_use_extract"], use_extract)
+                self.assertEqual(results[0]["symplanner_use_plan"], use_plan)
+                self.assertEqual(bool(results[0]["extraction_note"]), use_extract)
+                self.assertEqual(bool(results[0]["planner_note"]), use_plan)
 
     def test_planner_accepts_compact_labeled_format(self):
         raw = """# Subject: geometry

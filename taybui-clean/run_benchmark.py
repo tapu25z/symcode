@@ -22,6 +22,14 @@ from method.symcode import evaluate as evaluate_symcode
 from method.symplanner import evaluate as evaluate_symplanner
 
 
+SYMPLANNER_ABLATION_METHODS = {
+    "SymPlanner": "full",
+    "SymPlannerExtractOnly": "extract_only",
+    "SymPlannerPlanOnly": "plan_only",
+    "SymPlannerNoModules": "none",
+}
+
+
 MODEL_PRESETS = {
     "qwen2.5-coder-7b": {
         "model_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
@@ -59,7 +67,15 @@ def parse_args():
         "--methods",
         nargs="+",
         default=["Direct", "CoT", "SymCode", "SymPlanner"],
-        choices=["Direct", "CoT", "SymCode", "SymPlanner"],
+        choices=[
+            "Direct",
+            "CoT",
+            "SymCode",
+            "SymPlanner",
+            "SymPlannerExtractOnly",
+            "SymPlannerPlanOnly",
+            "SymPlannerNoModules",
+        ],
         help="Danh sach cac phuong phap can danh gia."
     )
     parser.add_argument(
@@ -179,6 +195,9 @@ def parse_args():
 
 
 def _write_json_atomic(data: Dict[str, Any], filepath: str) -> None:
+    output_dir = os.path.dirname(filepath)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     temp_file = filepath + ".tmp"
     with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -333,10 +352,11 @@ def _run_single_method(
             [item], llm, timeout=args.timeout, max_retries=args.max_retries,
             checkpoint_file=output_file, save_every=1, verbose=False
         )
-    if method == "SymPlanner":
+    if method in SYMPLANNER_ABLATION_METHODS:
         return evaluate_symplanner(
             [item], llm, timeout=args.timeout, max_retries=args.max_retries,
-            checkpoint_file=output_file, save_every=1, verbose=False
+            checkpoint_file=output_file, save_every=1, verbose=False,
+            ablation=SYMPLANNER_ABLATION_METHODS[method], method_name=method
         )
     raise ValueError(f"Phuong phap khong hop le: {method}")
 
@@ -409,7 +429,7 @@ def main():
         else:
             lvl_str = ""
         tail_str = "_tail" if args.tail else ""
-        output_file = f"{args.dataset}{lvl_str}{tail_str}_results.json"
+        output_file = os.path.join("results", f"{args.dataset}{lvl_str}{tail_str}_results.json")
 
     config = {
         "model_id": args.model_id,
@@ -491,9 +511,11 @@ def main():
                 benchmark_data["results"]["SymCode"] = evaluate_symcode(
                     dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
                 )
-            elif method == "SymPlanner":
-                benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
-                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+            elif method in SYMPLANNER_ABLATION_METHODS:
+                benchmark_data["results"][method] = evaluate_symplanner(
+                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries,
+                    checkpoint_file=output_file, save_every=args.save_every,
+                    ablation=SYMPLANNER_ABLATION_METHODS[method], method_name=method
                 )
             live_accuracy = _refresh_live_accuracy(benchmark_data)
             _write_json_atomic(benchmark_data, output_file)

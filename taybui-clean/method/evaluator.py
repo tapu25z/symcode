@@ -606,7 +606,9 @@ def evaluate_symplanner(
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
     save_every: int = 5,
-    verbose: bool = True
+    verbose: bool = True,
+    ablation: str = "full",
+    method_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Thực thi SymPlanner đơn giản:
@@ -615,20 +617,37 @@ def evaluate_symplanner(
     - Turn 3: Sinh SymPy code từ problem + extract + plan.
     - Sau đó execute/retry giống SymCode.
     """
-    ckpt = _load_existing_checkpoint(checkpoint_file, "SymPlanner")
+    ablation_configs = {
+        "full": (True, True, "SymPlanner"),
+        "extract_only": (True, False, "SymPlannerExtractOnly"),
+        "plan_only": (False, True, "SymPlannerPlanOnly"),
+        "none": (False, False, "SymPlannerNoModules"),
+    }
+    if ablation not in ablation_configs:
+        raise ValueError(f"Invalid SymPlanner ablation: {ablation}")
+    use_extract, use_plan, default_method_name = ablation_configs[ablation]
+    method_name = method_name or default_method_name
+    phase_desc = {
+        "full": "Extract -> Plan -> SymCode",
+        "extract_only": "Extract -> SymCode",
+        "plan_only": "Plan -> SymCode",
+        "none": "SymCode context only",
+    }[ablation]
+
+    ckpt = _load_existing_checkpoint(checkpoint_file, method_name)
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     dataset_questions = {item["question"] for item in dataset}
     completed_in_dataset = len(completed_problems & dataset_questions)
     
     if verbose and completed_in_dataset:
-        print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
+        print(f"[INFO] Tiep tuc phuong phap {method_name}: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
 
     if verbose:
-        print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Extract -> Plan -> SymCode, Retries: {max_retries}) ====================")
+        print(f"\n==================== Bat dau danh gia Phuong phap: {method_name} ({phase_desc}, Retries: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymPlanner", disable=not verbose):
+    for item in tqdm(dataset, desc=f"Danh gia {method_name}", disable=not verbose):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -639,27 +658,32 @@ def evaluate_symplanner(
         attempt_history = []
         raw_outputs = []
         
-        # -------------------------------------------------------------
-        # TURN 1: EXTRACT PHASE
-        # -------------------------------------------------------------
-        extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
-        extraction_note = clean_planner_note(raw_extract)
-        total_tokens += extract_tokens
-        raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
+        extraction_note = ""
+        planner_note = ""
+        planner_meta = {}
+        planner_errors = []
+        context_blocks = []
 
-        # -------------------------------------------------------------
-        # TURN 2: PLAN PHASE
-        # -------------------------------------------------------------
-        planner_messages = build_planner_messages(question, extraction_note)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
-        planner_note = clean_planner_note(raw_plan)
-        total_tokens += plan_tokens
-        raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
+        if use_extract:
+            extract_messages = build_prompt_messages("SymPlanner", question)
+            raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
+            extraction_note = clean_planner_note(raw_extract)
+            total_tokens += extract_tokens
+            raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
+            context_blocks.append(f"# EXTRACTED STATE\n{extraction_note}")
 
-        planner_note_clean, planner_meta, planner_errors = parse_planner_contract(planner_note, question)
-        planner_note = planner_note_clean or planner_note
-        symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
+        if use_plan:
+            planner_messages = build_planner_messages(question, extraction_note)
+            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
+            planner_note = clean_planner_note(raw_plan)
+            total_tokens += plan_tokens
+            raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
+
+            planner_note_clean, planner_meta, planner_errors = parse_planner_contract(planner_note, question)
+            planner_note = planner_note_clean or planner_note
+            context_blocks.append(f"# PLAN\n{planner_note}")
+
+        symplanner_context = "\n\n".join(block for block in context_blocks if block.strip()).strip()
 
         # -------------------------------------------------------------
         # TURN 3: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
@@ -829,6 +853,9 @@ def evaluate_symplanner(
             "symplanner_context": symplanner_context,
             "planner_contract": planner_meta,
             "planner_errors": planner_errors,
+            "symplanner_ablation": ablation,
+            "symplanner_use_extract": use_extract,
+            "symplanner_use_plan": use_plan,
             "raw_output": raw_outputs[-1] if raw_outputs else "",
             "raw_outputs": raw_outputs,
             "attempt_history": attempt_history
@@ -841,10 +868,10 @@ def evaluate_symplanner(
             
         if checkpoint_file and (new_evaluated % save_every == 0):
             gc.collect()
-            _save_intermediate_checkpoint(checkpoint_file, "SymPlanner", results)
+            _save_intermediate_checkpoint(checkpoint_file, method_name, results)
 
     if checkpoint_file:
-        _save_intermediate_checkpoint(checkpoint_file, "SymPlanner", results)
+        _save_intermediate_checkpoint(checkpoint_file, method_name, results)
         
     return results
 
@@ -998,6 +1025,9 @@ def compute_metrics_table(all_results: Dict[str, List[Dict[str, Any]]]) -> Dict[
 
 def save_benchmark_results(results_data: Dict[str, Any], filepath: str):
     """Lưu dữ liệu kết quả benchmark vào file JSON bằng phương thức an toàn."""
+    output_dir = os.path.dirname(filepath)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     temp_file = filepath + ".tmp"
     with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(results_data, f, indent=2, ensure_ascii=False)

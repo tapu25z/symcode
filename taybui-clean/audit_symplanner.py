@@ -1,7 +1,7 @@
 """Offline audit for legacy SymPlanner result files.
 
 Usage:
-    python kaggle/audit_symplanner.py result_symplanner_math500_n70_vastai.json
+    python audit_symplanner.py results/results_math500_qwen25.json
 """
 
 from __future__ import annotations

@@ -1,215 +1,278 @@
-# Kaggle Math Reasoning Benchmark
+# Math Reasoning Benchmark
 
-Benchmark suite for MATH-500 and GSM8K with four methods:
+Repo benchmark cac phuong phap giai toan tren MATH-500 va GSM8K:
 
-1. Direct
-2. Chain-of-Thought
-3. SymCode
-4. SymPlanner
+- `Direct`: tra loi truc tiep.
+- `CoT`: giai thich tung buoc bang ngon ngu tu nhien.
+- `SymCode`: sinh mot chuong trinh Python/SymPy de giai bai.
+- `SymPlanner`: tach bai toan thanh extract + plan + codegen, roi chay code va retry khi loi.
 
-The code is organized so each method has its own folder, while shared execution, extraction, verification, dataset loading, and metrics stay in common modules.
-
-## Folder Structure
+## Cau Truc Thu Muc
 
 ```text
-kaggle/
-├── data/
-│   ├── gsm8k/test.jsonl
-│   └── math500/test.jsonl
-├── method/
-│   ├── direct/
-│   │   ├── prompt.py
-│   │   └── evaluator.py
-│   ├── cot/
-│   │   ├── prompt.py
-│   │   └── evaluator.py
-│   ├── symcode/
-│   │   ├── prompt.py
-│   │   └── evaluator.py
-│   ├── symplanner/
-│   │   ├── prompt.py
-│   │   └── evaluator.py
-│   ├── evaluator.py
-│   ├── extractor.py
-│   ├── model.py
-│   ├── sandbox.py
-│   ├── static_lint.py
-│   ├── target_contract.py
-│   └── verifier.py
-├── tests/test_symplanner_quality.py
-├── inference.ipynb
-├── requirements.txt
-└── run_benchmark.py
+.
+|-- data/
+|   |-- gsm8k/test.jsonl
+|   `-- math500/test.jsonl
+|-- method/
+|   |-- direct/          # baseline Direct
+|   |-- cot/             # baseline Chain-of-Thought
+|   |-- symcode/         # sinh code SymPy mot luot
+|   |-- symplanner/      # wrapper prompt cho SymPlanner
+|   |-- evaluator.py     # vong lap benchmark, checkpoint, metrics
+|   |-- extractor.py     # tach code, tach boxed answer, normalize answer
+|   |-- model.py         # load model Hugging Face
+|   |-- sandbox.py       # chay code sinh ra voi timeout
+|   |-- static_lint.py   # chan mot so loi code re tien
+|   |-- target_contract.py
+|   `-- verifier.py      # verifier nhe cho output/code
+|-- tests/
+|   `-- test_symplanner_quality.py
+|-- results/            # noi luu file ket qua benchmark
+|-- requirements.txt
+|-- run_benchmark.py
+`-- audit_symplanner.py
 ```
 
-The old flat imports still work:
+## Cai Dat
 
-```python
-from method import evaluate_symplanner, evaluate_symcode
+Repo nay duoc toi gian cho workflow chay truc tiep tren may GPU thue qua CLI. Nen dung Python 3.10+ va GPU CUDA neu chay model 7B/8B cuc bo.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Method-folder imports also work:
+Tat ca file ket qua benchmark nen luu trong thu muc `results/`. Thu muc nay duoc tao san va cac file JSON ben trong se khong commit len git.
 
-```python
-from method.direct import build_messages
-from method.symplanner import build_extract_messages, build_planner_messages, build_codegen_messages
+Neu can tai model gated tren Hugging Face, dang nhap truoc:
+
+```bash
+huggingface-cli login
 ```
 
-## Shared Protocol
+Mac dinh script load model o che do 4-bit NF4. Neu muon chay full precision:
 
-All methods use the same dataset loader, result format, and exact-match scorer.
+```bash
+python3 run_benchmark.py --no-4bit ...
+```
 
-Shared modules:
+## Cach Chay Nhanh
 
-- `method/model.py`: loads the Hugging Face model with optional 4-bit NF4 quantization.
-- `method/extractor.py`: extracts boxed answers, extracts Python code, normalizes answers, and checks exact match.
-- `method/sandbox.py`: executes generated Python/SymPy code with timeout.
-- `method/verifier.py`: lightweight verifier for invalid outputs, target mismatch, unresolved symbols, domain issues, and known strategy mistakes.
-- `method/static_lint.py`: cheap diagnostics for generated code hazards.
-- `method/evaluator.py`: benchmark loops and summary metrics.
+Smoke test 5 cau MATH-500 voi 4 method chinh:
 
-Program-based methods use the same final execution loop:
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --num-samples 5 \
+  --model-preset qwen2.5-coder-7b \
+  --methods Direct CoT SymCode SymPlanner \
+  --output-file results/results_smoke_math500.json
+```
 
-1. Extract Python code from the model response.
-2. Execute it in the sandbox.
-3. Extract the final `\boxed{...}` answer from stdout.
-4. Run lightweight verifier when possible.
-5. Retry with traceback/verifier feedback when there is a concrete failure.
-6. Score with `check_exact_match(predicted, ground_truth)`.
+Smoke test GSM8K:
 
-## Method 1: Direct
+```bash
+python3 run_benchmark.py \
+  --dataset gsm8k \
+  --num-samples 5 \
+  --model-preset qwen2.5-coder-7b \
+  --methods Direct CoT SymCode SymPlanner \
+  --output-file results/results_smoke_gsm8k.json
+```
 
-Folder:
+`run_benchmark.py` tu dong checkpoint vao `--output-file`; neu chay lai cung file, cac cau da co ket qua se duoc skip. Neu khong truyen `--output-file`, script se tu luu vao `results/`.
+
+## Chay Full MATH-500/GSM8K Tren 3 Model
+
+Ba preset dang co trong code:
+
+- `qwen2.5-coder-7b`: `Qwen/Qwen2.5-Coder-7B-Instruct`
+- `qwen3-8b`: `Qwen/Qwen3-8B`
+- `llama3-8b`: `meta-llama/Meta-Llama-3-8B-Instruct`
+
+Chay full MATH-500:
+
+```bash
+for model in qwen2.5-coder-7b qwen3-8b llama3-8b; do
+  python3 run_benchmark.py \
+    --dataset math500 \
+    --model-preset "$model" \
+    --methods Direct CoT SymCode SymPlanner \
+    --output-file "results/results_math500_${model}.json"
+done
+```
+
+Chay full GSM8K:
+
+```bash
+for model in qwen2.5-coder-7b qwen3-8b llama3-8b; do
+  python3 run_benchmark.py \
+    --dataset gsm8k \
+    --model-preset "$model" \
+    --methods Direct CoT SymCode SymPlanner \
+    --output-file "results/results_gsm8k_${model}.json"
+done
+```
+
+Neu muon tang so token sinh:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --model-preset qwen3-8b \
+  --max-new-tokens 2048 \
+  --methods Direct CoT SymCode SymPlanner \
+  --output-file results/results_math500_qwen3_8b_2048.json
+```
+
+## Chay Ablation Cho SymPlanner
+
+Cac bien the ablation:
+
+- `SymPlanner`: full pipeline, dung ca extract va plan.
+- `SymPlannerExtractOnly`: chi dung extract, bo plan.
+- `SymPlannerPlanOnly`: chi dung plan, bo extract.
+- `SymPlannerNoModules`: bo ca extract va plan, gan nhu pure codegen theo prompt SymPlanner.
+
+Chay ablation MATH-500:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --model-preset qwen2.5-coder-7b \
+  --methods SymPlanner SymPlannerExtractOnly SymPlannerPlanOnly SymPlannerNoModules \
+  --output-file results/results_ablation_math500_qwen25.json
+```
+
+Chay ablation GSM8K:
+
+```bash
+python3 run_benchmark.py \
+  --dataset gsm8k \
+  --model-preset qwen2.5-coder-7b \
+  --methods SymPlanner SymPlannerExtractOnly SymPlannerPlanOnly SymPlannerNoModules \
+  --output-file results/results_ablation_gsm8k_qwen25.json
+```
+
+## Y Tuong Method
+
+### SymPlanner
+
+SymPlanner tach viec sinh code thanh cac pha nho de giam loi formulate bai toan:
 
 ```text
-method/direct/
+Problem
+  -> Extract mathematical state
+  -> Write short solution plan
+  -> Generate Python/SymPy code from problem + extract + plan
+  -> Sandbox execution
+  -> Verify output
+  -> Retry/debug with traceback or verifier feedback
 ```
 
-Goal: direct final-answer baseline.
+Pha extract bat model noi ro target, du kien, rang buoc va kieu output. Pha plan chi viet cac buoc giai, khong tinh dap an cuoi va khong viet code. Pha codegen moi sinh Python/SymPy, in ket qua duy nhat dang `\boxed{...}`. Neu code crash, timeout, in output khong hop le, hoac verifier thay dau hieu sai target, evaluator se goi prompt debug de sua code.
 
-System prompt:
+### Direct
+
+Baseline don gian nhat: model doc bai va tra ve dap an cuoi trong `\boxed{answer}`. Khong chay code, khong retry.
+
+### CoT
+
+Baseline reasoning bang ngon ngu tu nhien: model viet loi giai tung buoc, cuoi cung in `\boxed{answer}`. Khong chay code, khong retry.
+
+### SymCode
+
+Baseline program-aided: model sinh mot block Python/SymPy truc tiep tu problem. Code duoc chay trong sandbox, tach output boxed, verifier/lint kiem tra loi, va retry toi da `--max-retries` lan neu co loi cu the.
+
+## Prompt Chi Tiet
+
+### Direct
+
+System:
 
 ```text
 You are an expert mathematician. Solve the following math problem directly.
 Do not provide long explanations. Put only the final answer inside \boxed{answer}.
 ```
 
-User prompt:
+User:
 
 ```text
 Problem:
 {question}
 ```
 
-Flow:
+### CoT
 
-1. Generate one answer.
-2. Extract the final boxed answer.
-3. Score exact match.
-
-No code execution and no retry loop.
-
-## Method 2: Chain-of-Thought
-
-Folder:
-
-```text
-method/cot/
-```
-
-Goal: natural-language reasoning baseline.
-
-System prompt:
+System:
 
 ```text
 You are an expert mathematician. Solve the following math problem step-by-step with clear and rigorous logical reasoning.
 At the end of your reasoning, write your final answer strictly formatted in \boxed{answer}.
 ```
 
-User prompt:
+User:
 
 ```text
 Problem:
 {question}
 ```
 
-Flow:
+### SymCode
 
-1. Generate one step-by-step solution.
-2. Extract the final boxed answer.
-3. Score exact match.
+System:
 
-No code execution and no retry loop.
-
-## Method 3: SymCode
-
-Folder:
-
-```text
-method/symcode/
-```
-
-Goal: monolithic Python/SymPy program generation.
-
-System prompt summary:
-
-```text
+````text
 You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
-Return only executable Python code in one ```python ... ``` block.
-Import sympy as sp, formulate the problem, solve the requested target,
-use exact arithmetic when possible, avoid unbounded loops, guard fragile solvers,
-and print only the final LaTeX boxed answer.
-```
+Solve the problem by returning ONLY executable Python code enclosed in a single ```python ... ``` block.
+Do NOT write explanations. Do NOT output <think> tags.
 
-User prompt:
+The code MUST:
+1. import sympy as sp (and math, fractions if helpful).
+2. Write the solver with two independent paths (Path A: Symbolic/Analytical, Path B: Empirical/Simulation/Search loop) to cross-verify the answer whenever possible.
+3. Guard symbolic solving calls (e.g., sp.solve) with try-except blocks. If SymPy fails, automatically fallback to a bounded search loop or numerical optimization.
+4. Define all given quantities and formulate equations accurately.
+5. Solve for the target quantity symbolically or numerically.
+6. Never call `.evalf()` on standard Python int/float.
+7. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
+8. Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
+9. Print ONLY the final answer in LaTeX boxed format at the end:
+   print(f"\\boxed{{{final_answer}}}")
+````
 
-```text
+User:
+
+````text
 # PROBLEM
 {question}
 # END PROBLEM
 
 Return executable Python code only enclosed in ```python ... ```.
-```
+````
 
-Required output:
+Debug system:
 
-```python
-print(f"\\boxed{{{final_answer}}}")
-```
+````text
+You are repairing Python/SymPy code for a math problem.
 
-Flow:
+Return ONLY corrected executable Python code in one ```python ... ``` block.
+Fix the reported issue and keep correct code. Do not explain or output <think> tags.
 
-1. Problem -> SymPy code.
-2. Sandbox execution.
-3. Boxed-answer extraction.
-4. Verifier/static diagnostics.
-5. Retry with failed code + traceback/diagnosis.
-6. Exact-match scoring.
+Rules:
+- Recompute the target; do not hard-code an answer.
+- Use exact arithmetic where possible and handle fragile solver failures.
+- Use finite loops only; never use an unbounded while loop.
+- Any reasoning comment must start with "# Step <number>:".
+- Print only the required final result.
+````
 
-## Method 4: SymPlanner
+### SymPlanner
 
-Folder:
-
-```text
-method/symplanner/
-```
-
-Goal: keep SymCode simple, but reduce formulation errors by adding two short model turns before code generation.
-
-SymPlanner is intentionally simple:
-
-```text
-Problem
-  -> Extract mathematical state
-  -> Generate solution plan without final answer
-  -> Generate SymCode from problem + extraction + plan
-  -> Execute/retry exactly like SymCode
-```
-
-### Turn 1: Extract
-
-System prompt:
+Extract system:
 
 ```text
 You extract the mathematical state of a problem for a later solver.
@@ -226,7 +289,7 @@ Rules:
 - Keep each line short and factual.
 ```
 
-User prompt:
+Extract user:
 
 ```text
 # PROBLEM
@@ -235,18 +298,7 @@ User prompt:
 Extract the mathematical state only.
 ```
 
-Example extract:
-
-```text
-# Target: number of distinct expression values
-# Given: expression 2*3*4*5+1; terms cannot be rearranged
-# Constraints: only parentheses may be inserted
-# Output: number
-```
-
-### Turn 2: Plan
-
-System prompt:
+Planner system:
 
 ```text
 You write a short solution plan for a Python/SymPy solver.
@@ -257,319 +309,101 @@ Return ONLY numbered plan steps.
 Rules:
 - Do not calculate or reveal the final numeric answer.
 - Do not write Python code.
+- Restate the requested target when the problem asks for an input, multiplier, quotient, coefficient, vector, or tuple; do not plan to print a downstream computed value instead.
 - Include candidate filtering or constraint checks when needed.
 - Keep the plan short.
 ```
 
-User prompt:
+Planner user:
 
 ```text
 # PROBLEM
 {question}
 
 # EXTRACTED STATE
-{extract}
+{extraction}
 
 Write the plan only.
 ```
 
-Example plan:
+Codegen system:
 
-```text
-1. Represent the ordered numbers and operators.
-2. Enumerate all valid parenthesizations recursively.
-3. Collect unique evaluated values.
-4. Return the number of unique values.
-```
-
-### Turn 3: SymCode Generation
-
-System prompt summary:
-
-```text
+````text
 You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
-Return only executable Python code in one ```python ... ``` block.
-Use the problem, extraction, and plan. Solve the requested target.
-Print only the final answer in LaTeX boxed format.
-```
+Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
-User prompt:
+Rules:
+1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
+2. Solve the requested target, not an intermediate value. Use the extraction and plan.
+   Examples: if asked "by what number should A be multiplied", print the multiplier, not A times that multiplier; if asked for a quotient, print the quotient polynomial, not the remainder or value at a point.
+3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
+4. Use finite loops only. Never use an unbounded while loop.
+5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
+6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
+7. Any reasoning comment must start with "# Step <number>:".
+8. At the end, print ONLY the final answer in LaTeX boxed format:
+   print(f"\\boxed{{{final_answer}}}")
+````
 
-```text
+Codegen user:
+
+````text
 # PROBLEM
 {question}
 
 # EXTRACTED STATE AND PLAN
-# EXTRACTED STATE
-{extract}
-
-# PLAN
-{plan}
+{plan_block}
 
 # OUTPUT REQUIREMENT
-- Answer type: ...
-- Unit: ...
-- Diagram relations required: ...
+- Answer type: {answer_type}
+- Unit: {unit}
+- Diagram relations required: {yes_or_no}
 
 Return executable Python code only enclosed in ```python ... ```. Do not write explanations.
-```
+````
 
-Required output is the same as SymCode:
+Debug user:
 
+````text
+# PROBLEM
+{question}
+
+# EXTRACTED STATE AND PLAN
+{plan_block}
+
+# OUTPUT REQUIREMENT
+- Answer type: {answer_type}
+- Unit: {unit}
+- Diagram relations required: {yes_or_no}
+
+# PREVIOUS CODE
 ```python
-print(f"\\boxed{{{final_answer}}}")
+{bad_code}
 ```
 
-After code generation, SymPlanner uses the same sandbox, boxed-answer extractor, verifier, static lint, retry, and exact-match scorer as SymCode. The only experimental difference is the added Extract + Plan context before codegen.
+# DIAGNOSIS
+Execution status: {status}
+Traceback:
+{traceback_if_any}
+Candidate answer printed: {candidate_answer_if_any}
+Verifier diagnosis: {verification_feedback_if_any}
 
-## Output JSON
+Fix the issue and return corrected executable Python code only enclosed in ```python ... ```.
+````
 
-Each benchmark output file contains:
+## Ket Qua
 
-```json
-{
-  "config": {
-    "model_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "dataset_name": "math500",
-    "methods_to_run": ["Direct", "CoT", "SymCode", "SymPlanner"]
-  },
-  "timestamp": "YYYY-MM-DD HH:MM:SS",
-  "results": {
-    "Direct": [],
-    "CoT": [],
-    "SymCode": [],
-    "SymPlanner": []
-  },
-  "live_accuracy": {
-    "Direct": {
-      "accuracy_percent": 80.0,
-      "correct": 4,
-      "total": 5
-    }
-  },
-  "live_accuracy_by_problem": [],
-  "summary": {}
-}
-```
+File output JSON gom:
 
-SymPlanner rows additionally include:
+- `config`: model, dataset, methods, token limit, timeout.
+- `results`: ket qua tung method/tung cau.
+- `summary`: accuracy, token trung binh, retry/exec/verifier stats.
+- `live_accuracy`: accuracy cap nhat trong luc chay.
+- `live_accuracy_by_problem`: snapshot sau moi problem khi dung `--run-order by-problem`.
 
-- `extraction_note`
-- `planner_note`
-- `symplanner_context`
-- `attempt_history`
-- generated code and execution diagnostics
-
-## Running
-
-Install:
+Chay test nhanh cho logic SymPlanner:
 
 ```bash
-pip install -r requirements.txt
+pytest tests/test_symplanner_quality.py
 ```
-
-Quick run. By default, the benchmark now runs one problem at a time and evaluates each selected method before moving to the next problem:
-
-```bash
-python3 run_benchmark.py --dataset math500 --num-samples 5 --methods Direct CoT SymCode SymPlanner
-```
-
-Default run order:
-
-```text
-Problem 1 -> Direct -> CoT -> SymCode -> SymPlanner
-Problem 2 -> Direct -> CoT -> SymCode -> SymPlanner
-...
-```
-
-During the run, each method reports whether it got the current problem right. After all selected methods finish that problem, the script prints one live accuracy snapshot:
-
-```text
-[PROBLEM 5/50] ...
-[Direct] cau nay: DUNG | pred=42 | gt=42
-[CoT] cau nay: SAI | pred=40 | gt=42
-[LIVE ACC PROBLEM 5/50] Direct: 60.00% (3/5) | CoT: 80.00% (4/5)
-[PROGRESS] 5/50 (10.0%) | 0.012 it/s | elapsed=6m52s | eta=1h01m48s
-```
-
-`it/s` is measured over completed problems, so one full pass over 50 problems is 50 iterations regardless of how many methods run for each problem. The latest totals are saved into `live_accuracy`, and the per-problem snapshots are saved into `live_accuracy_by_problem`, so you can inspect the output JSON while the benchmark is still running.
-
-Run in the old order, one full method at a time:
-
-```bash
-python3 run_benchmark.py --dataset math500 --num-samples 5 --run-order by-method
-```
-
-Run only SymPlanner:
-
-```bash
-python3 run_benchmark.py --dataset math500 --methods SymPlanner --output-file symplanner_math500_full.json
-```
-
-Run selected levels:
-
-```bash
-python3 run_benchmark.py --dataset math500 --filter-levels 4 5 --methods SymCode SymPlanner
-```
-
-Run a fixed number of samples per level:
-
-```bash
-python3 run_benchmark.py --dataset math500 --filter-levels 1 2 3 4 5 --per-level-samples 20 --methods Direct CoT SymCode SymPlanner
-```
-
-Resume from an existing output file:
-
-```bash
-python3 run_benchmark.py --dataset math500 --num-samples 50 --output-file math500_50_results.json
-```
-
-If the output file already contains results for a problem/method pair, the runner skips that pair and continues from the checkpoint.
-
-Use a local JSONL dataset:
-
-```bash
-python3 run_benchmark.py --dataset-path data/math500/test.jsonl --methods Direct SymPlanner
-```
-
-Important options:
-
-| Option | Default | Meaning |
-| :--- | :--- | :--- |
-| `--dataset` | `math500` | `math500` or `gsm8k` |
-| `--methods` | all four | Methods to evaluate |
-| `--run-order` | `by-problem` | `by-problem` runs each selected method per problem; `by-method` runs the old method-by-method flow |
-| `--num-samples` | all | Limit number of samples |
-| `--filter-levels` | none | Evaluate selected levels |
-| `--per-level-samples` | none | Select N samples per level |
-| `--tail` | false | Select from the end of each list |
-| `--model-id` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Hugging Face model id |
-| `--model-preset` | none | Convenience preset: `qwen2.5-coder-7b`, `qwen3-8b`, or `llama3-8b` |
-| `--load-in-4bit` | true | Use 4-bit NF4 quantization |
-| `--no-4bit` | false | Disable 4-bit loading |
-| `--max-new-tokens` | `1024` | Max generation tokens per model call |
-| `--max-input-tokens` | `2560` | Max prompt tokens after chat template |
-| `--temperature` | `0.0` | Greedy decoding by default |
-| `--disable-thinking` | preset-dependent | Disable thinking in chat templates that support it |
-| `--enable-thinking` | preset-dependent | Enable thinking in chat templates that support it |
-| `--max-retries` | `2` | Retry count for program methods |
-| `--timeout` | `15` | Sandbox timeout in seconds |
-| `--save-every` | `5` | Checkpoint interval |
-
-## Model Setups
-
-The runner ships with model presets for the 8B comparison runs:
-
-```text
-qwen3-8b  -> Qwen/Qwen3-8B
-llama3-8b -> meta-llama/Meta-Llama-3-8B-Instruct
-```
-
-Qwen3 8B smoke test:
-
-```bash
-python3 run_benchmark.py \
-  --dataset math500 \
-  --num-samples 5 \
-  --methods Direct CoT SymCode SymPlanner \
-  --model-preset qwen3-8b \
-  --output-file smoke_math500_qwen3_8b.json
-```
-
-Qwen3 8B full Math500 run:
-
-```bash
-python3 run_benchmark.py \
-  --dataset math500 \
-  --methods Direct CoT SymCode SymPlanner \
-  --model-preset qwen3-8b \
-  --output-file math500_qwen3_8b_results.json
-```
-
-Llama 3 8B requires a Hugging Face token with access to the Meta Llama model. Accept the model license on Hugging Face, then export the token before running:
-
-```bash
-export HF_TOKEN=hf_your_token_here
-```
-
-Llama 3 8B smoke test:
-
-```bash
-python3 run_benchmark.py \
-  --dataset math500 \
-  --num-samples 5 \
-  --methods Direct CoT SymCode SymPlanner \
-  --model-preset llama3-8b \
-  --output-file smoke_math500_llama3_8b.json
-```
-
-Llama 3 8B full Math500 run:
-
-```bash
-python3 run_benchmark.py \
-  --dataset math500 \
-  --methods Direct CoT SymCode SymPlanner \
-  --model-preset llama3-8b \
-  --output-file math500_llama3_8b_results.json
-```
-
-## Customizing Methods
-
-You can choose which built-in methods to run with `--methods`:
-
-```bash
-python3 run_benchmark.py --dataset math500 --num-samples 10 --methods Direct SymPlanner
-```
-
-The valid built-in names are:
-
-```text
-Direct CoT SymCode SymPlanner
-```
-
-To change the behavior of an existing method, edit its prompt file:
-
-```text
-method/direct/prompt.py
-method/cot/prompt.py
-method/symcode/prompt.py
-method/symplanner/prompt.py
-```
-
-To add a brand-new method name, add a new folder under `method/`, implement its `prompt.py` and `evaluator.py`, then register it in:
-
-```text
-run_benchmark.py
-method/__init__.py
-```
-
-The CLI currently validates method names with fixed `choices`, so a new custom method will not run from `--methods` until it is added to those choices and to the dispatch logic.
-
-## Tests
-
-```bash
-pytest -q
-python3 -m compileall -q method run_benchmark.py
-```
-
-Avoid `python -m unittest kaggle.tests...` from a parent repository root on machines with the Kaggle API installed, because Python may resolve `kaggle` to the external package.
-
-## Paper Note
-
-The paper should describe the current method as:
-
-```text
-SymPlanner: Extract-then-Plan guided SymCode generation.
-```
-
-The clean method equation is:
-
-```text
-E = Extract_M(q)
-P = Plan_M(q, E)
-C = Codegen_M(q, E, P)
-y = Exec(C)
-```
-
-Everything after `C` is the same execution and repair path as SymCode.
