@@ -235,6 +235,36 @@ def _print_live_accuracy(live_accuracy: Dict[str, Dict[str, Any]]) -> None:
     print("[LIVE ACC] " + " | ".join(parts), flush=True)
 
 
+def _format_duration(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "?"
+    seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m{secs:02d}s"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
+def _print_progress(
+    completed: int,
+    total: int,
+    start_time: float,
+) -> None:
+    elapsed = time.time() - start_time
+    rate = completed / elapsed if elapsed > 0 else 0.0
+    remaining = max(0, total - completed)
+    eta = remaining / rate if rate > 0 else None
+    percent = (completed / total) * 100.0 if total else 100.0
+    print(
+        f"[PROGRESS] {completed}/{total} ({percent:.1f}%) | "
+        f"{rate:.3f} it/s | elapsed={_format_duration(elapsed)} | eta={_format_duration(eta)}",
+        flush=True,
+    )
+
+
 def _find_result_for_problem(results: List[Dict[str, Any]], question: str) -> Optional[Dict[str, Any]]:
     for record in results:
         if record.get("problem") == question:
@@ -322,6 +352,7 @@ def _run_by_problem(
     _write_json_atomic(benchmark_data, output_file)
 
     total = len(dataset)
+    start_time = time.time()
     print("\n==================== Bat dau chay theo tung cau ====================")
     for index, item in enumerate(dataset, start=1):
         question = item["question"]
@@ -346,6 +377,7 @@ def _run_by_problem(
         _record_problem_accuracy_snapshot(benchmark_data, index, total, question, live_accuracy)
         _write_json_atomic(benchmark_data, output_file)
         _print_problem_accuracy_snapshot(index, total, live_accuracy)
+        _print_progress(index, total, start_time)
 
     return benchmark_data
 

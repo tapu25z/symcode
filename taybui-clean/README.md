@@ -390,9 +390,10 @@ During the run, each method reports whether it got the current problem right. Af
 [Direct] cau nay: DUNG | pred=42 | gt=42
 [CoT] cau nay: SAI | pred=40 | gt=42
 [LIVE ACC PROBLEM 5/50] Direct: 60.00% (3/5) | CoT: 80.00% (4/5)
+[PROGRESS] 5/50 (10.0%) | 0.012 it/s | elapsed=6m52s | eta=1h01m48s
 ```
 
-The latest totals are saved into `live_accuracy`, and the per-problem snapshots are saved into `live_accuracy_by_problem`, so you can inspect the output JSON while the benchmark is still running.
+`it/s` is measured over completed problems, so one full pass over 50 problems is 50 iterations regardless of how many methods run for each problem. The latest totals are saved into `live_accuracy`, and the per-problem snapshots are saved into `live_accuracy_by_problem`, so you can inspect the output JSON while the benchmark is still running.
 
 Run in the old order, one full method at a time:
 
