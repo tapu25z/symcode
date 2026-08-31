@@ -444,13 +444,74 @@ Important options:
 | `--per-level-samples` | none | Select N samples per level |
 | `--tail` | false | Select from the end of each list |
 | `--model-id` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Hugging Face model id |
+| `--model-preset` | none | Convenience preset: `qwen2.5-coder-7b`, `qwen3-8b`, or `llama3-8b` |
 | `--load-in-4bit` | true | Use 4-bit NF4 quantization |
 | `--no-4bit` | false | Disable 4-bit loading |
 | `--max-new-tokens` | `1024` | Max generation tokens per model call |
+| `--max-input-tokens` | `2560` | Max prompt tokens after chat template |
 | `--temperature` | `0.0` | Greedy decoding by default |
+| `--disable-thinking` | preset-dependent | Disable thinking in chat templates that support it |
+| `--enable-thinking` | preset-dependent | Enable thinking in chat templates that support it |
 | `--max-retries` | `2` | Retry count for program methods |
 | `--timeout` | `15` | Sandbox timeout in seconds |
 | `--save-every` | `5` | Checkpoint interval |
+
+## Model Setups
+
+The runner ships with model presets for the 8B comparison runs:
+
+```text
+qwen3-8b  -> Qwen/Qwen3-8B
+llama3-8b -> meta-llama/Meta-Llama-3-8B-Instruct
+```
+
+Qwen3 8B smoke test:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --num-samples 5 \
+  --methods Direct CoT SymCode SymPlanner \
+  --model-preset qwen3-8b \
+  --output-file smoke_math500_qwen3_8b.json
+```
+
+Qwen3 8B full Math500 run:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --methods Direct CoT SymCode SymPlanner \
+  --model-preset qwen3-8b \
+  --output-file math500_qwen3_8b_results.json
+```
+
+Llama 3 8B requires a Hugging Face token with access to the Meta Llama model. Accept the model license on Hugging Face, then export the token before running:
+
+```bash
+export HF_TOKEN=hf_your_token_here
+```
+
+Llama 3 8B smoke test:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --num-samples 5 \
+  --methods Direct CoT SymCode SymPlanner \
+  --model-preset llama3-8b \
+  --output-file smoke_math500_llama3_8b.json
+```
+
+Llama 3 8B full Math500 run:
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 \
+  --methods Direct CoT SymCode SymPlanner \
+  --model-preset llama3-8b \
+  --output-file math500_llama3_8b_results.json
+```
 
 ## Customizing Methods
 

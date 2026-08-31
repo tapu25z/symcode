@@ -22,6 +22,22 @@ from method.symcode import evaluate as evaluate_symcode
 from method.symplanner import evaluate as evaluate_symplanner
 
 
+MODEL_PRESETS = {
+    "qwen2.5-coder-7b": {
+        "model_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
+        "default_enable_thinking": None,
+    },
+    "qwen3-8b": {
+        "model_id": "Qwen/Qwen3-8B",
+        "default_enable_thinking": False,
+    },
+    "llama3-8b": {
+        "model_id": "meta-llama/Meta-Llama-3-8B-Instruct",
+        "default_enable_thinking": None,
+    },
+}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="LLM Reasoning Benchmark Suite (Direct, CoT, SymCode, SymPlanner)"
@@ -66,6 +82,13 @@ def parse_args():
         help="ID mo hinh tren Hugging Face."
     )
     parser.add_argument(
+        "--model-preset",
+        type=str,
+        default=None,
+        choices=sorted(MODEL_PRESETS.keys()),
+        help="Preset model tien loi. Neu dung, preset se ghi de --model-id."
+    )
+    parser.add_argument(
         "--load-in-4bit",
         action="store_true",
         default=True,
@@ -82,6 +105,12 @@ def parse_args():
         type=int,
         default=1024,
         help="So token toi da cho moi lan sinh."
+    )
+    parser.add_argument(
+        "--max-input-tokens",
+        type=int,
+        default=2560,
+        help="So token toi da cua prompt dau vao sau khi ap chat template."
     )
     parser.add_argument(
         "--temperature",
@@ -131,6 +160,20 @@ def parse_args():
         default="by-problem",
         choices=["by-problem", "by-method"],
         help="Thu tu chay: 'by-problem' = moi cau chay lan luot tung phuong phap; 'by-method' = chay het dataset cho tung phuong phap."
+    )
+    thinking_group = parser.add_mutually_exclusive_group()
+    thinking_group.add_argument(
+        "--enable-thinking",
+        dest="default_enable_thinking",
+        action="store_true",
+        default=None,
+        help="Bat thinking trong chat template neu model/tokenizer ho tro."
+    )
+    thinking_group.add_argument(
+        "--disable-thinking",
+        dest="default_enable_thinking",
+        action="store_false",
+        help="Tat thinking trong chat template neu model/tokenizer ho tro."
     )
     return parser.parse_args()
 
@@ -310,6 +353,12 @@ def _run_by_problem(
 def main():
     args = parse_args()
 
+    preset = MODEL_PRESETS.get(args.model_preset) if args.model_preset else None
+    if preset:
+        args.model_id = preset["model_id"]
+        if args.default_enable_thinking is None:
+            args.default_enable_thinking = preset["default_enable_thinking"]
+
     # Xac dinh duong dan file du lieu
     if args.dataset_path:
         dataset_path = args.dataset_path
@@ -334,7 +383,9 @@ def main():
         "model_id": args.model_id,
         "load_in_4bit": args.load_in_4bit,
         "max_new_tokens": args.max_new_tokens,
+        "max_input_tokens": args.max_input_tokens,
         "temperature": args.temperature,
+        "default_enable_thinking": args.default_enable_thinking,
         "dataset_name": args.dataset,
         "dataset_path": dataset_path,
         "filter_levels": args.filter_levels,
@@ -377,11 +428,17 @@ def main():
         sys.exit(1)
 
     # Khoi tao mo hinh
+    if LLMRunner is None:
+        print("[ERROR] Khong import duoc LLMRunner. Hay cai dat dependencies: pip install -r requirements.txt")
+        sys.exit(1)
+
     llm = LLMRunner(
         model_id=args.model_id,
         load_in_4bit=args.load_in_4bit,
         max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature
+        temperature=args.temperature,
+        max_input_tokens=args.max_input_tokens,
+        default_enable_thinking=args.default_enable_thinking
     )
 
     if args.run_order == "by-problem":
