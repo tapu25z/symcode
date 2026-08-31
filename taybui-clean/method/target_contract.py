@@ -55,12 +55,14 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
         spec["answer_type"] = "symbolic"
     elif re.search(r"\b(simplify|expand|factor)\b", text) and re.search(r"\b[a-z]\b", text):
         spec["answer_type"] = "symbolic"
+    elif re.search(r"\b(?:find|what is)\s+the\s+quotient\b", text) and re.search(r"\bdivided\s+by\b", text):
+        spec["answer_type"] = "symbolic"
     elif re.search(
         r"\bfind\s+(?:all\s+|the\s+)?(?:values|roots|solutions|zeros)\b|\benter\s+all\b|\bwhat\s+are\s+(?:the\s+)?(?:roots|solutions|zeros)\b",
         text,
     ):
         spec["answer_type"] = "set"
-    elif re.search(r"\b(matrix|determinant|eigenvalue)\b", text):
+    elif re.search(r"\b(matrix|determinant|eigenvalue|vector)\b|\\mathbf\{", text):
         spec["answer_type"] = "matrix"
     elif not asks_numeric_value and re.search(r"\b(polar coordinates?|ordered pair|ordered triple|ordered quadruple|coordinate pair|coordinates of|coordinates of the point|find the point|what point)\b", text):
         spec["answer_type"] = "tuple"
@@ -126,6 +128,33 @@ def _parse_labeled_planner(text: str) -> dict[str, Any] | None:
     }
 
 
+def _parse_numbered_planner(text: str) -> dict[str, Any] | None:
+    """Parse the current planner prompt format: short numbered steps only."""
+    steps = [
+        match.group(1).strip()
+        for match in re.finditer(
+            r"^\s*(?:\d+[\).]|#\s*Step\s+\d+\s*:)\s*(.+?)\s*$",
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if match.group(1).strip()
+    ]
+    if not steps:
+        return None
+    return {
+        "subject": "",
+        "target_unknown": "",
+        "given_constants": [],
+        "variables": [],
+        "relations": [],
+        "constraints": [],
+        "strategy": "",
+        "steps": steps,
+        "pitfalls": [],
+        "answer_type": "",
+    }
+
+
 def parse_planner_contract(raw_plan: str, question: str = "") -> tuple[str, dict[str, Any], list[str]]:
     """Parse compact labeled planner output, with backward-compatible JSON support."""
     text = str(raw_plan or "").strip()
@@ -139,8 +168,11 @@ def parse_planner_contract(raw_plan: str, question: str = "") -> tuple[str, dict
     errors: list[str] = []
     parsed: dict[str, Any] = {}
     labeled = _parse_labeled_planner(candidate)
+    numbered = None if labeled is not None else _parse_numbered_planner(candidate)
     if labeled is not None:
         parsed = labeled
+    elif numbered is not None:
+        parsed = numbered
     else:
         try:
             value = json.loads(candidate)

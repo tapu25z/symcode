@@ -33,10 +33,43 @@ def _code_strategy_feedback(question: str, candidate_answer: str, code: Optional
 
     if "round table" in q_lower and "no two" in q_lower and "next to each other" in q_lower:
         has_adjacency_check = any(token in code_lower for token in ("itertools.permutations", "for perm", "def is_valid", "adjacent", "next_to"))
+        has_gap_method = any(token in code_lower for token in ("binomial", "comb", "spaces", "gaps"))
         if "restricted_permutations" in code_lower and "total_permutations" in code_lower and not has_adjacency_check:
             return (
                 "fail",
                 "Verification Error: circular no-adjacency counting needs pairwise adjacency handling or brute-force validation; subtracting only one grouped case is incomplete."
+            )
+        if not has_adjacency_check and not has_gap_method:
+            return (
+                "fail",
+                "Verification Error: circular no-adjacency counting must use a gap method or explicit adjacency validation."
+            )
+
+    if re.search(r"\b(?:find|what is)\s+the\s+quotient\b", q_lower) and "divided by" in q_lower:
+        if candidate_answer and not re.search(r"[a-zA-Z]", cand_lower):
+            return (
+                "fail",
+                "Verification Error: target is the quotient polynomial/expression, but candidate is scalar."
+            )
+
+    if "by what number should" in q_lower and "multiply" in q_lower and "to get the answer" in q_lower:
+        numeric_literals = [int(x) for x in re.findall(r"\b\d+\b", q_lower)]
+        try:
+            import sympy as sp
+            candidate_value = sp.sympify(candidate_answer)
+            if numeric_literals and candidate_value.is_number and candidate_value > max(numeric_literals):
+                return (
+                    "fail",
+                    "Verification Error: target asks for the multiplier itself, not the final multiplied result."
+                )
+        except Exception:
+            pass
+
+    if "ordered triple" in q_lower and "factor of" in q_lower and "polynomial" in q_lower:
+        if "sp.div" in code_lower and not any(token in code_lower for token in ("all_coeffs", "coeff(", "remainder.coeff", "poly(")):
+            return (
+                "fail",
+                "Verification Error: polynomial factor constraints need coefficient equations from the remainder, not default parameter substitutions."
             )
 
     if "different battalions" in q_lower or ("how many different" in q_lower and "soldiers" in q_lower):
@@ -110,6 +143,12 @@ def _code_strategy_feedback(question: str, candidate_answer: str, code: Optional
                 "fail",
                 "Verification Error: modular remainder should be computed by direct residue substitution and modulo reduction, not by extracting a constant coefficient."
             )
+
+    if ("base eight" in q_lower or "base 8" in q_lower) and ("0o" in cand_lower or candidate_answer.startswith("0O")):
+        return (
+            "fail",
+            "Verification Error: answer must preserve requested mathematical base notation, e.g. digits with _8, not Python's 0o prefix."
+        )
 
     if "for all angles" in q_lower and "sin" in q_lower and "collect" in code_lower and "coeffs_lhs.get" in code_lower:
         return (

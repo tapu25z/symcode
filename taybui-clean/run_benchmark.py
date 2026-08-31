@@ -8,7 +8,7 @@ import sys
 import json
 import time
 import argparse
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from method import (
     LLMRunner,
@@ -125,7 +125,186 @@ def parse_args():
         default=5,
         help="Tan suat luu checkpoint trung gian theo so mau."
     )
+    parser.add_argument(
+        "--run-order",
+        type=str,
+        default="by-problem",
+        choices=["by-problem", "by-method"],
+        help="Thu tu chay: 'by-problem' = moi cau chay lan luot tung phuong phap; 'by-method' = chay het dataset cho tung phuong phap."
+    )
     return parser.parse_args()
+
+
+def _write_json_atomic(data: Dict[str, Any], filepath: str) -> None:
+    temp_file = filepath + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(temp_file, filepath)
+
+
+def _load_benchmark_data(output_file: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    if os.path.exists(output_file):
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                benchmark_data = json.load(f)
+        except Exception:
+            benchmark_data = {}
+    else:
+        benchmark_data = {}
+
+    benchmark_data.setdefault("timestamp", time.strftime("%Y-%m-%d %H:%M:%S"))
+    benchmark_data["config"] = config
+    benchmark_data.setdefault("results", {})
+    benchmark_data.setdefault("summary", {})
+    benchmark_data.setdefault("live_accuracy", {})
+    benchmark_data.setdefault("live_accuracy_by_problem", [])
+    return benchmark_data
+
+
+def _accuracy_stats(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    total = len(results)
+    correct = sum(1 for r in results if r.get("is_correct"))
+    accuracy = (correct / total) * 100.0 if total else 0.0
+    return {
+        "accuracy_percent": round(accuracy, 2),
+        "correct": correct,
+        "total": total
+    }
+
+
+def _refresh_live_accuracy(benchmark_data: Dict[str, Any]) -> Dict[str, Any]:
+    live_accuracy = {
+        method: _accuracy_stats(results)
+        for method, results in benchmark_data.get("results", {}).items()
+    }
+    benchmark_data["live_accuracy"] = live_accuracy
+    return live_accuracy
+
+
+def _print_live_accuracy(live_accuracy: Dict[str, Dict[str, Any]]) -> None:
+    if not live_accuracy:
+        return
+    parts = []
+    for method, stats in live_accuracy.items():
+        parts.append(
+            f"{method}: {stats['accuracy_percent']:.2f}% ({stats['correct']}/{stats['total']})"
+        )
+    print("[LIVE ACC] " + " | ".join(parts), flush=True)
+
+
+def _find_result_for_problem(results: List[Dict[str, Any]], question: str) -> Optional[Dict[str, Any]]:
+    for record in results:
+        if record.get("problem") == question:
+            return record
+    return None
+
+
+def _has_result_for_problem(results: List[Dict[str, Any]], question: str) -> bool:
+    return _find_result_for_problem(results, question) is not None
+
+
+def _record_problem_accuracy_snapshot(
+    benchmark_data: Dict[str, Any],
+    problem_index: int,
+    total_problems: int,
+    question: str,
+    live_accuracy: Dict[str, Dict[str, Any]],
+) -> None:
+    snapshots = benchmark_data.setdefault("live_accuracy_by_problem", [])
+    snapshots = [s for s in snapshots if s.get("problem") != question]
+    snapshots.append({
+        "problem_index": problem_index,
+        "total_problems": total_problems,
+        "problem": question,
+        "live_accuracy": live_accuracy,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    })
+    benchmark_data["live_accuracy_by_problem"] = snapshots
+
+
+def _print_problem_accuracy_snapshot(
+    problem_index: int,
+    total_problems: int,
+    live_accuracy: Dict[str, Dict[str, Any]],
+) -> None:
+    if not live_accuracy:
+        return
+    parts = []
+    for method, stats in live_accuracy.items():
+        parts.append(
+            f"{method}: {stats['accuracy_percent']:.2f}% ({stats['correct']}/{stats['total']})"
+        )
+    print(
+        f"[LIVE ACC PROBLEM {problem_index}/{total_problems}] " + " | ".join(parts),
+        flush=True
+    )
+
+
+def _run_single_method(
+    method: str,
+    item: Dict[str, Any],
+    llm: LLMRunner,
+    args: argparse.Namespace,
+    output_file: str,
+) -> List[Dict[str, Any]]:
+    if method == "Direct":
+        return evaluate_direct(
+            [item], llm, checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    if method == "CoT":
+        return evaluate_cot(
+            [item], llm, checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    if method == "SymCode":
+        return evaluate_symcode(
+            [item], llm, timeout=args.timeout, max_retries=args.max_retries,
+            checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    if method == "SymPlanner":
+        return evaluate_symplanner(
+            [item], llm, timeout=args.timeout, max_retries=args.max_retries,
+            checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    raise ValueError(f"Phuong phap khong hop le: {method}")
+
+
+def _run_by_problem(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    args: argparse.Namespace,
+    config: Dict[str, Any],
+    output_file: str,
+) -> Dict[str, Any]:
+    benchmark_data = _load_benchmark_data(output_file, config)
+    _write_json_atomic(benchmark_data, output_file)
+
+    total = len(dataset)
+    print("\n==================== Bat dau chay theo tung cau ====================")
+    for index, item in enumerate(dataset, start=1):
+        question = item["question"]
+        short_question = " ".join(str(question).split())[:120]
+        print(f"\n[PROBLEM {index}/{total}] {short_question}", flush=True)
+
+        for method in args.methods:
+            method_results = benchmark_data.setdefault("results", {}).setdefault(method, [])
+            if _has_result_for_problem(method_results, question):
+                print(f"[SKIP] {method}: da co ket qua trong checkpoint.", flush=True)
+            else:
+                print(f"[RUN] {method}...", flush=True)
+                method_results = _run_single_method(method, item, llm, args, output_file)
+                benchmark_data["results"][method] = method_results
+
+            current_result = _find_result_for_problem(benchmark_data["results"].get(method, []), question)
+            if current_result:
+                verdict = "DUNG" if current_result.get("is_correct") else "SAI"
+                print(f"[{method}] cau nay: {verdict} | pred={current_result.get('predicted')} | gt={current_result.get('ground_truth')}", flush=True)
+
+        live_accuracy = _refresh_live_accuracy(benchmark_data)
+        _record_problem_accuracy_snapshot(benchmark_data, index, total, question, live_accuracy)
+        _write_json_atomic(benchmark_data, output_file)
+        _print_problem_accuracy_snapshot(index, total, live_accuracy)
+
+    return benchmark_data
 
 
 def main():
@@ -166,7 +345,8 @@ def main():
         "code_exec_timeout": args.timeout,
         "max_symcode_retries": args.max_retries,
         "output_file": output_file,
-        "save_every": args.save_every
+        "save_every": args.save_every,
+        "run_order": args.run_order
     }
 
     print("=" * 75)
@@ -177,6 +357,7 @@ def main():
     print(f"[INFO] Lat nguoc lay tu cuoi (tail): {config['tail']}")
     print(f"[INFO] So mau danh gia: {config['num_samples'] if config['num_samples'] is not None else 'TOAN BO'}")
     print(f"[INFO] Cac phuong phap: {config['methods_to_run']}")
+    print(f"[INFO] Thu tu chay: {config['run_order']}")
     print(f"[INFO] File ket qua: {config['output_file']}")
     print("=" * 75)
 
@@ -203,38 +384,36 @@ def main():
         temperature=args.temperature
     )
 
-    # Doc checkpoint da co neu ton tai
-    if os.path.exists(output_file):
-        try:
-            with open(output_file, "r", encoding="utf-8") as f:
-                benchmark_data = json.load(f)
-        except Exception:
-            benchmark_data = {"config": config, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"), "results": {}, "summary": {}}
+    if args.run_order == "by-problem":
+        benchmark_data = _run_by_problem(dataset, llm, args, config, output_file)
     else:
-        benchmark_data = {"config": config, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"), "results": {}, "summary": {}}
-
-    # Thuc thi tung phuong phap
-    for method in args.methods:
-        if method == "Direct":
-            benchmark_data["results"]["Direct"] = evaluate_direct(
-                dataset, llm, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "CoT":
-            benchmark_data["results"]["CoT"] = evaluate_cot(
-                dataset, llm, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "SymCode":
-            benchmark_data["results"]["SymCode"] = evaluate_symcode(
-                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "SymPlanner":
-            benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
-                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
-            )
+        benchmark_data = _load_benchmark_data(output_file, config)
+        # Thuc thi tung phuong phap
+        for method in args.methods:
+            if method == "Direct":
+                benchmark_data["results"]["Direct"] = evaluate_direct(
+                    dataset, llm, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "CoT":
+                benchmark_data["results"]["CoT"] = evaluate_cot(
+                    dataset, llm, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "SymCode":
+                benchmark_data["results"]["SymCode"] = evaluate_symcode(
+                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "SymPlanner":
+                benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
+                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
+            live_accuracy = _refresh_live_accuracy(benchmark_data)
+            _write_json_atomic(benchmark_data, output_file)
+            _print_live_accuracy(live_accuracy)
 
     # Tong hop va xuat ket qua
     summary = compute_metrics_table(benchmark_data["results"])
     benchmark_data["summary"] = summary
+    _refresh_live_accuracy(benchmark_data)
     save_benchmark_results(benchmark_data, output_file)
     print(f"[SUCCESS] Hoan thanh toan bo quy trinh danh gia benchmark!")
 

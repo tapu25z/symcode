@@ -15,12 +15,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT / "kaggle") not in sys.path:
-    sys.path.insert(0, str(ROOT / "kaggle"))
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from method.extractor import check_exact_match
-from method.target_contract import format_answer_for_contract
+from method.target_contract import format_answer_for_contract, parse_planner_contract
 
 
 def _rate(value: int, total: int) -> float:
@@ -48,7 +48,16 @@ def audit(path: str) -> dict[str, Any]:
     ]
     false_passes = [item for item, correct in zip(results, normalized_correct) if item.get("verification_status") == "pass" and not correct]
     false_fails = [item for item, correct in zip(results, normalized_correct) if item.get("verification_status") == "fail" and correct]
-    malformed = [item for item in results if item.get("planner_errors")]
+    planner_error_records = []
+    for item in results:
+        stored_errors = item.get("planner_errors") or []
+        if stored_errors:
+            planner_error_records.append((item, stored_errors))
+            continue
+        if item.get("planner_note"):
+            _, _, parsed_errors = parse_planner_contract(item.get("planner_note", ""), item.get("problem", ""))
+            if parsed_errors:
+                planner_error_records.append((item, parsed_errors))
     recovered = []
     for item in results:
         history = item.get("attempt_history") or []
@@ -68,7 +77,7 @@ def audit(path: str) -> dict[str, Any]:
         "execution_status": dict(Counter(item.get("execution_status", "unknown") for item in results)),
         "false_pass_count": len(false_passes),
         "false_fail_count": len(false_fails),
-        "planner_malformed_count": len(malformed),
+        "planner_malformed_count": len(planner_error_records),
         "repair_recovered_count": len(recovered),
         "avg_tokens": round(statistics.mean(token_values), 1) if token_values else 0.0,
         "median_tokens": statistics.median(token_values) if token_values else 0,

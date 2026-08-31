@@ -341,6 +341,14 @@ Each benchmark output file contains:
     "SymCode": [],
     "SymPlanner": []
   },
+  "live_accuracy": {
+    "Direct": {
+      "accuracy_percent": 80.0,
+      "correct": 4,
+      "total": 5
+    }
+  },
+  "live_accuracy_by_problem": [],
   "summary": {}
 }
 ```
@@ -358,25 +366,70 @@ SymPlanner rows additionally include:
 Install:
 
 ```bash
-pip install -r kaggle/requirements.txt
+pip install -r requirements.txt
 ```
 
-Quick run:
+Quick run. By default, the benchmark now runs one problem at a time and evaluates each selected method before moving to the next problem:
 
 ```bash
-python3 kaggle/run_benchmark.py --dataset math500 --num-samples 5 --methods Direct CoT SymCode SymPlanner
+python3 run_benchmark.py --dataset math500 --num-samples 5 --methods Direct CoT SymCode SymPlanner
+```
+
+Default run order:
+
+```text
+Problem 1 -> Direct -> CoT -> SymCode -> SymPlanner
+Problem 2 -> Direct -> CoT -> SymCode -> SymPlanner
+...
+```
+
+During the run, each method reports whether it got the current problem right. After all selected methods finish that problem, the script prints one live accuracy snapshot:
+
+```text
+[PROBLEM 5/50] ...
+[Direct] cau nay: DUNG | pred=42 | gt=42
+[CoT] cau nay: SAI | pred=40 | gt=42
+[LIVE ACC PROBLEM 5/50] Direct: 60.00% (3/5) | CoT: 80.00% (4/5)
+```
+
+The latest totals are saved into `live_accuracy`, and the per-problem snapshots are saved into `live_accuracy_by_problem`, so you can inspect the output JSON while the benchmark is still running.
+
+Run in the old order, one full method at a time:
+
+```bash
+python3 run_benchmark.py --dataset math500 --num-samples 5 --run-order by-method
 ```
 
 Run only SymPlanner:
 
 ```bash
-python3 kaggle/run_benchmark.py --dataset math500 --methods SymPlanner --output-file symplanner_math500_full.json
+python3 run_benchmark.py --dataset math500 --methods SymPlanner --output-file symplanner_math500_full.json
 ```
 
 Run selected levels:
 
 ```bash
-python3 kaggle/run_benchmark.py --dataset math500 --filter-levels 4 5 --methods SymCode SymPlanner
+python3 run_benchmark.py --dataset math500 --filter-levels 4 5 --methods SymCode SymPlanner
+```
+
+Run a fixed number of samples per level:
+
+```bash
+python3 run_benchmark.py --dataset math500 --filter-levels 1 2 3 4 5 --per-level-samples 20 --methods Direct CoT SymCode SymPlanner
+```
+
+Resume from an existing output file:
+
+```bash
+python3 run_benchmark.py --dataset math500 --num-samples 50 --output-file math500_50_results.json
+```
+
+If the output file already contains results for a problem/method pair, the runner skips that pair and continues from the checkpoint.
+
+Use a local JSONL dataset:
+
+```bash
+python3 run_benchmark.py --dataset-path data/math500/test.jsonl --methods Direct SymPlanner
 ```
 
 Important options:
@@ -385,6 +438,7 @@ Important options:
 | :--- | :--- | :--- |
 | `--dataset` | `math500` | `math500` or `gsm8k` |
 | `--methods` | all four | Methods to evaluate |
+| `--run-order` | `by-problem` | `by-problem` runs each selected method per problem; `by-method` runs the old method-by-method flow |
 | `--num-samples` | all | Limit number of samples |
 | `--filter-levels` | none | Evaluate selected levels |
 | `--per-level-samples` | none | Select N samples per level |
@@ -398,14 +452,46 @@ Important options:
 | `--timeout` | `15` | Sandbox timeout in seconds |
 | `--save-every` | `5` | Checkpoint interval |
 
+## Customizing Methods
+
+You can choose which built-in methods to run with `--methods`:
+
+```bash
+python3 run_benchmark.py --dataset math500 --num-samples 10 --methods Direct SymPlanner
+```
+
+The valid built-in names are:
+
+```text
+Direct CoT SymCode SymPlanner
+```
+
+To change the behavior of an existing method, edit its prompt file:
+
+```text
+method/direct/prompt.py
+method/cot/prompt.py
+method/symcode/prompt.py
+method/symplanner/prompt.py
+```
+
+To add a brand-new method name, add a new folder under `method/`, implement its `prompt.py` and `evaluator.py`, then register it in:
+
+```text
+run_benchmark.py
+method/__init__.py
+```
+
+The CLI currently validates method names with fixed `choices`, so a new custom method will not run from `--methods` until it is added to those choices and to the dispatch logic.
+
 ## Tests
 
 ```bash
-python3 kaggle/tests/test_symplanner_quality.py
-python3 -m compileall -q kaggle/method kaggle/run_benchmark.py
+pytest -q
+python3 -m compileall -q method run_benchmark.py
 ```
 
-Avoid `python -m unittest kaggle.tests...` from the repository root on machines with the Kaggle API installed, because Python may resolve `kaggle` to the external package.
+Avoid `python -m unittest kaggle.tests...` from a parent repository root on machines with the Kaggle API installed, because Python may resolve `kaggle` to the external package.
 
 ## Paper Note
 

@@ -2,8 +2,8 @@ import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "kaggle"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from method.extractor import check_exact_match
 from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages, format_problem_hints
@@ -37,7 +37,6 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertTrue(check_exact_match(["3.00000000000000", "1.57079632679490"], r"\left( 3, \frac{\pi}{2} \right)"))
         self.assertTrue(check_exact_match("4/3", r"\frac43"))
         self.assertTrue(check_exact_match("1/2", r"\frac12"))
-
 
     def test_base_notation_is_not_collapsed_to_decimal(self):
         self.assertFalse(check_exact_match("52", "52_8"))
@@ -104,6 +103,16 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(parsed["answer_type"], "text")
         self.assertEqual(len(parsed["steps"]), 3)
 
+    def test_planner_accepts_numbered_format_used_by_prompt(self):
+        raw = """1. Identify the target quotient.
+2. Divide the polynomial by the divisor.
+3. Print the quotient polynomial."""
+        note, parsed, errors = parse_planner_contract(raw, "Find the quotient when x^2 - 1 is divided by x + 1.")
+        self.assertTrue(note)
+        self.assertFalse(errors)
+        self.assertEqual(parsed["answer_type"], "symbolic")
+        self.assertEqual(len(parsed["steps"]), 3)
+
     def test_planner_accepts_structured_state_labels(self):
         raw = """# Subject: number_theory
 # Target: number of valid x
@@ -157,6 +166,8 @@ class SymPlannerQualityTests(unittest.TestCase):
     def test_static_lint_catches_recursion_hazard(self):
         findings = lint_sympy_code("def eval_expr(sub_expr):\n    return eval_expr(sub_expr[:-1])")
         self.assertTrue(any("recursive function call detected" in f for f in findings))
+        findings = lint_sympy_code("while True:\n    pass")
+        self.assertTrue(any("unbounded while True" in f for f in findings))
 
     def test_symplanner_sandbox_enforces_structured_output(self):
         code = 'import json; print(json.dumps({"answer":"5","canonical_answer":"5","answer_type":"number","unit":None,"variables":{}}))'
@@ -188,6 +199,8 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertEqual(infer_target_spec("Find the roots of x^2-1.")["answer_type"], "set")
         self.assertEqual(infer_target_spec("What is the smallest n such that all the roots of x^4+x^2+1 are nth roots of unity?")["answer_type"], "number")
         self.assertEqual(infer_target_spec("Enter the ordered triple (p,q,r).")["answer_type"], "tuple")
+        self.assertEqual(infer_target_spec("Find the quotient when x^6 - 3 is divided by x + 1.")["answer_type"], "symbolic")
+        self.assertEqual(infer_target_spec(r"Find the vector $\\mathbf{v}$ such that a dot v = 2.")["answer_type"], "matrix")
 
     def test_verifier_flags_detectable_wrong_strategies_for_retry(self):
         status, feedback = verify_candidate_answer(
@@ -227,5 +240,25 @@ class SymPlannerQualityTests(unittest.TestCase):
             "A worker makes three end-of-year deposits with compound interest. What rate is needed?",
             "49.03",
             "equation = sp.Eq(A, P * (1 + r)**n)",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            "Find the quotient when x^6 - 3 is divided by x + 1.",
+            "-6",
+            "quotient, remainder = sp.div(x**6 - 3, x + 1)\nprint(remainder)",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            r"Remmy wants to divide $10$ by $\\frac{2}{3}$. By what number should he multiply $10$ to get the answer?",
+            "15",
+        )
+        self.assertEqual(status, "fail")
+
+        status, _ = verify_candidate_answer(
+            "The polynomial x^3 - 3x^2 + 4x - 1 is a factor of x^9 + px^6 + qx^3 + r. Enter the ordered triple (p,q,r).",
+            "(1, 0, 0)",
+            "quotient, remainder = sp.div(g, f)\nprint((1, 0, 0))",
         )
         self.assertEqual(status, "fail")

@@ -34,6 +34,7 @@ Return ONLY numbered plan steps.
 Rules:
 - Do not calculate or reveal the final numeric answer.
 - Do not write Python code.
+- Restate the requested target when the problem asks for an input, multiplier, quotient, coefficient, vector, or tuple; do not plan to print a downstream computed value instead.
 - Include candidate filtering or constraint checks when needed.
 - Keep the plan short."""
 
@@ -50,6 +51,7 @@ Return ONLY executable Python code in one ```python ... ``` block. Do not explai
 Rules:
 1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
 2. Solve the requested target, not an intermediate value. Use the extraction and plan.
+   Examples: if asked "by what number should A be multiplied", print the multiplier, not A times that multiplier; if asked for a quotient, print the quotient polynomial, not the remainder or value at a point.
 3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
 4. Use finite loops only. Never use an unbounded while loop.
 5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
@@ -254,7 +256,6 @@ def build_symplanner_codegen_messages(question: str, planner_note: str = "", sub
 # EXTRACTED STATE AND PLAN
 {plan_block}
 
-# OUTPUT REQUIREMENT
 {target_block}
 
 Return executable Python code only enclosed in ```python ... ```. Do not write explanations."""
@@ -307,7 +308,6 @@ def build_symplanner_debug_messages(
 # EXTRACTED STATE AND PLAN
 {plan_block}
 
-# OUTPUT REQUIREMENT
 {target_block}
 
 # PREVIOUS CODE

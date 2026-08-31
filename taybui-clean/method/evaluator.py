@@ -88,6 +88,11 @@ def _should_retry_symplanner(execution_status: str, candidate: Any, verification
         "trig power identity",
         "reassigned",
         "explicit coordinates",
+        "quotient polynomial",
+        "multiplier itself",
+        "gap method",
+        "polynomial factor constraints",
+        "python's 0o prefix",
     )
     if verification_status == "fail":
         return any(token in feedback_text for token in actionable_tokens)
@@ -385,7 +390,8 @@ def evaluate_direct_or_cot(
     dataset: List[Dict[str, Any]],
     llm: LLMRunner,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5
+    save_every: int = 5,
+    verbose: bool = True
 ) -> List[Dict[str, Any]]:
     """
     Thực thi đánh giá zero-shot cho Direct hoặc Chain-of-Thought (CoT) với tính năng Auto-Resume.
@@ -393,14 +399,17 @@ def evaluate_direct_or_cot(
     ckpt = _load_existing_checkpoint(checkpoint_file, method_name)
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
+    dataset_questions = {item["question"] for item in dataset}
+    completed_in_dataset = len(completed_problems & dataset_questions)
     
-    if completed_problems:
-        print(f"[INFO] Tiep tuc phuong phap {method_name}: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+    if verbose and completed_in_dataset:
+        print(f"[INFO] Tiep tuc phuong phap {method_name}: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
 
-    print(f"\n==================== Bat dau danh gia Baseline: {method_name} ====================")
+    if verbose:
+        print(f"\n==================== Bat dau danh gia Baseline: {method_name} ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc=f"Danh gia {method_name}"):
+    for item in tqdm(dataset, desc=f"Danh gia {method_name}", disable=not verbose):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -449,7 +458,8 @@ def evaluate_symcode(
     timeout: int = 15,
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5
+    save_every: int = 5,
+    verbose: bool = True
 ) -> List[Dict[str, Any]]:
     """
     Thực thi đánh giá phương pháp SymCode (Neurosymbolic Equation Solving với SymPy & Vòng lặp Verifier).
@@ -459,14 +469,17 @@ def evaluate_symcode(
     ckpt = _load_existing_checkpoint(checkpoint_file, "SymCode")
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
+    dataset_questions = {item["question"] for item in dataset}
+    completed_in_dataset = len(completed_problems & dataset_questions)
     
-    if completed_problems:
-        print(f"[INFO] Tiep tuc phuong phap SymCode: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+    if verbose and completed_in_dataset:
+        print(f"[INFO] Tiep tuc phuong phap SymCode: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
 
-    print(f"\n==================== Bat dau danh gia Phuong phap: SymCode (So lan retry toi da: {max_retries}) ====================")
+    if verbose:
+        print(f"\n==================== Bat dau danh gia Phuong phap: SymCode (So lan retry toi da: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymCode"):
+    for item in tqdm(dataset, desc="Danh gia SymCode", disable=not verbose):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -592,7 +605,8 @@ def evaluate_symplanner(
     timeout: int = 15,
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5
+    save_every: int = 5,
+    verbose: bool = True
 ) -> List[Dict[str, Any]]:
     """
     Thực thi SymPlanner đơn giản:
@@ -604,14 +618,17 @@ def evaluate_symplanner(
     ckpt = _load_existing_checkpoint(checkpoint_file, "SymPlanner")
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
+    dataset_questions = {item["question"] for item in dataset}
+    completed_in_dataset = len(completed_problems & dataset_questions)
     
-    if completed_problems:
-        print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
+    if verbose and completed_in_dataset:
+        print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
 
-    print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Extract -> Plan -> SymCode, Retries: {max_retries}) ====================")
+    if verbose:
+        print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Extract -> Plan -> SymCode, Retries: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymPlanner"):
+    for item in tqdm(dataset, desc="Danh gia SymPlanner", disable=not verbose):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -640,8 +657,8 @@ def evaluate_symplanner(
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
 
-        planner_meta = infer_target_spec(question, extraction_note)
-        planner_errors = []
+        planner_note_clean, planner_meta, planner_errors = parse_planner_contract(planner_note, question)
+        planner_note = planner_note_clean or planner_note
         symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
 
         # -------------------------------------------------------------
