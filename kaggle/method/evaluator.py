@@ -406,7 +406,7 @@ def evaluate_direct_or_cot(
         messages = build_prompt_messages(method_name, question)
         
         if method_name == "Direct":
-            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=128)
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
         else:  # CoT
             raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
         predicted_ans = extract_answer_fallback(raw_output)
@@ -488,7 +488,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -499,8 +499,7 @@ def evaluate_symcode(
                     verification_status=verif_status,
                     verification_feedback=verif_feedback
                 )
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
-            
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
             total_tokens += token_count
             raw_outputs.append(raw_output)
             
@@ -635,8 +634,7 @@ def evaluate_symplanner(
         # TURN 2: PLAN PHASE
         # -------------------------------------------------------------
         planner_messages = build_planner_messages(question, extraction_note)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, enable_thinking=False, max_new_tokens_override=192)
-        planner_note = clean_planner_note(raw_plan)
+        raw_plan, plan_tokens = llm.generate_chat(planner_messages, enable_thinking=False, max_new_tokens_override=256)
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
 
