@@ -25,10 +25,12 @@ class LLMRunner:
         max_new_tokens: int = 1024,
         temperature: float = 0.0,
         top_p: float = 1.0,
-        max_input_tokens: int = 2560,
+        max_input_tokens: int = 8192,
         device_map: str = "auto",
         hf_token: Optional[str] = None,
-        default_enable_thinking: Optional[bool] = None
+        default_enable_thinking: Optional[bool] = None,
+        extract_max_tokens: int = 384,
+        plan_max_tokens: int = 768,
     ):
         self.model_id = model_id
         self.max_new_tokens = max_new_tokens
@@ -36,6 +38,8 @@ class LLMRunner:
         self.top_p = top_p
         self.max_input_tokens = int(max_input_tokens)
         self.default_enable_thinking = default_enable_thinking
+        self.extract_max_tokens = extract_max_tokens
+        self.plan_max_tokens = plan_max_tokens
         
         token = hf_token or os.environ.get("HF_TOKEN") or None
         cuda_avail = torch.cuda.is_available()
@@ -76,7 +80,7 @@ class LLMRunner:
             "device_map": device_map,
             "low_cpu_mem_usage": True,
             "trust_remote_code": True,
-            "dtype": compute_dtype
+            "torch_dtype": compute_dtype
         }
         
         if bnb_config is not None:
@@ -119,31 +123,18 @@ class LLMRunner:
         }
         thinking_setting = self.default_enable_thinking if enable_thinking is None else enable_thinking
         if thinking_setting is not None:
-            try:
-                chat_template_kwargs["enable_thinking"] = thinking_setting
-            except TypeError:
-                pass
-
-        try:
-            prompt = self.tokenizer.apply_chat_template(messages, **chat_template_kwargs)
-        except (TypeError, Exception):
-            try:
-                prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            except Exception:
-                formatted = []
-                for m in messages:
-                    role = m.get("role", "user").capitalize()
-                    content = m.get("content", "")
-                    formatted.append(f"<|im_start|>{role}\n{content}<|im_end|>")
-                formatted.append("<|im_start|>assistant\n")
-                prompt = "\n".join(formatted)
-
+            chat_template_kwargs["enable_thinking"] = thinking_setting
+        # A template failure must not silently change the experimental condition.
+        prompt = self.tokenizer.apply_chat_template(messages, **chat_template_kwargs)
         inputs = self.tokenizer(
-            prompt,
-            return_tensors="pt",
-            truncation=True,
-            max_length=self.max_input_tokens
+            prompt, return_tensors="pt", truncation=False, add_special_tokens=False
         ).to(self.model.device)
+        if inputs.input_ids.shape[1] > self.max_input_tokens:
+            raise ValueError(
+                f"Prompt has {inputs.input_ids.shape[1]} tokens, exceeding "
+                f"max_input_tokens={self.max_input_tokens}. Increase --max-input-tokens; "
+                "refusing to silently truncate the problem, plan, or repair feedback."
+            )
         input_len = inputs.input_ids.shape[1]
 
         tokens_limit = int(max_new_tokens_override) if max_new_tokens_override is not None else self.max_new_tokens

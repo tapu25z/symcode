@@ -1,8 +1,9 @@
 """
 Module Sandbox thực thi mã nguồn Python/SymPy cách ly và an toàn.
-Sử dụng ThreadPoolExecutor để đảm bảo tốc độ thực thi nhanh dưới 0.05 giây và bảo vệ chống treo (timeout).
+Thực thi trong tiến trình con với timeout; đây không phải sandbox bảo mật cho mã không tin cậy.
 """
 
+import ast
 import io
 import json
 import math
@@ -154,10 +155,26 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
     try:
         if mode == "symplanner":
             json.dumps = _json_dumps_with_default_str
+        output_source = "stdout"
         with contextlib.redirect_stdout(stdout_capture):
-            exec(code, exec_globals)
+            tree = ast.parse(code)
+            # Support notebook-style final expressions without guessing a variable
+            # or executing the expression twice. Shared by both code methods.
+            final_expr = None
+            if mode == "symcode" and tree.body and isinstance(tree.body[-1], ast.Expr):
+                node = tree.body[-1].value
+                if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                    final_expr = tree.body.pop().value
+            exec(compile(tree, "<string>", "exec"), exec_globals)
+            if final_expr is not None:
+                value = eval(compile(ast.Expression(final_expr), "<string>", "eval"), exec_globals)
+                if value is not None and not stdout_capture.getvalue().strip():
+                    rendered = sp.latex(value) if sp is not None and isinstance(value, sp.Basic) else str(value)
+                    print("\\boxed{" + rendered + "}")
+                    output_source = "final_expression"
         stdout_val = stdout_capture.getvalue()
-        return {"status": "success", "stdout": stdout_val, "traceback": None}
+        return {"status": "success", "stdout": stdout_val, "traceback": None,
+                "output_source": output_source}
     except Exception:
         tb_raw = traceback.format_exc()
         tb_clean = _clean_traceback_str(tb_raw)

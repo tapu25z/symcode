@@ -11,6 +11,9 @@ from .prompts import (
     PLANNER_SYSTEM_PROMPT,
     SYMPLANNER_CODEGEN_SYSTEM_PROMPT,
     DEBUG_SYSTEM_PROMPT,
+    PAL_SYSTEM_PROMPT,
+    POT_SYSTEM_PROMPT,
+    PLANCODE_SYSTEM_PROMPT,
     build_prompt_messages,
     build_extract_messages,
     build_planner_messages,
@@ -49,6 +52,10 @@ except ImportError:
 from .evaluator import (
     load_dataset_file,
     evaluate_direct_or_cot,
+    evaluate_program_aided,
+    evaluate_pal,
+    evaluate_pot,
+    evaluate_plancode,
     evaluate_symcode,
     evaluate_symplanner,
     compute_metrics_table,
@@ -62,6 +69,9 @@ from . import verifier
 from . import evaluator
 from . import direct
 from . import cot
+from . import pal
+from . import pot
+from . import plancode
 from . import symcode
 from . import symplanner
 try:
@@ -78,6 +88,9 @@ __all__ = [
     "PLANNER_SYSTEM_PROMPT",
     "SYMPLANNER_CODEGEN_SYSTEM_PROMPT",
     "DEBUG_SYSTEM_PROMPT",
+    "PAL_SYSTEM_PROMPT",
+    "POT_SYSTEM_PROMPT",
+    "PLANCODE_SYSTEM_PROMPT",
     "build_prompt_messages",
     "build_extract_messages",
     "build_planner_messages",
@@ -106,6 +119,10 @@ __all__ = [
     "LLMRunner",
     "load_dataset_file",
     "evaluate_direct_or_cot",
+    "evaluate_program_aided",
+    "evaluate_pal",
+    "evaluate_pot",
+    "evaluate_plancode",
     "evaluate_symcode",
     "evaluate_symplanner",
     "compute_metrics_table",
@@ -117,6 +134,9 @@ __all__ = [
     "evaluator",
     "direct",
     "cot",
+    "pal",
+    "pot",
+    "plancode",
     "symcode",
     "symplanner",
     "model"
