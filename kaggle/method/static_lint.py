@@ -13,8 +13,10 @@ def lint_sympy_code(code: str) -> list[str]:
         (r"\b(?:solutions?|roots?|sol)\s*\[\s*0\s*\]", "indexing a possibly empty solution list"),
         (r"(?:Eq|solve)\([^\n]*//", "using floor division inside an equation/solver expression"),
         (r"\)\s*&\s*\(", "combining inequalities with Python '&' instead of SymPy And"),
-        (r"\.evalf\(\)", "evalf() may be called on a Python scalar; use sp.sympify first"),
+        (r"\.evalf\(\)", "evalf() should not be called unless decimal approximation is requested; keep exact symbolic/fractional values"),
         (r"print\(\s*['\"]\{.*['\"]\.format\(", "hand-formatting JSON with .format; use json.dumps(..., default=str)"),
+        (r"sp\.Rational\s*\([^,\n]+,\s*(?:sp\.|sqrt|\[)", "sp.Rational accepts integer arguments only; use division '/' or sp.S() for symbolic expressions"),
+        (r"\[\s*\w+\s+for\s+\w+\s+in\s+\w+\s+if\s+\w+\s*>\s*0\s*\]", "filtering positive solutions (sol > 0) without verifying if negative solutions are valid"),
     ]
     for pattern, message in patterns:
         if re.search(pattern, text):

@@ -50,12 +50,17 @@ SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and
 Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
 Rules:
-1. Import sympy as sp. Use exact arithmetic (sp.Rational); use floats only when requested.
-2. Implement the plan as clean, linear Python code.
-3. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
-4. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
-5. Use finite loops only. Never use an unbounded while loop.
-6. At the end, print ONLY the final answer in LaTeX boxed format:
+1. Import sympy as sp. Use exact symbolic arithmetic.
+2. IMPORTANT SYMPY & CODE RULES:
+   - sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q (e.g. 5 / sp.sqrt(80)).
+   - Keep answers in exact symbolic/fractional form by default (e.g. 2, 3/2). Do NOT call .evalf() unless decimal places are explicitly requested.
+   - Use sp.together(expr) or sp.cancel(expr) to combine fraction terms into a single fraction before printing.
+   - Do NOT filter out negative solutions (sol > 0) unless the problem strictly restricts the domain (e.g. length, count, probability).
+3. Implement the plan as clean, linear Python code.
+4. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
+5. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
+6. Use finite loops only. Never use an unbounded while loop.
+7. At the end, print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")"""
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -86,10 +91,13 @@ Fix the reported issue and keep correct code. Do not explain or output <think> t
 
 Rules:
 - Recompute the target; do not hard-code an answer.
-- Use exact arithmetic where possible and handle fragile solver failures.
+- sp.Rational(p, q) accepts ONLY integers p and q. For expressions/sqrts, use p / q or sp.S(p) / q.
+- Do NOT call .evalf() unless decimal places are requested. Keep exact symbolic expressions.
+- Use sp.together(expr) or sp.cancel(expr) to combine fraction terms.
+- Do NOT filter out negative solutions unless the problem domain strictly requires it.
 - Use finite loops only; never use an unbounded while loop.
 - Any reasoning comment must start with "# Step <number>:".
-- Print only the required final result."""
+- Print only the required final result in \boxed{final_answer}."""
 
 SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 
@@ -97,7 +105,8 @@ SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 # 4. BASELINE PROMPTS (Direct & CoT)
 # ==============================================================================
 
-COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear and rigorous logical reasoning.
+COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear, concise, and direct logical reasoning.
+Avoid repeating calculations or writing excessive narrative text. Keep your reasoning focused and concise.
 At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
 
 DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
