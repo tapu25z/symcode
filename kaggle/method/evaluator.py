@@ -401,6 +401,7 @@ def evaluate_direct_or_cot(
     
     new_evaluated = 0
     for item in tqdm(dataset, desc=f"Danh gia {method_name}", disable=not verbose):
+        question = item["question"]
         if question in completed_problems:
             continue
             
@@ -468,6 +469,7 @@ def evaluate_symcode(
     
     new_evaluated = 0
     for item in tqdm(dataset, desc="Danh gia SymCode", disable=not verbose):
+        question = item["question"]
         if question in completed_problems:
             continue
             
@@ -614,6 +616,7 @@ def evaluate_symplanner(
     
     new_evaluated = 0
     for item in tqdm(dataset, desc="Danh gia SymPlanner", disable=not verbose):
+        question = item["question"]
         if question in completed_problems:
             continue
             
