@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
-from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
+from method.prompts import build_extract_messages, build_planner_messages, build_replan_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
 from method.static_lint import lint_sympy_code
-from method.sandbox import execute_code_safely
+from method.sandbox import execute_code_safely, safe_solve, SafeList, safe_inequality
 from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from method.verifier import verify_candidate_answer
 from method.direct import build_messages as build_direct_messages
@@ -209,6 +209,44 @@ class SymPlannerQualityTests(unittest.TestCase):
             "49.03",
             "equation = sp.Eq(A, P * (1 + r)**n)",
         )
+        self.assertEqual(status, "fail")
+
+    def test_safe_solve_defensive_behavior(self):
+        import sympy as sp
+        x = sp.Symbol('x')
+        # Filter positive roots
+        pos_sols = safe_solve(x**2 - 9, x, positive=True)
+        self.assertEqual(pos_sols, [3])
+        # Empty roots returns SafeList with safe indexing [0] -> None (no IndexError)
+        empty_sols = safe_solve(x**2 + 1, x, real=True)
+        self.assertIsNone(empty_sols[0])
+        self.assertIsNone(empty_sols.first())
+
+    def test_sandbox_executes_safe_solve_without_imports(self):
+        code = "x = sp.Symbol('x')\nsols = safe_solve(x**2 - 16, x, positive=True)\nprint(f'\\boxed{{{sols[0]}}}')"
+        res = execute_code_safely(code)
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["extracted_answer"], "4")
+
+    def test_auto_latex_and_contract_format(self):
+        radical = format_answer_for_contract("Find the length.", "3*sqrt(13)")
+        self.assertIn(r"\sqrt{13}", radical)
+        frac = format_answer_for_contract("Express your answer as a common fraction.", "0.75")
+        self.assertEqual(frac, r"\frac{3}{4}")
+
+    def test_replan_message_generation(self):
+        msgs = build_replan_messages(
+            question="Find the maximum value.",
+            extraction="# Target: max value",
+            prev_plan="1. Solve directly",
+            failure_feedback="Verification Error: candidate is negative."
+        )
+        self.assertEqual(len(msgs), 2)
+        self.assertIn("FAILURE DIAGNOSIS", msgs[1]["content"])
+        self.assertIn("candidate is negative", msgs[1]["content"])
+
+    def test_target_contract_rejects_numeric_fractions_for_text_target(self):
+        status, _ = verify_candidate_answer("Which student has the greatest average speed?", "14/3")
         self.assertEqual(status, "fail")
 
 if __name__ == "__main__":

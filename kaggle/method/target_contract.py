@@ -173,7 +173,7 @@ def target_contract_feedback(question: str, candidate_answer: Any, planner_note:
     if not answer:
         return "fail", "Verification Error: empty candidate answer."
     if spec["answer_type"] == "text":
-        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?(?:\s*[A-Za-z]+)?", answer):
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?(?:\s*[A-Za-z]+)?", answer) or re.fullmatch(r"[-+]?\d+\s*/\s*\d+", answer):
             return "fail", "Verification Error: target requires a named text entity, but candidate is numeric."
         return "unknown", f"Candidate answer is a valid text entity ('{answer}')."
     elif spec["answer_type"] == "symbolic":
@@ -222,7 +222,7 @@ def format_answer_for_contract(question: str, answer: Any, answer_type: str | No
     if answer is None:
         return answer
     spec = infer_target_spec(question)
-    inferred_type = spec.get("answer_type")
+    inferred_type = answer_type or spec.get("answer_type")
     answer_text = str(answer).strip()
     numeric_list = _as_numeric_list(answer)
     if inferred_type == "tuple" and numeric_list and len(numeric_list) >= 2:
@@ -236,4 +236,27 @@ def format_answer_for_contract(question: str, answer: Any, answer_type: str | No
         if base_match:
             base = next(group for group in base_match.groups() if group)
             return f"{answer_text}_{base}"
+
+    q_lower = str(question or "").lower()
+    # Auto-convert decimal to common fraction if requested by problem
+    if ("common fraction" in q_lower or "fraction" in q_lower) and "." in answer_text:
+        try:
+            from fractions import Fraction
+            frac = Fraction(answer_text).limit_denominator(1000)
+            if frac.denominator > 1:
+                return f"\\frac{{{frac.numerator}}}{{{frac.denominator}}}"
+        except Exception:
+            pass
+
+    # Auto-convert Python radical/complex/pi syntax to clean LaTeX
+    if any(tok in answer_text for tok in ("*sqrt(", "sqrt(", "**", "*I", "*pi")):
+        try:
+            import sympy as sp
+            sym_expr = sp.sympify(answer_text, locals={"I": sp.I, "pi": sp.pi, "sqrt": sp.sqrt})
+            latex_expr = sp.latex(sym_expr)
+            if latex_expr:
+                return latex_expr
+        except Exception:
+            pass
+
     return answer

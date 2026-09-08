@@ -9,11 +9,13 @@ from .prompts import (
     SYMCODE_SYSTEM_PROMPT,
     EXTRACT_SYSTEM_PROMPT,
     PLANNER_SYSTEM_PROMPT,
+    REPLAN_SYSTEM_PROMPT,
     SYMPLANNER_CODEGEN_SYSTEM_PROMPT,
     DEBUG_SYSTEM_PROMPT,
     build_prompt_messages,
     build_extract_messages,
     build_planner_messages,
+    build_replan_messages,
     clean_planner_note,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages,
@@ -30,7 +32,10 @@ from .extractor import (
     check_exact_match
 )
 from .sandbox import (
-    execute_code_safely
+    execute_code_safely,
+    SafeList,
+    safe_solve,
+    safe_inequality,
 )
 from .verifier import (
     verify_candidate_answer
@@ -72,11 +77,13 @@ __all__ = [
     "SYMCODE_SYSTEM_PROMPT",
     "EXTRACT_SYSTEM_PROMPT",
     "PLANNER_SYSTEM_PROMPT",
+    "REPLAN_SYSTEM_PROMPT",
     "SYMPLANNER_CODEGEN_SYSTEM_PROMPT",
     "DEBUG_SYSTEM_PROMPT",
     "build_prompt_messages",
     "build_extract_messages",
     "build_planner_messages",
+    "build_replan_messages",
     "clean_planner_note",
     "build_symplanner_codegen_messages",
     "build_symplanner_debug_messages",
@@ -90,6 +97,9 @@ __all__ = [
     "normalize_answer_str",
     "check_exact_match",
     "execute_code_safely",
+    "SafeList",
+    "safe_solve",
+    "safe_inequality",
     "verify_candidate_answer",
     "infer_target_spec",
     "parse_planner_contract",

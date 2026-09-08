@@ -36,9 +36,21 @@ Rules:
 - Include candidate filtering or constraint checks when needed.
 - Keep the plan short."""
 
+REPLAN_SYSTEM_PROMPT = r"""You are revising an unsuccessful solution plan for a mathematical problem.
+You will receive the original problem, the extracted mathematical state, the previous plan that failed, and the diagnosis/feedback from execution.
+
+Return ONLY revised numbered plan steps.
+
+Rules:
+- Do not repeat the previous failed strategy.
+- Propose an alternative mathematical approach (e.g., switch from pure symbolic solving to bounded search or Vieta's formulas, re-formulate coordinate axes, or change variable substitution).
+- Do not calculate or reveal the final numeric answer.
+- Do not write Python code.
+- Keep the plan short and concrete."""
+
 
 # ==============================================================================
-# 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
+# 2. CODEGEN PROMPTS (Turn 3: Sinh mã nguồn Python/SymPy thuần túy 100%)
 # ==============================================================================
 
 SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
@@ -48,13 +60,13 @@ Return ONLY executable Python code in one ```python ... ``` block. Do not explai
 Rules:
 1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
 2. Solve the requested target, not an intermediate value. Use the extraction and plan.
-3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
+3. If using sp.solve, handle empty solutions safely. You can also use safe_solve(eqs, vars, positive=True/False, real=True) available in globals.
 4. Use finite loops only. Never use an unbounded while loop.
-5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
+5. Cross-verify whenever possible: write an analytical path (Path A) and a simple verification or numerical/substitution check (Path B) to confirm the result.
 6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
 7. Any reasoning comment must start with "# Step <number>:".
-8. At the end, print ONLY the final answer in LaTeX boxed format:
-   print(f"\\boxed{{{final_answer}}}")"""
+8. At the end, print ONLY the final answer in LaTeX boxed format using sp.latex() for mathematical/symbolic expressions:
+   print(f"\\boxed{{{sp.latex(final_answer)}}}")"""
 
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -154,6 +166,37 @@ def build_planner_messages(question: str, extraction: str = "") -> List[Dict[str
     return [
         {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
         {"role": "user", "content": f"# PROBLEM\n{question}\n\n# EXTRACTED STATE\n{extraction_block}\n\nWrite the plan only."}
+    ]
+
+
+def build_replan_messages(
+    question: str,
+    extraction: str = "",
+    prev_plan: str = "",
+    failure_feedback: str = ""
+) -> List[Dict[str, str]]:
+    """Build Level 2 Backtracking messages: request an alternative plan given diagnosis."""
+    extraction_block = extraction.strip() or "No extraction available."
+    prev_plan_block = prev_plan.strip() or "N/A"
+    diag_block = failure_feedback.strip() or "The previous plan led to execution or verification failure."
+
+    user_content = f"""# PROBLEM
+{question}
+
+# EXTRACTED STATE
+{extraction_block}
+
+# PREVIOUS FAILED PLAN
+{prev_plan_block}
+
+# FAILURE DIAGNOSIS
+{diag_block}
+
+Formulate a new, alternative numbered solution plan that avoids the above failure mode. Write the revised plan only."""
+
+    return [
+        {"role": "system", "content": REPLAN_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content}
     ]
 
 

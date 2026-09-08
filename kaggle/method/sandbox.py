@@ -56,6 +56,94 @@ try:
 except ImportError:
     np = None
 
+class SafeList(list):
+    """List that returns None on out-of-range indexing instead of raising IndexError."""
+    def __getitem__(self, index):
+        try:
+            return super().__getitem__(index)
+        except IndexError:
+            return None
+
+    def first(self, default=None):
+        return self[0] if len(self) > 0 else default
+
+
+def safe_solve(equations, *variables, positive=None, non_negative=None, real=True, integer=False, **kwargs):
+    """Robust solver wrapper that catches exceptions, applies domain filters, and never raises IndexError."""
+    if sympy is None:
+        return SafeList([])
+
+    try:
+        raw_sols = sympy.solve(equations, *variables, **kwargs)
+    except Exception:
+        try:
+            raw_sols = list(sympy.solveset(equations, *variables))
+        except Exception:
+            raw_sols = []
+
+    if isinstance(raw_sols, dict):
+        return SafeList([raw_sols])
+
+    if not isinstance(raw_sols, (list, tuple, set)):
+        raw_sols = [raw_sols] if raw_sols is not None else []
+
+    filtered = []
+    for s in raw_sols:
+        val = s
+        if isinstance(s, dict) and variables:
+            val = s.get(variables[0])
+
+        if real:
+            if hasattr(val, "is_real") and val.is_real is False:
+                continue
+            if hasattr(val, "has") and val.has(sympy.I):
+                continue
+        if positive:
+            if hasattr(val, "is_positive") and val.is_positive is False:
+                continue
+            try:
+                if float(sympy.sympify(val)) <= 0:
+                    continue
+            except Exception:
+                pass
+        if non_negative:
+            try:
+                if float(sympy.sympify(val)) < 0:
+                    continue
+            except Exception:
+                pass
+        if integer:
+            if hasattr(val, "is_integer") and val.is_integer is False:
+                continue
+            try:
+                if not float(sympy.sympify(val)).is_integer():
+                    continue
+            except Exception:
+                pass
+
+        filtered.append(s)
+
+    if any([positive is not None, non_negative is not None, integer, real]):
+        return SafeList(filtered)
+    return SafeList(filtered if filtered else raw_sols)
+
+
+def safe_inequality(conditions, var=None):
+    """Safely reduce compound inequalities without crashing on And/Or objects."""
+    if sympy is None:
+        return conditions
+    try:
+        if isinstance(conditions, (list, tuple, set)):
+            return sympy.reduce_inequalities(list(conditions), var)
+        return sympy.reduce_inequalities(conditions, var)
+    except Exception:
+        try:
+            if hasattr(conditions, "args"):
+                return sympy.And(*[sympy.reduce_inequalities(arg, var) for arg in conditions.args])
+        except Exception:
+            pass
+    return conditions
+
 
 def _clean_traceback_str(tb_str: str) -> str:
     """
@@ -141,10 +229,11 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
             "diff": diff,
             "integrate": integrate,
             "zoo": zoo,
-            "oo": oo,
-            "nan": nan
+            "nan": nan,
+            "SafeList": SafeList,
+            "safe_solve": safe_solve,
+            "safe_inequality": safe_inequality,
         })
-
     original_json_dumps = json.dumps
 
     def _json_dumps_with_default_str(*args, **kwargs):
@@ -357,8 +446,19 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
     boxed_ans = extract_boxed_content(stdout)
     if boxed_ans is not None:
         res["extracted_answer"] = boxed_ans
+        clean_boxed = boxed_ans.strip()
+        if (
+            sympy is not None
+            and any(tok in clean_boxed for tok in ("*", "sqrt(", "**", "Rational(", "pi", "I", "/"))
+            and not re.search(r"_\d+", clean_boxed)
+            and not clean_boxed.startswith(("{", "["))
+        ):
+            try:
+                sym_val = sympy.sympify(clean_boxed, locals={"I": sympy.I, "pi": sympy.pi, "sqrt": sympy.sqrt})
+                res["latex_answer"] = sympy.latex(sym_val)
+            except Exception:
+                pass
     else:
         lines = [l.strip() for l in stdout.strip().split("\n") if l.strip()]
         res["extracted_answer"] = lines[-1] if lines else None
-
     return res

@@ -25,6 +25,7 @@ from .prompts import (
     build_prompt_messages,
     build_retry_prompt_messages,
     build_planner_messages,
+    build_replan_messages,
     clean_planner_note,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages,
@@ -678,7 +679,7 @@ def evaluate_symplanner(
             "generated_tokens": code_tokens,
             "execution_status": exec_res.get("status"),
             "candidate_answer": candidate_ans,
-            "canonical_answer": exec_res.get("canonical_answer"),
+            "canonical_answer": exec_res.get("latex_answer") or exec_res.get("canonical_answer"),
             "answer_type": exec_res.get("answer_type"),
             "unit": exec_res.get("unit"),
             "variables": exec_res.get("variables"),
@@ -692,28 +693,65 @@ def evaluate_symplanner(
 
         attempt = 1
         # -------------------------------------------------------------
-        # TARGETED DEBUG REPAIR LOOP (Giống SymCode)
+        # TWO-LEVEL DYNAMIC BACKTRACKING REPAIR LOOP (Re-Code vs Re-Plan)
         # -------------------------------------------------------------
         while attempt <= max_retries and _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
             attempt += 1
-            if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
-                verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
-            debug_messages = build_symplanner_debug_messages(
-                question=question,
-                bad_code=extracted_code,
-                execution_status=exec_res.get("status", "error"),
-                error_tb=exec_res.get("traceback"),
-                candidate_answer=candidate_ans,
-                verification_status=verif_status,
-                verification_feedback=verif_feedback,
-                planner_note=symplanner_context,
-                subject=item.get("subject", "")
+
+            # Decide whether to perform Level 1 (Code Debug) or Level 2 (Re-Plan Backtracking)
+            is_repeated_code = sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2
+            is_strategy_failure = verif_status == "fail" and any(
+                tok in str(verif_feedback).lower()
+                for tok in ("strategy", "approach", "spectral norm", "round table", "circular", "vieta", "functional equation", "must be simplified")
             )
-            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
-            total_tokens += dbg_tokens
-            raw_outputs.append(f"### Turn 3 (Debug Retry {attempt}):\n{raw_debug_output}")
-            
-            extracted_code = extract_symplanner_code(raw_debug_output)
+            should_replan = attempt > 2 or is_repeated_code or is_strategy_failure
+
+            if should_replan:
+                # Level 2: Re-Plan Backtracking (Revise solution strategy)
+                replan_messages = build_replan_messages(
+                    question=question,
+                    extraction=extraction_note,
+                    prev_plan=planner_note,
+                    failure_feedback=str(verif_feedback or exec_res.get("traceback") or "The previous plan failed execution or mathematical verification.")
+                )
+                raw_replan, replan_tokens = llm.generate_chat(replan_messages, max_new_tokens_override=192)
+                planner_note = clean_planner_note(raw_replan)
+                total_tokens += replan_tokens
+                symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# REVISED PLAN\n{planner_note}".strip()
+                raw_outputs.append(f"### Turn 2.x (Re-Plan Retry {attempt}):\n{raw_replan}")
+
+                # Synthesize fresh code based on revised plan
+                codegen_messages = build_symplanner_codegen_messages(
+                    question,
+                    symplanner_context,
+                    subject=item.get("subject", "")
+                )
+                raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False)
+                total_tokens += code_tokens
+                raw_outputs.append(f"### Turn 3.x (Re-Plan Codegen Retry {attempt}):\n{raw_code_output}")
+                extracted_code = extract_symplanner_code(raw_code_output)
+                current_phase = "replan_codegen"
+                generated_attempt_tokens = replan_tokens + code_tokens
+            else:
+                # Level 1: Direct Code Repair (Fix syntax, runtime traceback, or minor verifier issue)
+                debug_messages = build_symplanner_debug_messages(
+                    question=question,
+                    bad_code=extracted_code,
+                    execution_status=exec_res.get("status", "error"),
+                    error_tb=exec_res.get("traceback"),
+                    candidate_answer=candidate_ans,
+                    verification_status=verif_status,
+                    verification_feedback=verif_feedback,
+                    planner_note=symplanner_context,
+                    subject=item.get("subject", "")
+                )
+                raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
+                total_tokens += dbg_tokens
+                raw_outputs.append(f"### Turn 3.x (Debug Retry {attempt}):\n{raw_debug_output}")
+                extracted_code = extract_symplanner_code(raw_debug_output)
+                current_phase = "debug_repair"
+                generated_attempt_tokens = dbg_tokens
+
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
             
@@ -733,12 +771,12 @@ def evaluate_symplanner(
                 
             retry_record = {
                 "attempt": attempt,
-                "phase": "debug_repair",
+                "phase": current_phase,
                 "code": extracted_code,
-                "generated_tokens": dbg_tokens,
+                "generated_tokens": generated_attempt_tokens,
                 "execution_status": exec_res.get("status"),
                 "candidate_answer": candidate_ans,
-                "canonical_answer": exec_res.get("canonical_answer"),
+                "canonical_answer": exec_res.get("latex_answer") or exec_res.get("canonical_answer"),
                 "answer_type": exec_res.get("answer_type"),
                 "unit": exec_res.get("unit"),
                 "variables": exec_res.get("variables"),
@@ -751,11 +789,12 @@ def evaluate_symplanner(
             attempt_history.append(retry_record)
 
             if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
+                if not should_replan:
+                    continue
                 break
             
             if not _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
                 break
-
         # -------------------------------------------------------------
         # FINAL ANSWER EXTRACTION & ACCURACY EVALUATION
         # -------------------------------------------------------------
