@@ -206,7 +206,8 @@ def verify_candidate_answer(
             return ("fail", "Verification Error: numeric target cannot be an empty collection.")
         if re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", cand_str):
             return ("fail", "Verification Error: numeric target cannot be an unresolved symbol or placeholder variable.")
-
+        if bool(re.search(r"\\(?:sin|cos|tan|cot|sec|csc|log|ln|arcsin|arccos|arctan)\b", cand_str)):
+            return ("fail", f"Verification Error: Candidate answer '{cand_str}' contains an unevaluated trigonometric/logarithmic function. Solve for and print the concrete numerical value.")
     strategy_result = _code_strategy_feedback(question, cand_str, code)
     if strategy_result is not None:
         return strategy_result
@@ -349,8 +350,8 @@ def verify_candidate_answer(
             return ("unknown", f"Verification Unknown: candidate '{cand_str}' is numeric, but no independent relation proves the target value.")
 
     except Exception:
-        # Nếu SymPy không parse được (ví dụ chuỗi chữ cái tên riêng như "Evelyn")
-        if len(cand_str) > 0 and not any(ch in cand_str for ch in ["\n", "\r", "\t"]):
+        # Only treat as text entity if the problem actually asked for a text entity!
+        if target_spec.get("answer_type") == "text":
             return ("unknown", f"Candidate answer is a valid text entity ('{cand_str}').")
-
+        return ("fail", f"Verification Error: Candidate answer '{cand_str}' could not be parsed as a valid numeric or algebraic value.")
     return ("unknown", "Candidate answer is syntactically well-formed, but problem nature prevents automated symbolic proof without ground truth.")

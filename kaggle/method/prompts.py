@@ -19,12 +19,24 @@ Return ONLY these two lines:
 # Target: <the exact quantity, entity, or expression to find>
 # Output: <pick exactly one: number | text | tuple | set | symbolic | base_notation>
 
+Rules for Output type:
+- number: any problem asking for a numerical value, ratio, trigonometric value (e.g. tan A, sin x), length, area, angle, or fraction.
+- text: names, true/false, or conic classifications (e.g. ellipse, parabola).
+- tuple: coordinates (x, y) or ordered pairs.
+- set: multiple roots/values.
+- symbolic: ONLY when the question explicitly says "in terms of" or "polynomial in".
+
 Example 1:
 Problem: If 2x + 5 = 15, find the value of x^2.
 # Target: x^2
 # Output: number
 
 Example 2:
+Problem: In right triangle ABC with angle B = 90, sin A = 2 cos A. What is tan A?
+# Target: tan A
+# Output: number
+
+Example 3:
 Problem: Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is a parabola, circle, ellipse, or hyperbola.
 # Target: conic section classification
 # Output: text"""
@@ -76,7 +88,8 @@ Rules:
 3. Import sympy as sp. Use exact arithmetic (sp.Rational, sp.Integer); use floats only when explicitly requested.
 4. If using sp.solve, handle results safely (safe_solve is available in globals).
 5. Use finite loops only. Never use unbounded while loops.
-6. At the end, ALWAYS print the final answer enclosed in LaTeX boxed format:
+6. When solving for a ratio or trigonometric value (e.g. tan A = sin A / cos A), compute the numerical ratio directly (e.g. sin_val / cos_val). Never print an unevaluated function call like sp.tan(A).
+7. At the end, ALWAYS print the final answer enclosed in LaTeX boxed format:
    - For symbolic/mathematical expressions: print(f"\\boxed{{{sp.latex(final_answer)}}}")
    - For text answers: print(f"\\boxed{{{final_answer}}}")"""
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.

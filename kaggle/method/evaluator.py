@@ -86,6 +86,9 @@ def _should_retry_symplanner(execution_status: str, candidate: Any, verification
         "trig power identity",
         "reassigned",
         "explicit coordinates",
+        "unevaluated trigonometric",
+        "trigonometric/logarithmic",
+        "could not be parsed",
     )
     if verification_status == "fail":
         return any(token in feedback_text for token in actionable_tokens)
