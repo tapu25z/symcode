@@ -406,7 +406,7 @@ def evaluate_direct_or_cot(
         messages = build_prompt_messages(method_name, question)
         
         if method_name == "Direct":
-            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=128)
         else:  # CoT
             raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
         predicted_ans = extract_answer_fallback(raw_output)
