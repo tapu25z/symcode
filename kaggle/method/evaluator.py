@@ -408,7 +408,7 @@ def evaluate_direct_or_cot(
         if method_name == "Direct":
             raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
         else:  # CoT
-            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
