@@ -105,12 +105,12 @@ SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 # 4. BASELINE PROMPTS (Direct & CoT)
 # ==============================================================================
 
-COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the problem step-by-step with brief, direct logical reasoning (under 4-5 short lines).
-Do NOT write long narrative explanations or output <think> tags.
+COT_SYSTEM_PROMPT = """You are a mathematician. Solve the problem in at most 2-3 brief steps.
+Do not write long scratchpads or detailed derivations.
 At the end, write your final answer strictly formatted in \\boxed{answer}."""
 
-DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
-Do not provide long explanations. Put only the final answer inside \\boxed{answer}."""
+DIRECT_SYSTEM_PROMPT = """State only the final answer directly without any steps or explanations.
+Write your final answer strictly inside \\boxed{answer}."""
 
 SYSTEM_PROMPTS = {
     "Direct": DIRECT_SYSTEM_PROMPT,
