@@ -1,0 +1,5 @@
+FROM python:3.11-slim
+RUN pip install --no-cache-dir sympy==1.14.0 numpy==2.2.6 scipy==1.15.3
+ENV OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1
+USER 65534:65534
+WORKDIR /tmp

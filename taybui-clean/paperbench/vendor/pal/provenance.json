@@ -1,0 +1,14 @@
+{
+  "repository": "reasoning-machines/pal",
+  "revision": "f81ca2a9777f002f98a6b4d0f10b61bd5c8feb02",
+  "files": {
+    "math_prompts.py": {
+      "url": "https://raw.githubusercontent.com/reasoning-machines/pal/f81ca2a9777f002f98a6b4d0f10b61bd5c8feb02/pal/prompt/math_prompts.py",
+      "sha256": "95a2e69baff1f4fb05390bd67b45e04e0730dbf55149b59f378dde4c0718aa43"
+    },
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/reasoning-machines/pal/f81ca2a9777f002f98a6b4d0f10b61bd5c8feb02/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    }
+  }
+}

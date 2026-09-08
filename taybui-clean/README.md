@@ -1,5 +1,19 @@
 # Math Reasoning Benchmark
 
+**Runner hiện hành (server protocol v3): 4 method PaL, PoT, SymCode, SymPlan**, tất cả lấy đáp án từ
+Python thực thi. Xem [PAPER_EXPERIMENTS.md](PAPER_EXPERIMENTS.md) để chạy trên RTX
+3090 và [METHOD_RESEARCH.md](METHOD_RESEARCH.md) để đối chiếu paper gốc.
+
+```bash
+bash scripts/setup_paper_server.sh
+mkdir -p paper_runs
+nohup bash scripts/run_paper_server.sh > paper_runs/paper_v3.log 2>&1 < /dev/null &
+```
+
+Lệnh cần dữ liệu đã chuẩn bị và executor Linux theo hướng dẫn cài đặt. Phần bên
+dưới là tài liệu **runner cũ** (`run_benchmark.py`), giữ lại để truy vết; nó không
+phải protocol bốn method hiện hành.
+
 Repo benchmark cac phuong phap giai toan tren MATH-500 va GSM8K:
 
 - `Direct`: tra loi truc tiep.
