@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Vast.ai Benchmark Execution Script for RTX 3090 (CUDA 12.4)
+# Model: Qwen/Qwen3-4B (4-bit NF4 Quantization)
 # ==============================================================================
 # Usage:
-#   chmod +x run_vastai.sh
-#   ./run_vastai.sh                         # Run default benchmark
-#   ./run_vastai.sh --num-samples 50         # Run 50 samples
-#   ./run_vastai.sh --model-id "Qwen/Qwen2.5-Math-7B-Instruct"
+#   chmod +x unknow/run_vastai.sh
+#   ./unknow/run_vastai.sh                     # Run default benchmark (Qwen/Qwen3-4B 4-bit)
+#   ./unknow/run_vastai.sh --num-samples 50     # Run 50 samples
 # ==============================================================================
 
 set -e
@@ -40,13 +40,15 @@ if [ -f "kaggle/requirements.txt" ]; then
     pip install -q -r kaggle/requirements.txt
 fi
 
-# 3. Create results directory
-mkdir -p results
+# 3. Create results & logs directories
+mkdir -p results logs
 
-# 4. Default execution parameters (can be overridden via CLI args)
-DEFAULT_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+# 4. Default execution parameters
+DEFAULT_MODEL="Qwen/Qwen3-4B"
 DEFAULT_DATASET="math500"
 DEFAULT_METHODS="Direct CoT SymCode SymPlanner"
+SAMPLE_FILE="kaggle/data/math500/test_50_stratified.jsonl"
+OUTPUT_RESULT="results/results_vastai_qwen3_4b.json"
 
 echo "======================================================================"
 echo " Executing Benchmark Evaluation"
@@ -54,16 +56,24 @@ echo "======================================================================"
 
 if [ "$#" -eq 0 ]; then
     echo "[INFO] No custom arguments provided. Running default benchmark configuration:"
-    echo "       Model:   ${DEFAULT_MODEL}"
-    echo "       Dataset: ${DEFAULT_DATASET}"
-    echo "       Methods: ${DEFAULT_METHODS}"
-    echo "       4-Bit:   Enabled (NF4 via bitsandbytes)"
+    echo "       Model:        ${DEFAULT_MODEL}"
+    echo "       Dataset:      ${DEFAULT_DATASET}"
+    echo "       Methods:      ${DEFAULT_METHODS}"
+    echo "       Quantization: 4-Bit NF4"
+    echo "       Output:       ${OUTPUT_RESULT}"
     echo ""
     python3 kaggle/run_benchmark.py \
         --dataset "${DEFAULT_DATASET}" \
+        --dataset-path "${SAMPLE_FILE}" \
         --methods ${DEFAULT_METHODS} \
         --model-id "${DEFAULT_MODEL}" \
-        --load-in-4bit
+        --load-in-4bit \
+        --disable-thinking \
+        --run-order by-problem \
+        --output-file "${OUTPUT_RESULT}" \
+        --timeout 15 \
+        --max-retries 2 \
+        --save-every 1
 else
     echo "[INFO] Passing custom arguments to kaggle/run_benchmark.py: $@"
     python3 kaggle/run_benchmark.py "$@"
