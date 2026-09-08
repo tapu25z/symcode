@@ -147,10 +147,20 @@ def safe_inequality(conditions, var=None):
 def _safe_coeff(expr, *args, **kwargs):
     """Safely extract polynomial coefficient whether called as sp.coeff(expr, var) or expr.coeff(var)."""
     if hasattr(expr, "coeff"):
-        return expr.coeff(*args, **kwargs)
+        c = expr.coeff(*args, **kwargs)
+        if c != 0 or len(args) == 0:
+            return c
+        try:
+            return sympy.expand(expr).coeff(*args, **kwargs)
+        except Exception:
+            return c
     if sympy is not None:
         try:
-            return sympy.sympify(expr).coeff(*args, **kwargs)
+            sym_expr = sympy.sympify(expr)
+            c = sym_expr.coeff(*args, **kwargs)
+            if c != 0 or len(args) == 0:
+                return c
+            return sympy.expand(sym_expr).coeff(*args, **kwargs)
         except Exception:
             return 0
     return 0

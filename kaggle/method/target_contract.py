@@ -51,6 +51,8 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
         spec["answer_type"] = "text"
     elif re.search(r"\b(even|odd|neither)\b", text) or "true or false" in text:
         spec["answer_type"] = "text"
+    elif re.search(r"\b(parabola|circle|ellipse|hyperbola|two lines|empty)\b", text) and re.search(r"\b(graph|equation|conic)\b", text):
+        spec["answer_type"] = "text"
     elif re.search(r"\bin terms of\b|\bexpress .* using\b|\bpolynomial in\b|\bfunction .* of\b", text):
         spec["answer_type"] = "symbolic"
     elif re.search(r"\b(simplify|expand|factor)\b", text) and re.search(r"\b[a-z]\b", text):
