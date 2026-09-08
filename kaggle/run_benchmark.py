@@ -8,7 +8,7 @@ import sys
 import json
 import time
 import argparse
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from method import (
     LLMRunner,
