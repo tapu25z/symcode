@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=taybui_llama31_50pct
-#SBATCH --output=logs/bench_taybui_llama31_50pct_%j.out
-#SBATCH --error=logs/bench_taybui_llama31_50pct_%j.err
+#SBATCH --job-name=sym_a100_8_9
+#SBATCH --output=logs/bench_a100_8_9_%j.out
+#SBATCH --error=logs/bench_a100_8_9_%j.err
 #SBATCH --nodelist=DGX-A100            # Chỉ định chạy trên Node DGX-A100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -11,23 +11,21 @@
 #SBATCH --time=12:00:00                # Giới hạn thời gian chạy (12 giờ)
 
 # ==============================================================================
-# Script Slurm Benchmark: taybui-clean
-# Chạy 4 Pipelines: Direct, CoT, SymCode, SymPlanner
-# Tập dữ liệu: MATH-500 (50% mẫu = 250 samples)
-# Model: meta-llama/Llama-3.1-8B-Instruct (4-bit NF4)
+# Script Slurm Benchmark: A100 (Ngày 08/09)
+# Đánh giá 4 Phương pháp: Direct, CoT, SymCode, SymPlanner
+# Tập dữ liệu: MATH-500 (50 mẫu ngẫu nhiên: 70% Level 1-3 = 35 câu, 30% Level 4-5 = 15 câu)
+# Model: Qwen/Qwen3-4B (4-bit NF4 Quantization)
 # ==============================================================================
 
-# Tự động đẩy log ra màn hình lập tức (không bị nghẽn buffer)
 export PYTHONUNBUFFERED=1
 
-# Tạo các thư mục chứa log và kết quả
 mkdir -p logs
-mkdir -p taybui-clean/results
+mkdir -p results
 
 echo "⏰ [$(date '+%Y-%m-%d %H:%M:%S')] Start Job $SLURM_JOB_ID on $(hostname)"
 
 # ---------------------------------------------------------
-# 1. THIẾT LẬP MÔI TRƯỜNG & CHỌN THƯ MỤC LÀM VIỆC
+# 1. THIẾT LẬP MÔI TRƯỜNG & TẠO VENV MỚI (TRÁNH CONFLICT SERVER)
 # ---------------------------------------------------------
 if command -v module &> /dev/null; then
     module clear -f || true
@@ -36,44 +34,40 @@ fi
 
 if [ -d "/home/uitchain/datastore/uitchain/symcode" ]; then
     export WORK_DIR="/home/uitchain/datastore/uitchain/symcode"
-    export VENV_PATH="/home/uitchain/datastore/uitchain/venv_symcode"
 elif [ -d "/datastore/uitchain/symcode" ]; then
     export WORK_DIR="/datastore/uitchain/symcode"
-    export VENV_PATH="/datastore/uitchain/venv_symcode"
 elif [ -d "$HOME/datastore/uitchain/symcode" ]; then
     export WORK_DIR="$HOME/datastore/uitchain/symcode"
-    export VENV_PATH="$HOME/datastore/uitchain/venv_symcode"
 else
     export WORK_DIR="$(pwd)"
-    export VENV_PATH="$WORK_DIR/venv"
 fi
 
 cd "$WORK_DIR"
 echo "📍 [$(date '+%H:%M:%S')] Thư mục làm việc: $WORK_DIR"
 
-# Kích hoạt hoặc khởi tạo venv nếu chưa có
+# Tạo venv riêng biệt mới để không bị conflict với môi trường server
+export VENV_PATH="$WORK_DIR/venv_a100_8_9"
+
 if [ ! -d "$VENV_PATH" ]; then
-    echo "📦 [$(date '+%H:%M:%S')] Đang tạo venv mới tại $VENV_PATH..."
+    echo "📦 [$(date '+%H:%M:%S')] Đang khởi tạo môi trường ảo mới tại $VENV_PATH..."
     python3 -m venv "$VENV_PATH"
     source "$VENV_PATH/bin/activate"
     pip install --upgrade pip setuptools wheel --quiet
     echo "📥 Đang cài đặt PyTorch CUDA 12.1..."
-    pip install torch --index-url https://download.pytorch.org/whl/cu121
+    pip install torch --index-url https://download.pytorch.org/whl/cu121 --quiet
+    echo "📥 Đang cài đặt các thư viện yêu cầu từ kaggle/requirements.txt..."
+    if [ -f "kaggle/requirements.txt" ]; then
+        pip install -r kaggle/requirements.txt --quiet
+    else
+        pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm scipy numpy --quiet
+    fi
 else
+    echo "📦 [$(date '+%H:%M:%S')] Kích hoạt venv hiện hữu tại: $VENV_PATH"
     source "$VENV_PATH/bin/activate"
 fi
 
-echo "📥 [$(date '+%H:%M:%S')] Kiểm tra và cập nhật các gói thư viện từ taybui-clean/requirements.txt..."
-if [ -f "taybui-clean/requirements.txt" ]; then
-    pip install -r taybui-clean/requirements.txt --quiet
-elif [ -f "kaggle/requirements.txt" ]; then
-    pip install -r kaggle/requirements.txt --quiet
-else
-    pip install "transformers>=4.40.0" "accelerate>=0.28.0" "bitsandbytes>=0.43.0" "sympy>=1.12" "datasets>=2.18.0" tqdm scipy numpy --quiet
-fi
-
 # ---------------------------------------------------------
-# 2. CHECK GPU CHUẨN TỰ ĐỘNG (BẮT BỘC TRƯỚC KHI IMPORT TORCH)
+# 2. CHECK GPU CHUẨN TỰ ĐỘNG TRƯỚC KHI IMPORT TORCH
 # ---------------------------------------------------------
 echo "🔍 [$(date '+%H:%M:%S')] Đang kiểm tra GPU rảnh qua gpu_check.sh..."
 REQUIRED_VRAM=16384
@@ -106,51 +100,93 @@ export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-mps-log-job$SLURM_JOB_ID
 rm -rf $CUDA_MPS_PIPE_DIRECTORY $CUDA_MPS_LOG_DIRECTORY
 mkdir -p $CUDA_MPS_PIPE_DIRECTORY $CUDA_MPS_LOG_DIRECTORY
 
-# Khóa CUDA Visible Devices
 export CUDA_VISIBLE_DEVICES=$BEST_GPU
 
 export OMP_NUM_THREADS=16
 export MKL_NUM_THREADS=16
 export NUMEXPR_NUM_THREADS=16
 
-# ---------------------------------------------------------
-# 4. KIỂM TRA PYTORCH CUDA SAU KHI ĐÃ CÓ CUDA_VISIBLE_DEVICES
-# ---------------------------------------------------------
+# Kiểm tra trạng thái GPU PyTorch
 echo "🔍 [$(date '+%H:%M:%S')] Kiểm tra trạng thái GPU PyTorch:"
 HAS_CUDA=$(python3 -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
 
 if [ "$HAS_CUDA" != "True" ]; then
-    echo "⚠️ PyTorch chưa có CUDA! Đang tiến hành cài đặt lại PyTorch CUDA 12.1..."
-    pip install torch --index-url https://download.pytorch.org/whl/cu121 --force-reinstall
+    echo "⚠️ PyTorch chưa nhận diện CUDA! Đang cài đặt lại PyTorch CUDA 12.1..."
+    pip install torch --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
     pip install "bitsandbytes>=0.43.0" "accelerate>=0.28.0" --quiet
 fi
 
 python3 -c "import torch; print('-> CUDA Available:', torch.cuda.is_available()); print('-> Device Name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 
 # ---------------------------------------------------------
-# 5. CHẠY BENCHMARK TAYBUI-CLEAN: 4 PIPELINES TRÊN 50% MATH-500
+# 4. TẠO & LƯU TRỮ 50 MẪU ĐÁNH GIÁ (70% LEVEL 1-3, 30% LEVEL 4-5)
 # ---------------------------------------------------------
+SAMPLE_FILE="kaggle/data/math500/test_50_stratified.jsonl"
+
+if [ ! -f "$SAMPLE_FILE" ]; then
+    echo "🎲 [$(date '+%H:%M:%S')] Đang trích xuất và lưu 50 mẫu ngẫu nhiên (35 mẫu L1-3, 15 mẫu L4-5)..."
+    python3 -c "
+import json
+import random
+from collections import Counter
+
+random.seed(42)
+lvl1_3 = []
+lvl4_5 = []
+
+with open('kaggle/data/math500/test.jsonl', 'r', encoding='utf-8') as f:
+    for line in f:
+        item = json.loads(line)
+        lvl = item.get('level')
+        if lvl in [1, 2, 3]:
+            lvl1_3.append(item)
+        elif lvl in [4, 5]:
+            lvl4_5.append(item)
+
+sample_35 = random.sample(lvl1_3, 35)
+sample_15 = random.sample(lvl4_5, 15)
+sampled_50 = sample_35 + sample_15
+random.shuffle(sampled_50)
+
+with open('$SAMPLE_FILE', 'w', encoding='utf-8') as f:
+    for item in sampled_50:
+        f.write(json.dumps(item, ensure_ascii=False) + '\n')
+
+print(f'✅ Đã lưu {len(sampled_50)} mẫu vào $SAMPLE_FILE')
+print('Phân bổ level:', sorted(Counter(it.get('level') for it in sampled_50).items()))
+"
+else
+    echo "📄 [$(date '+%H:%M:%S')] Đã có sẵn file 50 mẫu lưu trữ tại: $SAMPLE_FILE"
+fi
+
+# ---------------------------------------------------------
+# 5. CHẠY BENCHMARK: 4 METHODS TRÊN 50 MẪU RANDOM STRATIFIED
+# ---------------------------------------------------------
+OUTPUT_RESULT="results/results_a100_8_9_math500_50samples_qwen3_4b.json"
+
 echo "=========================================================================="
-echo "🚀 [$(date '+%H:%M:%S')] Bắt đầu Benchmark 4 Pipelines trên 50% MATH-500"
-echo "   - Model     : meta-llama/Llama-3.1-8B-Instruct (4-bit NF4)"
-echo "   - Pipelines : Direct, CoT, SymCode, SymPlanner"
-echo "   - Samples   : 250 / 500 (50%)"
-echo "   - Order     : by-problem (Live comparison & per-problem checkpointing)"
+echo "🚀 [$(date '+%H:%M:%S')] Bắt đầu Benchmark trên 50 mẫu MATH-500"
+echo "   - Model        : Qwen/Qwen3-4B (4-bit NF4)"
+echo "   - Pipelines    : Direct, CoT, SymCode, SymPlanner"
+echo "   - Samples File : $SAMPLE_FILE (50 mẫu: 35 câu L1-3, 15 câu L4-5)"
+echo "   - Output File  : $OUTPUT_RESULT"
 echo "=========================================================================="
 
-python taybui-clean/run_benchmark.py \
+python kaggle/run_benchmark.py \
     --dataset math500 \
-    --num-samples 250 \
-    --model-id meta-llama/Llama-3.1-8B-Instruct \
+    --dataset-path "$SAMPLE_FILE" \
+    --num-samples 50 \
+    --model-id Qwen/Qwen3-4B \
+    --load-in-4bit \
     --methods Direct CoT SymCode SymPlanner \
-    --output-file taybui-clean/results/results_math500_50pct_llama3_1_8b.json \
+    --output-file "$OUTPUT_RESULT" \
     --timeout 15 \
-    --save-every 5 \
-    --run-order by-problem
+    --max-retries 2 \
+    --save-every 2
 
 echo "=========================================================================="
-echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất Benchmark 4 Pipelines trên 50% MATH-500!"
-echo "📁 Kết quả đã được lưu tại: taybui-clean/results/results_math500_50pct_llama3_1_8b.json"
+echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất Benchmark trên 50 mẫu MATH-500!"
+echo "📁 Kết quả đã được lưu tại: $OUTPUT_RESULT"
 echo "=========================================================================="
 
 # Dọn dẹp MPS pipe
