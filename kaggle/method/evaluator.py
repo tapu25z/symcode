@@ -103,11 +103,26 @@ def _with_static_diagnostics(feedback: Any, code: str, execution_status: str, ca
     return f"{feedback or 'No verifier feedback.'} {suffix}"
 
 
-def _candidate_is_present(value: Any) -> bool:
-    if value is None:
-        return False
-    return str(value).strip().lower() not in {"", "none", "null", "invalid", "undefined", "nan"}
+INVALID_PREDICTED_VALUES = {
+    "", "none", "null", "invalid", "undefined", "nan", "error",
+    "final_answer", "{final_answer}", "{{final_answer}}",
+    "ans", "{ans}", "{{ans}}", "result", "{result}", "{{result}}"
+}
 
+
+def is_valid_predicted(val: Any) -> bool:
+    if val is None:
+        return False
+    s = str(val).strip().lower()
+    if s in INVALID_PREDICTED_VALUES:
+        return False
+    if s.startswith("{") and s.endswith("}") and len(s) < 30:
+        return False
+    return bool(s)
+
+
+def _candidate_is_present(value: Any) -> bool:
+    return is_valid_predicted(value)
 
 def _symplanner_record_rank(record: Dict[str, Any]) -> tuple[int, int, int, int]:
     return (
@@ -543,14 +558,13 @@ def evaluate_symcode(
             prev_code = extracted_code
             error_tb = exec_res.get("traceback")
 
-        final_predicted = candidate_ans
-        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+        final_predicted = candidate_ans if is_valid_predicted(candidate_ans) else None
+        if final_predicted is None:
             for out in reversed(raw_outputs):
                 b = extract_boxed_content(out)
-                if b is not None and b.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                if is_valid_predicted(b):
                     final_predicted = b
                     break
-
         is_correct = check_exact_match(final_predicted, gt)
 
         results.append({
@@ -821,12 +835,11 @@ def evaluate_symplanner(
         final_canonical = best_record.get("canonical_answer")
         final_answer_type = best_record.get("answer_type")
         final_unit = best_record.get("unit")
-        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
-            # Fallback an toàn: trích xuất từ planner note nếu có
+        if not is_valid_predicted(final_predicted):
+            final_predicted = None
             box_match = extract_boxed_content(planner_note)
-            if box_match:
+            if is_valid_predicted(box_match):
                 final_predicted = box_match
-        final_predicted = format_answer_for_contract(question, final_predicted, final_answer_type)
 
         is_correct = check_exact_match(final_predicted, gt)
 

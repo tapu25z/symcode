@@ -144,6 +144,34 @@ def safe_inequality(conditions, var=None):
             pass
     return conditions
 
+def _safe_coeff(expr, *args, **kwargs):
+    """Safely extract polynomial coefficient whether called as sp.coeff(expr, var) or expr.coeff(var)."""
+    if hasattr(expr, "coeff"):
+        return expr.coeff(*args, **kwargs)
+    if sympy is not None:
+        try:
+            return sympy.sympify(expr).coeff(*args, **kwargs)
+        except Exception:
+            return 0
+    return 0
+
+
+if sympy is not None:
+    if not hasattr(sympy, "coeff"):
+        sympy.coeff = _safe_coeff
+    if hasattr(sympy, "Basic") and not hasattr(sympy.Basic, "eval_finite"):
+        sympy.Basic.eval_finite = lambda self: self.evalf() if hasattr(self, "evalf") else self
+    _orig_sympy_solve = sympy.solve
+    def _safe_sympy_solve(*args, **kwargs):
+        try:
+            sols = _orig_sympy_solve(*args, **kwargs)
+            if isinstance(sols, list):
+                return SafeList(sols)
+            return sols
+        except Exception:
+            return SafeList([])
+    sympy.solve = _safe_sympy_solve
+
 
 def _clean_traceback_str(tb_str: str) -> str:
     """
@@ -231,6 +259,7 @@ def _run_code_in_scope(code: str, mode: str = "symcode") -> Dict[str, Any]:
             "zoo": zoo,
             "nan": nan,
             "SafeList": SafeList,
+            "coeff": _safe_coeff,
             "safe_solve": safe_solve,
             "safe_inequality": safe_inequality,
         })

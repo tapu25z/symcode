@@ -62,7 +62,7 @@ Rules:
 2. Solve the requested target, not an intermediate value. Use the extraction and plan.
 3. If using sp.solve, handle empty solutions safely. You can also use safe_solve(eqs, vars, positive=True/False, real=True) available in globals.
 4. Use finite loops only. Never use an unbounded while loop.
-5. Cross-verify whenever possible: write an analytical path (Path A) and a simple verification or numerical/substitution check (Path B) to confirm the result.
+5. Solve directly and cleanly. Do not write duplicate algorithms or complicated try-except simulation blocks unless analytical solving fails.
 6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
 7. Any reasoning comment must start with "# Step <number>:".
 8. At the end, print ONLY the final answer in LaTeX boxed format using sp.latex() for mathematical/symbolic expressions:
@@ -75,8 +75,8 @@ Do NOT write explanations. Do NOT output <think> tags.
 
 The code MUST:
 1. import sympy as sp (and math, fractions if helpful).
-2. Write the solver with two independent paths (Path A: Symbolic/Analytical, Path B: Empirical/Simulation/Search loop) to cross-verify the answer whenever possible.
-3. Guard symbolic solving calls (e.g., sp.solve) with try-except blocks. If SymPy fails, automatically fallback to a bounded search loop or numerical optimization.
+2. Formulate equations accurately and solve directly for the target quantity using SymPy. Keep the code clean, linear, and deterministic.
+3. Guard against empty solution lists before indexing (e.g. check if solutions is non-empty).
 4. Define all given quantities and formulate equations accurately.
 5. Solve for the target quantity symbolically or numerically.
 6. Never call `.evalf()` on standard Python int/float.
@@ -90,17 +90,14 @@ The code MUST:
 # 3. DEBUG / REPAIR PROMPTS (Turn 3: Sửa lỗi mã nguồn có chủ đích)
 # ==============================================================================
 
-DEBUG_SYSTEM_PROMPT = r"""You are repairing Python/SymPy code for a math problem.
-
-Return ONLY corrected executable Python code in one ```python ... ``` block.
-Fix the reported issue and keep correct code. Do not explain or output <think> tags.
+DEBUG_SYSTEM_PROMPT = r"""You are an expert Python/SymPy code repair engineer.
+Fix the reported code/verifier issue and return ONLY the corrected executable Python code block.
 
 Rules:
-- Recompute the target; do not hard-code an answer.
-- Use exact arithmetic where possible and handle fragile solver failures.
-- Use finite loops only; never use an unbounded while loop.
-- Any reasoning comment must start with "# Step <number>:".
-- Print only the required final result."""
+1. Recompute the requested target directly; do not hard-code numbers or repeat crashed code.
+2. Use exact arithmetic (sp.Rational, safe_solve) and guard empty solver results before indexing.
+3. Ensure finite execution; never use unbounded while loops.
+4. Print ONLY the final answer in LaTeX boxed format: print(f"\\boxed{{{sp.latex(final_answer)}}}")"""
 
 SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 
