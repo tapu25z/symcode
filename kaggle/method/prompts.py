@@ -12,30 +12,34 @@ from .target_contract import infer_target_spec
 # 1. SYMPLANNER PROMPTS (Extract -> Plan -> SymCode)
 # ==============================================================================
 
-EXTRACT_SYSTEM_PROMPT = r"""You extract the mathematical state of a problem for a later solver.
+EXTRACT_SYSTEM_PROMPT = r"""You extract the target and output format for a math solver.
 
-Return ONLY these labeled lines:
-# Target: quantity/expression/object the problem asks for
-# Given: facts, numbers, definitions, equations, and relations
-# Constraints: domains, integer/positive/nonzero/range/order conditions
-# Output: number|symbolic|tuple|set|matrix|text|base_notation
+Return ONLY these 2 labeled lines:
+# Target: <target variable/quantity/object asked for>
+# Output: <number | text | tuple | set | symbolic>
 
-Rules:
-- Do not solve the problem.
-- Do not write code.
-- Keep each line short and factual."""
-
-PLANNER_SYSTEM_PROMPT = r"""You write a short solution plan for a Python/SymPy solver.
-
-You will receive the original problem and an extracted mathematical state.
-Return ONLY numbered plan steps.
+Output type rules:
+- number: any numerical answer, ratio, trig value (tan A, sin x), length, area, angle, fraction.
+- text: names, true/false, conic classification.
+- tuple: coordinates (x, y) or ordered pair.
+- set: solution set or set of values.
+- symbolic: ONLY when problem explicitly states "in terms of" or "polynomial in".
 
 Rules:
-- Do not calculate or reveal the final numeric answer.
-- Do not write Python code.
-- Include candidate filtering or constraint checks when needed.
-- Keep the plan short."""
+- Do not solve the problem or write code.
+- Keep each line short."""
 
+PLANNER_SYSTEM_PROMPT = r"""You write a short SymPy computational plan for a math solver.
+
+Return 2-3 concise bullet points outlining the calculation steps:
+1. Define symbols (sp.symbols).
+2. Formulate equations (sp.Eq) or direct formulas.
+3. Solve (sp.solve) and compute the target value.
+
+Rules:
+- Do NOT calculate or reveal the numeric final answer in the plan.
+- Do NOT write Python code.
+- Keep the plan short and focused on SymPy operations."""
 
 # ==============================================================================
 # 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
@@ -46,16 +50,13 @@ SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and
 Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
 Rules:
-1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
-2. Solve the requested target, not an intermediate value. Use the extraction and plan.
-3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
-4. Use finite loops only. Never use an unbounded while loop.
-5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
-6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
-7. Any reasoning comment must start with "# Step <number>:".
-8. At the end, print ONLY the final answer in LaTeX boxed format:
+1. Import sympy as sp. Use exact arithmetic (sp.Rational); use floats only when requested.
+2. Implement the plan as clean, linear Python code.
+3. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
+4. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
+5. Use finite loops only. Never use an unbounded while loop.
+6. At the end, print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")"""
-
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
 Solve the problem by returning ONLY executable Python code enclosed in a single ```python ... ``` block.
@@ -144,7 +145,7 @@ def build_extract_messages(question: str) -> List[Dict[str, str]]:
     """Build Turn 1 messages: extract the mathematical state."""
     return [
         {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\nExtract the mathematical state only."}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\nExtract target and output type format only."}
     ]
 
 

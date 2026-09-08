@@ -696,23 +696,27 @@ def evaluate_symplanner(
         # -------------------------------------------------------------
         while attempt <= max_retries and _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
             attempt += 1
-            if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
-                verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
-            debug_messages = build_symplanner_debug_messages(
-                question=question,
-                bad_code=extracted_code,
-                execution_status=exec_res.get("status", "error"),
-                error_tb=exec_res.get("traceback"),
-                candidate_answer=candidate_ans,
-                verification_status=verif_status,
-                verification_feedback=verif_feedback,
-                planner_note=symplanner_context,
-                subject=item.get("subject", "")
-            )
+            if attempt >= max_retries + 1:
+                debug_messages = build_prompt_messages("SymCode", question)
+                retry_phase = "symcode_fallback"
+            else:
+                if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
+                    verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
+                debug_messages = build_symplanner_debug_messages(
+                    question=question,
+                    bad_code=extracted_code,
+                    execution_status=exec_res.get("status", "error"),
+                    error_tb=exec_res.get("traceback"),
+                    candidate_answer=candidate_ans,
+                    verification_status=verif_status,
+                    verification_feedback=verif_feedback,
+                    planner_note=symplanner_context,
+                    subject=item.get("subject", "")
+                )
+                retry_phase = "debug_repair"
             raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
             total_tokens += dbg_tokens
-            raw_outputs.append(f"### Turn 3 (Debug Retry {attempt}):\n{raw_debug_output}")
-            
+            raw_outputs.append(f"### Turn 3 ({retry_phase} Attempt {attempt}):\n{raw_debug_output}")
             extracted_code = extract_symplanner_code(raw_debug_output)
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
@@ -733,7 +737,7 @@ def evaluate_symplanner(
                 
             retry_record = {
                 "attempt": attempt,
-                "phase": "debug_repair",
+                "phase": retry_phase,
                 "code": extracted_code,
                 "generated_tokens": dbg_tokens,
                 "execution_status": exec_res.get("status"),

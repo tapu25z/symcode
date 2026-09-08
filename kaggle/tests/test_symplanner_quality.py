@@ -22,7 +22,7 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("Solve the following math problem directly", build_direct_messages("1+1")[0]["content"])
         self.assertIn("step-by-step", build_cot_messages("1+1")[0]["content"])
         self.assertIn("executable Python code", build_symcode_messages("1+1")[0]["content"])
-        self.assertIn("extract the mathematical state", build_symplanner_folder_extract_messages("1+1")[0]["content"])
+        self.assertIn("extract the target and output format", build_symplanner_folder_extract_messages("1+1")[0]["content"].lower())
         self.assertIn("OUTPUT REQUIREMENT", build_symplanner_folder_codegen_messages("1+1", "{}")[-1]["content"])
 
     def test_common_math_format_variants_are_equivalent(self):
@@ -80,7 +80,7 @@ class SymPlannerQualityTests(unittest.TestCase):
 
     def test_simple_symplanner_prompt_chain(self):
         extract_messages = build_extract_messages("Triangle problem")
-        self.assertIn("Extract the mathematical state", extract_messages[-1]["content"])
+        self.assertIn("Extract target and output type format", extract_messages[-1]["content"])
         messages = build_planner_messages("Triangle problem", "# Target: area")
         self.assertEqual(len(messages), 2)
         self.assertIn("# EXTRACTED STATE", messages[-1]["content"])
@@ -210,6 +210,14 @@ class SymPlannerQualityTests(unittest.TestCase):
             "equation = sp.Eq(A, P * (1 + r)**n)",
         )
         self.assertEqual(status, "fail")
+    def test_verifier_fails_unevaluated_trig_functions_for_numeric_target(self):
+        q = "In right triangle ABC with angle B = 90, sin A = 2 cos A. What is tan A?"
+        status, feedback = verify_candidate_answer(q, r"\tan{\left(A \right)}", r"print(r'\tan{\left(A \right)}')")
+        self.assertEqual(status, "fail")
+        self.assertIn("unevaluated function", feedback.lower())
+
+        status_ok, _ = verify_candidate_answer(q, "2", "print(2)")
+        self.assertIn(status_ok, ["unknown", "pass"])
 
 if __name__ == "__main__":
     unittest.main()
