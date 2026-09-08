@@ -56,6 +56,7 @@ Rules:
    - Keep answers in exact symbolic/fractional form by default (e.g. 2, 3/2). Do NOT call .evalf() unless decimal places are explicitly requested.
    - Use sp.together(expr) or sp.cancel(expr) to combine fraction terms into a single fraction before printing.
    - Do NOT filter out negative solutions (sol > 0) unless the problem strictly restricts the domain (e.g. length, count, probability).
+   - FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
 3. Implement the plan as clean, linear Python code.
 4. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
 5. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
@@ -70,9 +71,10 @@ Rules:
 1. Import sympy as sp (and math if needed). Use exact symbolic arithmetic.
 2. sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q.
 3. Keep answers in exact symbolic/fractional form by default. Do NOT call .evalf() unless decimal places are explicitly requested.
-4. Guard fragile sp.solve calls with simple try-except fallback or bounded numerical fallback.
-5. Use finite loops only. Never use an unbounded while loop.
-6. At the end, print ONLY the final answer in LaTeX boxed format:
+4. FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
+5. Guard fragile sp.solve calls with simple try-except fallback or bounded numerical fallback.
+6. Use finite loops only. Never use an unbounded while loop.
+7. At the end, print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")"""
 
 # ==============================================================================
