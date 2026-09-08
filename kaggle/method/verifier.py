@@ -21,7 +21,6 @@ def _extract_in_terms_vars(question: str) -> list[str]:
 
 def _code_strategy_feedback(question: str, candidate_answer: str, code: Optional[str]) -> tuple[str, str] | None:
     q_lower = str(question or "").lower()
-    code_lower = str(code or "").lower()
     cand_lower = str(candidate_answer or "").lower()
 
     target_vars = _extract_in_terms_vars(q_lower)
@@ -30,101 +29,6 @@ def _code_strategy_feedback(question: str, candidate_answer: str, code: Optional
             "fail",
             "Verification Error: symbolic target must be simplified in the requested variables; do not leave an unevaluated special-function sum."
         )
-
-    if "round table" in q_lower and "no two" in q_lower and "next to each other" in q_lower:
-        has_adjacency_check = any(token in code_lower for token in ("itertools.permutations", "for perm", "def is_valid", "adjacent", "next_to"))
-        if "restricted_permutations" in code_lower and "total_permutations" in code_lower and not has_adjacency_check:
-            return (
-                "fail",
-                "Verification Error: circular no-adjacency counting needs pairwise adjacency handling or brute-force validation; subtracting only one grouped case is incomplete."
-            )
-
-    if "different battalions" in q_lower or ("how many different" in q_lower and "soldiers" in q_lower):
-        if "min(" in code_lower and "//" in code_lower and "comb" not in code_lower and "binomial" not in code_lower:
-            return (
-                "fail",
-                "Verification Error: this asks for number of selectable groups, so use combinations/binomial counts rather than the maximum number of full battalions."
-            )
-
-    if "three for" in q_lower and "$1" in q_lower:
-        if "// 3" in code_lower and re.search(r"price_\w+\s*=\s*1\s*/\s*3", code_lower):
-            return (
-                "fail",
-                "Verification Error: phrase 'three for $1' means each group of three earns one dollar; do not multiply the number of groups by 1/3 again."
-            )
-
-    has_norm_target = "norm" in q_lower or "||" in q_lower or "\\|" in q_lower or "magnitude" in q_lower
-    has_matrix_target = "matrix" in q_lower or "pmatrix" in q_lower or "begin{pmatrix}" in q_lower
-    if has_norm_target and "for all" in q_lower and has_matrix_target:
-        if "eigenvals" in code_lower and not any(token in code_lower for token in ("singular", ".t *", ".t*", "transpose")):
-            return (
-                "fail",
-                "Verification Error: the smallest C for ||Av|| <= C||v|| is the spectral norm, sqrt(max eigenvalue of A.T*A), not the maximum absolute eigenvalue of A."
-            )
-
-    if "logarithms of the roots" in q_lower and "sp.solve(log_condition" in code_lower:
-        return (
-            "fail",
-            "Verification Error: use log product rules directly with Vieta; do not ask SymPy to solve a sum of logs for a product expression."
-        )
-
-    if "functional equation" in q_lower and "sp.function" in code_lower and "f(2)" in code_lower:
-        return (
-            "fail",
-            "Verification Error: solve the functional equation by assuming a quadratic/affine polynomial form and equating coefficients, not by solving for isolated f(k) symbols."
-        )
-
-    if "smallest positive perfect cube" in q_lower and "three consecutive integers" in q_lower:
-        try:
-            import sympy as sp
-            candidate_value = sp.sympify(candidate_answer)
-            for base in range(1, 1000):
-                cube = base ** 3
-                if cube % 3 == 0:
-                    if sp.simplify(candidate_value - cube) != 0:
-                        return (
-                            "fail",
-                            "Verification Error: candidate is not the smallest qualifying cube; search cube values in increasing order and return the cube value itself."
-                        )
-                    break
-        except Exception:
-            pass
-
-    if "rotated around" in q_lower and ("complex" in q_lower or " i" in q_lower or "i$" in q_lower):
-        if any(token in code_lower for token in ("sp.arg", "arg(", "sp.abs", "abs(")) and "z-c" not in code_lower.replace(" ", ""):
-            return (
-                "fail",
-                "Verification Error: complex rotation around a center should use c + (z-c)*(cos(theta)+I*sin(theta)); do not rotate polar coordinates around the origin."
-            )
-
-    if "compound interest" in q_lower and "deposit" in q_lower:
-        if re.search(r"\b[a-z]\s*\*\s*\(\s*1\s*\+\s*r\s*\)\s*\*\*\s*n\b", code_lower) and "(1 + r)**2" not in code_lower:
-            return (
-                "fail",
-                "Verification Error: repeated end-of-year deposits require summing separately compounded deposits, not treating all deposits as one lump sum."
-            )
-
-    if "remainder" in q_lower and ("mod" in q_lower or "pmod" in q_lower):
-        if "as_coefficients_dict()[1]" in code_lower:
-            return (
-                "fail",
-                "Verification Error: modular remainder should be computed by direct residue substitution and modulo reduction, not by extracting a constant coefficient."
-            )
-
-    if "for all angles" in q_lower and "sin" in q_lower and "collect" in code_lower and "coeffs_lhs.get" in code_lower:
-        return (
-            "fail",
-            "Verification Error: trig power identity coefficients are not obtained reliably by collect on sin(k*x); use exact expansion/equating at enough sample points or Fourier identities."
-        )
-
-    if "reassigned to" in q_lower and "denali" in q_lower and "nate" in q_lower:
-        compact_code = code_lower.replace(" ", "")
-        if "12+x" in compact_code:
-            return (
-                "fail",
-                "Verification Error: when x of Nate's dogs are reassigned to Denali, Denali gains x and Nate loses x; Nate's count should not become 12+x."
-            )
-
     return None
 
 
