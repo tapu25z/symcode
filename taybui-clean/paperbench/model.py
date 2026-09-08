@@ -2,6 +2,7 @@
 import time
 
 MODELS = {
+    "deepseek-coder-6.7b": "deepseek-ai/deepseek-coder-6.7b-instruct",
     "deepseek-coder-1.3b": "deepseek-ai/deepseek-coder-1.3b-instruct",
     "qwen3-1.7b": "Qwen/Qwen3-1.7B",
     "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
@@ -17,13 +18,15 @@ class Runner:
         set_seed(seed)
         self.torch = torch
         self.input_limit = input_limit
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_id, revision=revision, trust_remote_code=True)
         kwargs = dict(revision=revision, torch_dtype=torch.bfloat16,
                       attn_implementation="sdpa", device_map={"": 0})
         if precision == "nf4":
             kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True,
                 bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
                 bnb_4bit_use_double_quant=True)
+        kwargs["trust_remote_code"] = True
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **kwargs).eval()
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id

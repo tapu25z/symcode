@@ -5,8 +5,8 @@ Bộ chạy hiện hành là `paperbench/`, protocol **paper_v3**. Runner cũ ch
 
 ## Model và thiết kế đã chốt
 
-**deepseek-ai/deepseek-coder-1.3b-instruct**, NF4 4-bit, batch 1, một GPU RTX 3090
-24GB, greedy decoding, seed 42. Model nhỏ, thiên về sinh code, phù hợp để đo
+**deepseek-ai/deepseek-coder-6.7b-instruct**, NF4 4-bit, batch 1, một GPU RTX 3090
+24GB, greedy decoding, seed 42. Model thiên về sinh code, đủ năng lực lập công
 program-aided inference mà không dùng Qwen3. Model revision được ghim lúc khởi
 động suite và giữ nguyên cho mọi run. NF4 dùng đồng nhất cho mọi method và suite.
 
@@ -116,10 +116,10 @@ Mỗi thư mục run còn có `manifest.json`, `records.jsonl`, `summary.json`, 
 Có thể xuất lại bằng `python -m paperbench.export paper_runs/paper_v3` với code đã khóa.
 
 Cách mô tả phù hợp: “We evaluate controlled program-aided adaptations of PaL, PoT,
-and SymCode with a fixed Qwen3-4B-Instruct-2507 backbone, and report a separate
+and SymCode with a fixed DeepSeek-Coder-6.7B-Instruct backbone, and report a separate
 source-aligned prompt sensitivity study.” Không gọi đây là tái lập điểm số gốc.
 Chỉ khẳng định cải thiện/significance khi số và kiểm định tương ứng hỗ trợ.
 
-Nguồn: [model](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507),
+Nguồn: [model](https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-instruct),
 [PyTorch CUDA wheels](https://pytorch.org/get-started/previous-versions/),
 [Math-Verify](https://github.com/huggingface/Math-Verify).

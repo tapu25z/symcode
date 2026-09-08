@@ -60,7 +60,7 @@ def validate_resume(previous, current):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-1.3b")
+    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-6.7b")
     parser.add_argument("--dataset", choices=["math500", "gsm8k"], default="math500")
     parser.add_argument("--phase", choices=["smoke", "dev", "test"], default="dev")
     parser.add_argument("--data-dir", type=Path, default=Path("data/paper"))

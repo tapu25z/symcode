@@ -21,7 +21,7 @@ SUITES = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-1.3b")
+    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-6.7b")
     parser.add_argument("--output", type=Path, default=Path("paper_runs/paper_v3"))
     parser.add_argument("--executor", choices=["process", "docker"], default="process")
     parser.add_argument("--suites", nargs="+", choices=SUITES, default=list(SUITES))
