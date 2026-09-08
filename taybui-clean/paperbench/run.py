@@ -60,7 +60,7 @@ def validate_resume(previous, current):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=MODELS, default="qwen3-4b")
+    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-1.3b")
     parser.add_argument("--dataset", choices=["math500", "gsm8k"], default="math500")
     parser.add_argument("--phase", choices=["smoke", "dev", "test"], default="dev")
     parser.add_argument("--data-dir", type=Path, default=Path("data/paper"))
@@ -171,6 +171,25 @@ def main():
             print("Already complete.")
             return
         runner = Runner(config["model_id"], config["model_revision"], args.precision, args.input_limit, args.seed)
+        live = {method: {"correct": 0, "n": 0} for method in args.methods}
+        for previous in records:
+            live[previous["method"]]["correct"] += int(previous["correct"])
+            live[previous["method"]]["n"] += 1
+
+        def write_live(problem_index=None):
+            snapshot = {
+                "dataset": args.dataset, "phase": args.phase, "model_id": config["model_id"],
+                "precision": config["precision"], "methods": list(args.methods),
+                "completed_records": sum(row["n"] for row in live.values()),
+                "expected_records": len(rows) * len(args.methods),
+                "problem_index": problem_index,
+                "accuracy": {
+                    method: (100.0 * row["correct"] / row["n"] if row["n"] else None)
+                    for method, row in live.items()
+                },
+            }
+            atomic_json(args.output / "live_accuracy.json", snapshot)
+
         rng = random.Random(args.seed)
         ordered_rows = list(rows)
         rng.shuffle(ordered_rows)
@@ -200,8 +219,18 @@ def main():
                         output.flush()
                         os.fsync(output.fileno())
                         done.add((row["id"], method))
+                        live[method]["correct"] += int(record["correct"])
+                        live[method]["n"] += 1
+                        write_live(index + 1)
                         print(f"{index+1}/{len(rows)} {method}: correct={record['correct']} "
-                              f"tokens={result['output_tokens']} status={result['execution_status']}", flush=True)
+                              f"tokens={result['output_tokens']} status={result['execution_status']} "
+                              f"dataset={args.dataset} accuracy={live[method]['correct']}/{live[method]['n']}", flush=True)
+                    if all((row["id"], method) in done for method in args.methods for row in [row]):
+                        totals = ", ".join(
+                            f"{method}={live[method]['correct']}/{live[method]['n']}"
+                            for method in args.methods
+                        )
+                        print(f"PROBLEM_DONE dataset={args.dataset} problem={index+1}/{len(rows)} {totals}", flush=True)
         finally:
             from .report import write_report
             write_report(args.output)

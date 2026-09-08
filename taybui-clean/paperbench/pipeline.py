@@ -11,17 +11,17 @@ from .model import MODELS
 
 # Predeclared; no winner gate, test-based tuning, or selective reporting.
 SUITES = {
-    "controlled": ["--prompt-profile", "controlled", "--max-retries", "1"],
-    "source": ["--prompt-profile", "source", "--max-retries", "0", "--code-tokens", "3072"],
+    "controlled": ["--prompt-profile", "controlled", "--max-retries", "1", "--precision", "nf4"],
+    "source": ["--prompt-profile", "source", "--max-retries", "0", "--code-tokens", "3072", "--precision", "nf4"],
     **{name: ["--prompt-profile", "controlled", "--symplan-variant", name,
-              "--methods", "SymPlan", "--max-retries", "1"]
+              "--methods", "SymPlan", "--max-retries", "1", "--precision", "nf4"]
        for name in ["no-extract", "no-plan", "code-only"]},
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=MODELS, default="qwen3-4b")
+    parser.add_argument("--model", choices=MODELS, default="deepseek-coder-1.3b")
     parser.add_argument("--output", type=Path, default=Path("paper_runs/paper_v3"))
     parser.add_argument("--executor", choices=["process", "docker"], default="process")
     parser.add_argument("--suites", nargs="+", choices=SUITES, default=list(SUITES))

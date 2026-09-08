@@ -1,8 +1,11 @@
 """Single-GPU non-thinking generation, with complete token and timing accounting."""
 import time
 
-MODELS = {"qwen3-1.7b": "Qwen/Qwen3-1.7B",
-          "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507"}
+MODELS = {
+    "deepseek-coder-1.3b": "deepseek-ai/deepseek-coder-1.3b-instruct",
+    "qwen3-1.7b": "Qwen/Qwen3-1.7B",
+    "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
+}
 
 
 class Runner:

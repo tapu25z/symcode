@@ -5,11 +5,10 @@ Bộ chạy hiện hành là `paperbench/`, protocol **paper_v3**. Runner cũ ch
 
 ## Model và thiết kế đã chốt
 
-**Qwen/Qwen3-4B-Instruct-2507**, BF16, SDPA, batch 1, một GPU RTX 3090 24GB,
-greedy decoding, seed 42. Model chỉ có non-thinking mode. Chọn model này để khảo
-sát program-aided inference với model nhỏ; không tuyên bố kết quả đại diện mọi LLM.
-Model revision được ghim lúc khởi động suite và giữ nguyên cho mọi run.
-VRAM/tốc độ thực tế phải đo trên server; không tự đổi sang lượng tử hóa nếu OOM.
+**deepseek-ai/deepseek-coder-1.3b-instruct**, NF4 4-bit, batch 1, một GPU RTX 3090
+24GB, greedy decoding, seed 42. Model nhỏ, thiên về sinh code, phù hợp để đo
+program-aided inference mà không dùng Qwen3. Model revision được ghim lúc khởi
+động suite và giữ nguyên cho mọi run. NF4 dùng đồng nhất cho mọi method và suite.
 
 Cả bốn method lấy đáp án từ Python. Cùng dữ liệu, thư viện, timeout 15 giây/lần,
 grading Math-Verify, input tối đa 8.192 token/call, tổng output tối đa 3.072 token/bài.
@@ -106,6 +105,7 @@ prompt PaL vendored), dữ liệu và mọi cờ protocol. Các bảng source/co
 Sau khi status là `complete`, lấy tại `paper_runs/paper_v3/tables/`:
 
 - `metrics.csv`: đúng/N, accuracy đầu/cuối, ESR đầu/cuối, input/output tokens, calls, thời gian.
+- `live_accuracy.json`: cập nhật sau từng method và sau mỗi câu hoàn tất; có dataset, model và precision.
 - `paired.csv`: SymPlan trừ từng baseline, CI bootstrap 95%, McNemar exact và Holm p.
 - `ablations.csv`: full trừ mỗi ablation, CI và p chưa hiệu chỉnh.
 - `results.tex`: bảng LaTeX từ số thật, không điền số giả định hoặc tự bôi đậm winner.
