@@ -229,8 +229,8 @@ def verify_candidate_answer(
         "output", "val", "value", "perimeter_hexagon", "num_divisors", "count",
         "total", "speed", "max_speed", "min_val", "max_val", "target", "candidates"
     }
-    cleaned_cand = cand_str.replace("\\", "").replace("{", "").replace("}", "").strip()
-    if cleaned_cand in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4 and not cleaned_cand.isalpha()):
+    is_latex_or_expr = "\\" in cand_str or "{" in cand_str or "/" in cand_str or "(" in cand_str or "^" in cand_str
+    if not is_latex_or_expr and (cand_str.strip() in common_code_vars or (re.match(raw_var_pattern, cand_str.strip()) and len(cand_str.strip()) > 4 and not cand_str.strip().isalpha())):
         return (
             "fail",
             "Verification Error: Candidate answer '" + cand_str + "' is an unevaluated Python variable name. Actionable Fix: Compute the actual value of the variable first, then pass the evaluated variable to print(f'\\boxed{sp.latex(var)}')."
