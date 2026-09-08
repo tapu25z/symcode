@@ -214,8 +214,7 @@ def main():
         model_id=args.model_id,
         load_in_4bit=args.load_in_4bit,
         max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-        default_enable_thinking=False if args.disable_thinking else None
+        temperature=args.temperature
     )
 
     # Doc checkpoint da co neu ton tai
@@ -231,13 +230,13 @@ def main():
 
     def _run_single_method_on_item(method_name: str, item_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
         if method_name == "Direct":
-            return evaluate_direct([item_dict], llm, checkpoint_file=output_file, save_every=1, verbose=False)
+            return evaluate_direct([item_dict], llm, checkpoint_file=output_file, save_every=1)
         elif method_name == "CoT":
-            return evaluate_cot([item_dict], llm, checkpoint_file=output_file, save_every=1, verbose=False)
+            return evaluate_cot([item_dict], llm, checkpoint_file=output_file, save_every=1)
         elif method_name == "SymCode":
-            return evaluate_symcode([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1, verbose=False)
+            return evaluate_symcode([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1)
         elif method_name == "SymPlanner":
-            return evaluate_symplanner([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1, verbose=False)
+            return evaluate_symplanner([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1)
         else:
             raise ValueError(f"Phuong phap khong hop le: {method_name}")
 

@@ -12,70 +12,33 @@ from .target_contract import infer_target_spec
 # 1. SYMPLANNER PROMPTS (Extract -> Plan -> SymCode)
 # ==============================================================================
 
-EXTRACT_SYSTEM_PROMPT = r"""You identify ONLY the Target and Output format of a math problem in under 20 tokens.
-Do not copy, rewrite, or summarize the problem. Do not write equations or code.
+EXTRACT_SYSTEM_PROMPT = r"""You extract the mathematical state of a problem for a later solver.
 
-Return ONLY these two lines:
-# Target: <the exact quantity, entity, or expression to find>
-# Output: <pick exactly one: number | text | tuple | set | symbolic | base_notation>
+Return ONLY these labeled lines:
+# Target: quantity/expression/object the problem asks for
+# Given: facts, numbers, definitions, equations, and relations
+# Constraints: domains, integer/positive/nonzero/range/order conditions
+# Output: number|symbolic|tuple|set|matrix|text|base_notation
 
-Rules for Output type:
-- number: any problem asking for a numerical value, ratio, trigonometric value (e.g. tan A, sin x), length, area, angle, or fraction.
-- text: names, true/false, or conic classifications (e.g. ellipse, parabola).
-- tuple: coordinates (x, y) or ordered pairs.
-- set: multiple roots/values.
-- symbolic: ONLY when the question explicitly says "in terms of" or "polynomial in".
+Rules:
+- Do not solve the problem.
+- Do not write code.
+- Keep each line short and factual."""
 
-Example 1:
-Problem: If 2x + 5 = 15, find the value of x^2.
-# Target: x^2
-# Output: number
+PLANNER_SYSTEM_PROMPT = r"""You write a short solution plan for a Python/SymPy solver.
 
-Example 2:
-Problem: In right triangle ABC with angle B = 90, sin A = 2 cos A. What is tan A?
-# Target: tan A
-# Output: number
-
-Example 3:
-Problem: Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is a parabola, circle, ellipse, or hyperbola.
-# Target: conic section classification
-# Output: text"""
-
-PLANNER_SYSTEM_PROMPT = r"""You write an operational, step-by-step solution plan for a Python/SymPy solver.
-You will receive the original problem and the extracted mathematical state.
+You will receive the original problem and an extracted mathematical state.
 Return ONLY numbered plan steps.
 
 Rules:
-1. Operational blueprint: Name the exact mathematical theorem, formula, or SymPy technique to use (e.g., equate coefficients, compute discriminant, use Vieta's formulas, solve system).
-2. Minimalist & direct: Focus strictly on answering the requested target. Do NOT plan exploratory branches, extra case analyses, or degenerate checks unless the problem explicitly asks for them.
-3. Do not calculate or reveal final numbers.
-4. Do not write Python code.
-5. Keep the plan to 2-4 short, concrete steps.
-
-Example:
-# PROBLEM
-Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is an ellipse, parabola, or hyperbola.
-# TARGET & FORMAT
-# Target: conic section classification
-# Output: text
-1. Expand the equation into general conic form Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0 and extract coefficients A, B, C.
-2. Compute the discriminant B^2 - 4*A*C.
-3. If discriminant < 0 and A != C, conclude ellipse; otherwise determine conic type accordingly."""
-
-
-REPLAN_SYSTEM_PROMPT = r"""You are revising an unsuccessful solution plan for a mathematical problem.
-Review the problem, extracted state, previous failed plan, and diagnosis.
-Return ONLY revised numbered plan steps.
-
-Rules:
-1. Propose an alternative, simpler mathematical formulation that directly avoids the reported failure.
-2. Keep the plan short (2-3 steps) and operational.
-3. Do not repeat the failed approach.
-4. Do not write code or reveal final numeric values."""
+- Do not calculate or reveal the final numeric answer.
+- Do not write Python code.
+- Include candidate filtering or constraint checks when needed.
+- Keep the plan short."""
 
 
 # ==============================================================================
-# 2. CODEGEN PROMPTS (Turn 3: Sinh mã nguồn Python/SymPy thuần túy 100%)
+# 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
 # ==============================================================================
 
 SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
@@ -83,15 +46,16 @@ SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and
 Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
 Rules:
-1. 1:1 Plan realization: Implement the plan directly. Each main step in code must start with "# Step <number>:" corresponding to the plan.
-2. Direct execution: Do not add extra exploratory checks, duplicate branching, or unprompted edge-case handlers outside the plan.
-3. Import sympy as sp. Use exact arithmetic (sp.Rational, sp.Integer); use floats only when explicitly requested.
-4. If using sp.solve, handle results safely (safe_solve is available in globals).
-5. Use finite loops only. Never use unbounded while loops.
-6. When solving for a ratio or trigonometric value (e.g. tan A = sin A / cos A), compute the numerical ratio directly (e.g. sin_val / cos_val). Never print an unevaluated function call like sp.tan(A).
-7. At the end, ALWAYS print the final answer enclosed in LaTeX boxed format:
-   - For symbolic/mathematical expressions: print(f"\\boxed{{{sp.latex(final_answer)}}}")
-   - For text answers: print(f"\\boxed{{{final_answer}}}")"""
+1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
+2. Solve the requested target, not an intermediate value. Use the extraction and plan.
+3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
+4. Use finite loops only. Never use an unbounded while loop.
+5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
+6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
+7. Any reasoning comment must start with "# Step <number>:".
+8. At the end, print ONLY the final answer in LaTeX boxed format:
+   print(f"\\boxed{{{final_answer}}}")"""
+
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
 Solve the problem by returning ONLY executable Python code enclosed in a single ```python ... ``` block.
@@ -99,8 +63,8 @@ Do NOT write explanations. Do NOT output <think> tags.
 
 The code MUST:
 1. import sympy as sp (and math, fractions if helpful).
-2. Formulate equations accurately and solve directly for the target quantity using SymPy. Keep the code clean, linear, and deterministic.
-3. Guard against empty solution lists before indexing (e.g. check if solutions is non-empty).
+2. Write the solver with two independent paths (Path A: Symbolic/Analytical, Path B: Empirical/Simulation/Search loop) to cross-verify the answer whenever possible.
+3. Guard symbolic solving calls (e.g., sp.solve) with try-except blocks. If SymPy fails, automatically fallback to a bounded search loop or numerical optimization.
 4. Define all given quantities and formulate equations accurately.
 5. Solve for the target quantity symbolically or numerically.
 6. Never call `.evalf()` on standard Python int/float.
@@ -114,14 +78,17 @@ The code MUST:
 # 3. DEBUG / REPAIR PROMPTS (Turn 3: Sửa lỗi mã nguồn có chủ đích)
 # ==============================================================================
 
-DEBUG_SYSTEM_PROMPT = r"""You are an expert Python/SymPy code repair engineer.
-Fix the reported code/verifier issue and return ONLY the corrected executable Python code block.
+DEBUG_SYSTEM_PROMPT = r"""You are repairing Python/SymPy code for a math problem.
+
+Return ONLY corrected executable Python code in one ```python ... ``` block.
+Fix the reported issue and keep correct code. Do not explain or output <think> tags.
 
 Rules:
-1. Recompute the requested target directly; do not hard-code numbers or repeat crashed code.
-2. Use exact arithmetic (sp.Rational, safe_solve) and guard empty solver results before indexing.
-3. Ensure finite execution; never use unbounded while loops.
-4. Print ONLY the final answer in LaTeX boxed format: print(f"\\boxed{{{sp.latex(final_answer)}}}")"""
+- Recompute the target; do not hard-code an answer.
+- Use exact arithmetic where possible and handle fragile solver failures.
+- Use finite loops only; never use an unbounded while loop.
+- Any reasoning comment must start with "# Step <number>:".
+- Print only the required final result."""
 
 SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 
@@ -148,32 +115,25 @@ SYSTEM_PROMPTS = {
 # ==============================================================================
 
 def remove_thinking_tags(text: str) -> str:
-    """Strip <think>...</think> tags. If closing tag is missing (truncated output), salvage content."""
+    """Loại bỏ các thẻ <think>...</think> của các mô hình reasoning (Qwen, DeepSeek...)."""
     text = str(text or "")
-    if not text:
-        return ""
-    if "<think>" in text and "</think>" in text:
-        parts = text.split("</think>", 1)
-        after_think = parts[1].strip()
-        if after_think:
-            return after_think
-        inside_think = parts[0].split("<think>", 1)[-1].strip()
-        return inside_think
     if "<think>" in text and "</think>" not in text:
-        inside = text.split("<think>", 1)[-1].strip()
-        return inside
+        return text.split("<think>", 1)[0].strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     if "</think>" in text:
-        return text.split("</think>", 1)[-1].strip()
+        text = text.split("</think>", 1)[-1].strip()
     return text.strip()
 
 
 def clean_planner_note(raw_plan: str) -> str:
-    """Clean extracted state or plan, removing thinking tags and bounding context length."""
+    """
+    Làm sạch kết quả kế hoạch từ Turn 1:
+    - Loại bỏ thẻ thinking.
+    - Trích xuất khối JSON hoặc văn bản kế hoạch có giới hạn độ dài để không làm phình context codegen.
+    """
     if not raw_plan or not raw_plan.strip():
         return ""
     text = remove_thinking_tags(raw_plan.strip())
-    if not text:
-        text = re.sub(r"</?think>", "", raw_plan).strip()
     match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
     if match:
         text = match.group(1).strip()
@@ -181,48 +141,19 @@ def clean_planner_note(raw_plan: str) -> str:
 
 
 def build_extract_messages(question: str) -> List[Dict[str, str]]:
-    """Build Turn 1 messages: identify the Target and Output format only."""
+    """Build Turn 1 messages: extract the mathematical state."""
     return [
         {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\nIdentify the Target and Output format only in two lines."}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\nExtract the mathematical state only."}
     ]
 
 
 def build_planner_messages(question: str, extraction: str = "") -> List[Dict[str, str]]:
-    """Build Turn 2 messages: write an operational plan given the problem and target."""
-    extraction_block = extraction.strip() or "No target/format available."
+    """Build Turn 2 messages: write a plan from the problem and extraction."""
+    extraction_block = extraction.strip() or "No extraction available."
     return [
         {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\n# TARGET & FORMAT\n{extraction_block}\n\nWrite the operational plan only."}
-    ]
-def build_replan_messages(
-    question: str,
-    extraction: str = "",
-    prev_plan: str = "",
-    failure_feedback: str = ""
-) -> List[Dict[str, str]]:
-    """Build Level 2 Backtracking messages: request an alternative plan given diagnosis."""
-    extraction_block = extraction.strip() or "No extraction available."
-    prev_plan_block = prev_plan.strip() or "N/A"
-    diag_block = failure_feedback.strip() or "The previous plan led to execution or verification failure."
-
-    user_content = f"""# PROBLEM
-{question}
-
-# EXTRACTED STATE
-{extraction_block}
-
-# PREVIOUS FAILED PLAN
-{prev_plan_block}
-
-# FAILURE DIAGNOSIS
-{diag_block}
-
-Formulate a new, alternative numbered solution plan that avoids the above failure mode. Write the revised plan only."""
-
-    return [
-        {"role": "system", "content": REPLAN_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\n# EXTRACTED STATE\n{extraction_block}\n\nWrite the plan only."}
     ]
 
 

@@ -27,15 +27,14 @@ class LLMRunner:
         top_p: float = 1.0,
         max_input_tokens: int = 2560,
         device_map: str = "auto",
-        hf_token: Optional[str] = None,
-        default_enable_thinking: Optional[bool] = None
+        hf_token: Optional[str] = None
     ):
         self.model_id = model_id
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
         self.max_input_tokens = int(max_input_tokens)
-        self.default_enable_thinking = default_enable_thinking
+        
         token = hf_token or os.environ.get("HF_TOKEN") or None
         cuda_avail = torch.cuda.is_available()
         
@@ -116,12 +115,12 @@ class LLMRunner:
             "tokenize": False,
             "add_generation_prompt": True
         }
-        active_thinking = enable_thinking if enable_thinking is not None else self.default_enable_thinking
-        if active_thinking is not None:
+        if enable_thinking is not None:
             try:
-                chat_template_kwargs["enable_thinking"] = active_thinking
+                chat_template_kwargs["enable_thinking"] = enable_thinking
             except TypeError:
                 pass
+
         try:
             prompt = self.tokenizer.apply_chat_template(messages, **chat_template_kwargs)
         except (TypeError, Exception):

@@ -25,7 +25,6 @@ from .prompts import (
     build_prompt_messages,
     build_retry_prompt_messages,
     build_planner_messages,
-    build_replan_messages,
     clean_planner_note,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages,
@@ -86,9 +85,6 @@ def _should_retry_symplanner(execution_status: str, candidate: Any, verification
         "trig power identity",
         "reassigned",
         "explicit coordinates",
-        "unevaluated trigonometric",
-        "trigonometric/logarithmic",
-        "could not be parsed",
     )
     if verification_status == "fail":
         return any(token in feedback_text for token in actionable_tokens)
@@ -106,26 +102,11 @@ def _with_static_diagnostics(feedback: Any, code: str, execution_status: str, ca
     return f"{feedback or 'No verifier feedback.'} {suffix}"
 
 
-INVALID_PREDICTED_VALUES = {
-    "", "none", "null", "invalid", "undefined", "nan", "error",
-    "final_answer", "{final_answer}", "{{final_answer}}",
-    "ans", "{ans}", "{{ans}}", "result", "{result}", "{{result}}"
-}
-
-
-def is_valid_predicted(val: Any) -> bool:
-    if val is None:
-        return False
-    s = str(val).strip().lower()
-    if s in INVALID_PREDICTED_VALUES:
-        return False
-    if s.startswith("{") and s.endswith("}") and len(s) < 30:
-        return False
-    return bool(s)
-
-
 def _candidate_is_present(value: Any) -> bool:
-    return is_valid_predicted(value)
+    if value is None:
+        return False
+    return str(value).strip().lower() not in {"", "none", "null", "invalid", "undefined", "nan"}
+
 
 def _symplanner_record_rank(record: Dict[str, Any]) -> tuple[int, int, int, int]:
     return (
@@ -401,8 +382,7 @@ def evaluate_direct_or_cot(
     dataset: List[Dict[str, Any]],
     llm: LLMRunner,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5,
-    verbose: bool = True
+    save_every: int = 5
 ) -> List[Dict[str, Any]]:
     """
     Thực thi đánh giá zero-shot cho Direct hoặc Chain-of-Thought (CoT) với tính năng Auto-Resume.
@@ -411,14 +391,13 @@ def evaluate_direct_or_cot(
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     
-    if verbose and completed_problems:
+    if completed_problems:
         print(f"[INFO] Tiep tuc phuong phap {method_name}: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
 
-    if verbose:
-        print(f"\n==================== Bat dau danh gia Baseline: {method_name} ====================")
+    print(f"\n==================== Bat dau danh gia Baseline: {method_name} ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc=f"Danh gia {method_name}", disable=not verbose):
+    for item in tqdm(dataset, desc=f"Danh gia {method_name}"):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -426,8 +405,7 @@ def evaluate_direct_or_cot(
         gt = extract_ground_truth(item.get("raw") or item["answer"])
         messages = build_prompt_messages(method_name, question)
         
-        active_thinking = False if method_name == "Direct" else None
-        raw_output, token_count = llm.generate_chat(messages, enable_thinking=active_thinking)
+        raw_output, token_count = llm.generate_chat(messages)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
@@ -468,8 +446,7 @@ def evaluate_symcode(
     timeout: int = 15,
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5,
-    verbose: bool = True
+    save_every: int = 5
 ) -> List[Dict[str, Any]]:
     """
     Thực thi đánh giá phương pháp SymCode (Neurosymbolic Equation Solving với SymPy & Vòng lặp Verifier).
@@ -480,14 +457,13 @@ def evaluate_symcode(
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     
-    if verbose and completed_problems:
+    if completed_problems:
         print(f"[INFO] Tiep tuc phuong phap SymCode: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
 
-    if verbose:
-        print(f"\n==================== Bat dau danh gia Phuong phap: SymCode (So lan retry toi da: {max_retries}) ====================")
+    print(f"\n==================== Bat dau danh gia Phuong phap: SymCode (So lan retry toi da: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymCode", disable=not verbose):
+    for item in tqdm(dataset, desc="Danh gia SymCode"):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -509,7 +485,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False)
+                raw_output, token_count = llm.generate_chat(messages)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -561,13 +537,14 @@ def evaluate_symcode(
             prev_code = extracted_code
             error_tb = exec_res.get("traceback")
 
-        final_predicted = candidate_ans if is_valid_predicted(candidate_ans) else None
-        if final_predicted is None:
+        final_predicted = candidate_ans
+        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
             for out in reversed(raw_outputs):
                 b = extract_boxed_content(out)
-                if is_valid_predicted(b):
+                if b is not None and b.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
                     final_predicted = b
                     break
+
         is_correct = check_exact_match(final_predicted, gt)
 
         results.append({
@@ -612,8 +589,7 @@ def evaluate_symplanner(
     timeout: int = 15,
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
-    save_every: int = 5,
-    verbose: bool = True
+    save_every: int = 5
 ) -> List[Dict[str, Any]]:
     """
     Thực thi SymPlanner đơn giản:
@@ -626,14 +602,13 @@ def evaluate_symplanner(
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     
-    if verbose and completed_problems:
+    if completed_problems:
         print(f"[INFO] Tiep tuc phuong phap SymPlanner: da hoan thanh {len(completed_problems)}/{len(dataset)} mau.")
 
-    if verbose:
-        print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Extract -> Plan -> SymCode, Retries: {max_retries}) ====================")
+    print(f"\n==================== Bat dau danh gia Phuong phap: SymPlanner (Extract -> Plan -> SymCode, Retries: {max_retries}) ====================")
     
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymPlanner", disable=not verbose):
+    for item in tqdm(dataset, desc="Danh gia SymPlanner"):
         question = item["question"]
         if question in completed_problems:
             continue
@@ -648,7 +623,7 @@ def evaluate_symplanner(
         # TURN 1: EXTRACT PHASE
         # -------------------------------------------------------------
         extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=64, enable_thinking=False)
+        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
         extraction_note = clean_planner_note(raw_extract)
         total_tokens += extract_tokens
         raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
@@ -657,14 +632,14 @@ def evaluate_symplanner(
         # TURN 2: PLAN PHASE
         # -------------------------------------------------------------
         planner_messages = build_planner_messages(question, extraction_note)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192, enable_thinking=False)
+        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
         planner_note = clean_planner_note(raw_plan)
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
 
         planner_meta = infer_target_spec(question, extraction_note)
         planner_errors = []
-        symplanner_context = f"# TARGET & FORMAT\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
+        symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
 
         # -------------------------------------------------------------
         # TURN 3: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
@@ -703,7 +678,7 @@ def evaluate_symplanner(
             "generated_tokens": code_tokens,
             "execution_status": exec_res.get("status"),
             "candidate_answer": candidate_ans,
-            "canonical_answer": exec_res.get("latex_answer") or exec_res.get("canonical_answer"),
+            "canonical_answer": exec_res.get("canonical_answer"),
             "answer_type": exec_res.get("answer_type"),
             "unit": exec_res.get("unit"),
             "variables": exec_res.get("variables"),
@@ -717,64 +692,28 @@ def evaluate_symplanner(
 
         attempt = 1
         # -------------------------------------------------------------
-        # TWO-LEVEL DYNAMIC BACKTRACKING REPAIR LOOP (Re-Code vs Re-Plan)
+        # TARGETED DEBUG REPAIR LOOP (Giống SymCode)
         # -------------------------------------------------------------
         while attempt <= max_retries and _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
             attempt += 1
-
-            # Decide whether to perform Level 1 (Code Debug) or Level 2 (Re-Plan Backtracking)
-            is_repeated_code = sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2
-            is_strategy_failure = verif_status == "fail" and any(
-                tok in str(verif_feedback).lower()
-                for tok in ("strategy", "approach", "spectral norm", "round table", "circular", "vieta", "functional equation", "must be simplified")
+            if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
+                verif_feedback = f"{verif_feedback or 'No actionable diagnosis.'} Previous repair repeated the same code; produce a materially different implementation."
+            debug_messages = build_symplanner_debug_messages(
+                question=question,
+                bad_code=extracted_code,
+                execution_status=exec_res.get("status", "error"),
+                error_tb=exec_res.get("traceback"),
+                candidate_answer=candidate_ans,
+                verification_status=verif_status,
+                verification_feedback=verif_feedback,
+                planner_note=symplanner_context,
+                subject=item.get("subject", "")
             )
-            should_replan = attempt > 2 or is_repeated_code or is_strategy_failure
-
-            if should_replan:
-                # Level 2: Re-Plan Backtracking (Revise solution strategy)
-                replan_messages = build_replan_messages(
-                    question=question,
-                    extraction=extraction_note,
-                    prev_plan=planner_note,
-                    failure_feedback=str(verif_feedback or exec_res.get("traceback") or "The previous plan failed execution or mathematical verification.")
-                )
-                raw_replan, replan_tokens = llm.generate_chat(replan_messages, max_new_tokens_override=192, enable_thinking=False)
-                total_tokens += replan_tokens
-                symplanner_context = f"# TARGET & FORMAT\n{extraction_note}\n\n# REVISED PLAN\n{planner_note}".strip()
-                raw_outputs.append(f"### Turn 2.x (Re-Plan Retry {attempt}):\n{raw_replan}")
-
-                # Synthesize fresh code based on revised plan
-                codegen_messages = build_symplanner_codegen_messages(
-                    question,
-                    symplanner_context,
-                    subject=item.get("subject", "")
-                )
-                raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False)
-                total_tokens += code_tokens
-                raw_outputs.append(f"### Turn 3.x (Re-Plan Codegen Retry {attempt}):\n{raw_code_output}")
-                extracted_code = extract_symplanner_code(raw_code_output)
-                current_phase = "replan_codegen"
-                generated_attempt_tokens = replan_tokens + code_tokens
-            else:
-                # Level 1: Direct Code Repair (Fix syntax, runtime traceback, or minor verifier issue)
-                debug_messages = build_symplanner_debug_messages(
-                    question=question,
-                    bad_code=extracted_code,
-                    execution_status=exec_res.get("status", "error"),
-                    error_tb=exec_res.get("traceback"),
-                    candidate_answer=candidate_ans,
-                    verification_status=verif_status,
-                    verification_feedback=verif_feedback,
-                    planner_note=symplanner_context,
-                    subject=item.get("subject", "")
-                )
-                raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
-                total_tokens += dbg_tokens
-                raw_outputs.append(f"### Turn 3.x (Debug Retry {attempt}):\n{raw_debug_output}")
-                extracted_code = extract_symplanner_code(raw_debug_output)
-                current_phase = "debug_repair"
-                generated_attempt_tokens = dbg_tokens
-
+            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
+            total_tokens += dbg_tokens
+            raw_outputs.append(f"### Turn 3 (Debug Retry {attempt}):\n{raw_debug_output}")
+            
+            extracted_code = extract_symplanner_code(raw_debug_output)
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
             
@@ -794,12 +733,12 @@ def evaluate_symplanner(
                 
             retry_record = {
                 "attempt": attempt,
-                "phase": current_phase,
+                "phase": "debug_repair",
                 "code": extracted_code,
-                "generated_tokens": generated_attempt_tokens,
+                "generated_tokens": dbg_tokens,
                 "execution_status": exec_res.get("status"),
                 "candidate_answer": candidate_ans,
-                "canonical_answer": exec_res.get("latex_answer") or exec_res.get("canonical_answer"),
+                "canonical_answer": exec_res.get("canonical_answer"),
                 "answer_type": exec_res.get("answer_type"),
                 "unit": exec_res.get("unit"),
                 "variables": exec_res.get("variables"),
@@ -812,12 +751,11 @@ def evaluate_symplanner(
             attempt_history.append(retry_record)
 
             if sum(1 for record in attempt_history if record.get("code") == extracted_code) >= 2:
-                if not should_replan:
-                    continue
                 break
             
             if not _should_retry_symplanner(exec_res.get("status", "error"), candidate_ans, verif_status, verif_feedback):
                 break
+
         # -------------------------------------------------------------
         # FINAL ANSWER EXTRACTION & ACCURACY EVALUATION
         # -------------------------------------------------------------
@@ -838,11 +776,12 @@ def evaluate_symplanner(
         final_canonical = best_record.get("canonical_answer")
         final_answer_type = best_record.get("answer_type")
         final_unit = best_record.get("unit")
-        if not is_valid_predicted(final_predicted):
-            final_predicted = None
+        if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+            # Fallback an toàn: trích xuất từ planner note nếu có
             box_match = extract_boxed_content(planner_note)
-            if is_valid_predicted(box_match):
+            if box_match:
                 final_predicted = box_match
+        final_predicted = format_answer_for_contract(question, final_predicted, final_answer_type)
 
         is_correct = check_exact_match(final_predicted, gt)
 

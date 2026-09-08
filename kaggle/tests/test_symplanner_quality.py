@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
-from method.prompts import build_extract_messages, build_planner_messages, build_replan_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
+from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
 from method.static_lint import lint_sympy_code
-from method.sandbox import execute_code_safely, safe_solve, SafeList, safe_inequality
+from method.sandbox import execute_code_safely
 from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from method.verifier import verify_candidate_answer
 from method.direct import build_messages as build_direct_messages
@@ -22,7 +22,7 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("Solve the following math problem directly", build_direct_messages("1+1")[0]["content"])
         self.assertIn("step-by-step", build_cot_messages("1+1")[0]["content"])
         self.assertIn("executable Python code", build_symcode_messages("1+1")[0]["content"])
-        self.assertIn("Target and Output format", build_symplanner_folder_extract_messages("1+1")[0]["content"])
+        self.assertIn("extract the mathematical state", build_symplanner_folder_extract_messages("1+1")[0]["content"])
         self.assertIn("OUTPUT REQUIREMENT", build_symplanner_folder_codegen_messages("1+1", "{}")[-1]["content"])
 
     def test_common_math_format_variants_are_equivalent(self):
@@ -80,10 +80,10 @@ class SymPlannerQualityTests(unittest.TestCase):
 
     def test_simple_symplanner_prompt_chain(self):
         extract_messages = build_extract_messages("Triangle problem")
-        self.assertIn("Target and Output format", extract_messages[-1]["content"])
+        self.assertIn("Extract the mathematical state", extract_messages[-1]["content"])
         messages = build_planner_messages("Triangle problem", "# Target: area")
         self.assertEqual(len(messages), 2)
-        self.assertIn("# TARGET & FORMAT", messages[-1]["content"])
+        self.assertIn("# EXTRACTED STATE", messages[-1]["content"])
         self.assertIn("# Target: area", messages[-1]["content"])
 
 
@@ -210,64 +210,6 @@ class SymPlannerQualityTests(unittest.TestCase):
             "equation = sp.Eq(A, P * (1 + r)**n)",
         )
         self.assertEqual(status, "fail")
-
-    def test_safe_solve_defensive_behavior(self):
-        import sympy as sp
-        x = sp.Symbol('x')
-        # Filter positive roots
-        pos_sols = safe_solve(x**2 - 9, x, positive=True)
-        self.assertEqual(pos_sols, [3])
-        # Empty roots returns SafeList with safe indexing [0] -> None (no IndexError)
-        empty_sols = safe_solve(x**2 + 1, x, real=True)
-        self.assertIsNone(empty_sols[0])
-        self.assertIsNone(empty_sols.first())
-
-    def test_sandbox_executes_safe_solve_without_imports(self):
-        code = "x = sp.Symbol('x')\nsols = safe_solve(x**2 - 16, x, positive=True)\nprint(f'\\boxed{{{sols[0]}}}')"
-        res = execute_code_safely(code)
-        self.assertEqual(res["status"], "success")
-        self.assertEqual(res["extracted_answer"], "4")
-
-    def test_auto_latex_and_contract_format(self):
-        radical = format_answer_for_contract("Find the length.", "3*sqrt(13)")
-        self.assertIn(r"\sqrt{13}", radical)
-        frac = format_answer_for_contract("Express your answer as a common fraction.", "0.75")
-        self.assertEqual(frac, r"\frac{3}{4}")
-
-    def test_replan_message_generation(self):
-        msgs = build_replan_messages(
-            question="Find the maximum value.",
-            extraction="# Target: max value",
-            prev_plan="1. Solve directly",
-            failure_feedback="Verification Error: candidate is negative."
-        )
-        self.assertEqual(len(msgs), 2)
-        self.assertIn("FAILURE DIAGNOSIS", msgs[1]["content"])
-        self.assertIn("candidate is negative", msgs[1]["content"])
-
-    def test_target_contract_rejects_numeric_fractions_for_text_target(self):
-        status, _ = verify_candidate_answer("Which student has the greatest average speed?", "14/3")
-        self.assertEqual(status, "fail")
-
-    def test_prompts_have_in_context_anchors_and_operational_blueprints(self):
-        from method.prompts import EXTRACT_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT, SYMPLANNER_CODEGEN_SYSTEM_PROMPT
-        self.assertIn("Example 1:", EXTRACT_SYSTEM_PROMPT)
-        self.assertIn("Example 2:", EXTRACT_SYSTEM_PROMPT)
-        self.assertIn("Operational blueprint", PLANNER_SYSTEM_PROMPT)
-        self.assertIn("1:1 Plan realization", SYMPLANNER_CODEGEN_SYSTEM_PROMPT)
-
-    def test_target_contract_parses_turn1_output_label(self):
-        from method.target_contract import infer_target_spec
-        t1_note = "# Target: conic classification\n# Given: (x/2 - 3)^2 + y^2 = 10\n# Output: text"
-        spec = infer_target_spec("Some problem", t1_note)
-        self.assertEqual(spec["answer_type"], "text")
-
-    def test_safe_coeff_auto_expands_unexpanded_expression(self):
-        import sympy as sp
-        x, y = sp.symbols('x y')
-        eq = (sp.Rational(1, 2)*x - 3)**2 + y**2 - 10
-        self.assertEqual(sp.coeff(eq, x**2), sp.Rational(1, 4))
-        self.assertEqual(sp.coeff(eq, y**2), 1)
 
 if __name__ == "__main__":
     unittest.main()
