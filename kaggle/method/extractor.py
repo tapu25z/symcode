@@ -56,46 +56,62 @@ def extract_boxed_content(text: str) -> Optional[str]:
 
 def extract_answer_fallback(text: str) -> Optional[str]:
     """
-    Trích xuất đáp án toàn diện cho CoT/Direct:
-    1. Ưu tiên lấy nội dung trong \\boxed{...}.
-    2. Nếu không có, tìm kiếm các mẫu kết luận chuẩn:
-       'the answer is ...', 'the final answer is ...', '#### ...'.
+    Extract the final answer for CoT/Direct with multi-tier fallbacks:
+    1. First check if \\boxed{...} exists in cleaned text (outside <think> tags).
+    2. If not found, check if \\boxed{...} exists anywhere in raw text (salvages answers emitted inside <think>).
+    3. Check standard conclusion patterns ('the final answer is ...', '#### ...', 'the answer is ...').
     """
     if not text or not isinstance(text, str):
         return None
-        
-    text = remove_thinking_tags(text)
-    boxed = extract_boxed_content(text)
+
+    cleaned_text = remove_thinking_tags(text)
+
+    # 1. Boxed answer outside thinking tags
+    boxed = extract_boxed_content(cleaned_text)
     if boxed is not None:
         return boxed
 
-    # Các mẫu kết luận phổ biến
+    # 2. Boxed answer in raw text (recovers answers emitted inside <think> or truncated)
+    raw_boxed = extract_boxed_content(text)
+    if raw_boxed is not None:
+        return raw_boxed
+
+    # 3. Standard conclusion patterns in cleaned text, then raw text
     conclusion_patterns = [
-        r"(?:the\s+final\s+answer\s+is|the\s+answer\s+is|is\s+equal\s+to|equals|is\s+therefore)\s*[:=]?\s*([^\n\r]+)",
+        r"(?:the\s+final\s+answer\s+is|the\s+answer\s+is|is\s+equal\s+to|equals|is\s+therefore|actual\s+answer\s+is)\s*[:=]?\s*([^\n\r]+)",
         r"####\s*([^\n\r]+)"
     ]
-    for pat in conclusion_patterns:
-        matches = list(re.finditer(pat, text, flags=re.IGNORECASE))
-        if matches:
-            cand = matches[-1].group(1).strip()
-            cand = cand.replace("$", "").rstrip(".").strip()
-            # Lọc bỏ các từ thừa
-            sub_m = re.search(r"(-?\d+(?:\.\d+)?(?:/\d+)?|[a-zA-Z]+)", cand)
-            if sub_m:
-                return sub_m.group(0).strip()
-            return cand
+    for target in (cleaned_text, text):
+        for pat in conclusion_patterns:
+            matches = list(re.finditer(pat, target, flags=re.IGNORECASE))
+            if matches:
+                cand = matches[-1].group(1).strip()
+                cand = cand.replace("$", "").rstrip(".").strip()
+                sub_m = re.search(r"(-?\d+(?:\.\d+)?(?:/\d+)?|[a-zA-Z]+)", cand)
+                if sub_m:
+                    return sub_m.group(0).strip()
+                return cand
 
     return None
 
 
 def remove_thinking_tags(text: str) -> str:
-    """Loại bỏ các thẻ <think>...</think> của các mô hình reasoning."""
+    """Strip <think>...</think> tags. If closing tag is missing (truncated output), salvage content."""
     text = str(text or "")
+    if not text:
+        return ""
+    if "<think>" in text and "</think>" in text:
+        parts = text.split("</think>", 1)
+        after_think = parts[1].strip()
+        if after_think:
+            return after_think
+        inside_think = parts[0].split("<think>", 1)[-1].strip()
+        return inside_think
     if "<think>" in text and "</think>" not in text:
-        return text.split("<think>", 1)[0].strip()
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        inside = text.split("<think>", 1)[-1].strip()
+        return inside
     if "</think>" in text:
-        text = text.split("</think>", 1)[-1].strip()
+        return text.split("</think>", 1)[-1].strip()
     return text.strip()
 
 

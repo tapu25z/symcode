@@ -79,6 +79,12 @@ def parse_args():
         help="Su dung luong tu hoa 4-bit NF4 via bitsandbytes."
     )
     parser.add_argument(
+        "--disable-thinking",
+        action="store_true",
+        default=False,
+        help="Vo hieu hoa che do suy luan <think> cua mo hinh de tiet kiem token va tranh tran 1024 tokens."
+    )
+    parser.add_argument(
         "--no-4bit",
         dest="load_in_4bit",
         action="store_false",
@@ -208,7 +214,8 @@ def main():
         model_id=args.model_id,
         load_in_4bit=args.load_in_4bit,
         max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature
+        temperature=args.temperature,
+        default_enable_thinking=False if args.disable_thinking else None
     )
 
     # Doc checkpoint da co neu ton tai

@@ -127,25 +127,32 @@ SYSTEM_PROMPTS = {
 # ==============================================================================
 
 def remove_thinking_tags(text: str) -> str:
-    """Loại bỏ các thẻ <think>...</think> của các mô hình reasoning (Qwen, DeepSeek...)."""
+    """Strip <think>...</think> tags. If closing tag is missing (truncated output), salvage content."""
     text = str(text or "")
+    if not text:
+        return ""
+    if "<think>" in text and "</think>" in text:
+        parts = text.split("</think>", 1)
+        after_think = parts[1].strip()
+        if after_think:
+            return after_think
+        inside_think = parts[0].split("<think>", 1)[-1].strip()
+        return inside_think
     if "<think>" in text and "</think>" not in text:
-        return text.split("<think>", 1)[0].strip()
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        inside = text.split("<think>", 1)[-1].strip()
+        return inside
     if "</think>" in text:
-        text = text.split("</think>", 1)[-1].strip()
+        return text.split("</think>", 1)[-1].strip()
     return text.strip()
 
 
 def clean_planner_note(raw_plan: str) -> str:
-    """
-    Làm sạch kết quả kế hoạch từ Turn 1:
-    - Loại bỏ thẻ thinking.
-    - Trích xuất khối JSON hoặc văn bản kế hoạch có giới hạn độ dài để không làm phình context codegen.
-    """
+    """Clean extracted state or plan, removing thinking tags and bounding context length."""
     if not raw_plan or not raw_plan.strip():
         return ""
     text = remove_thinking_tags(raw_plan.strip())
+    if not text:
+        text = re.sub(r"</?think>", "", raw_plan).strip()
     match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
     if match:
         text = match.group(1).strip()

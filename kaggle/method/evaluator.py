@@ -408,7 +408,8 @@ def evaluate_direct_or_cot(
         gt = extract_ground_truth(item.get("raw") or item["answer"])
         messages = build_prompt_messages(method_name, question)
         
-        raw_output, token_count = llm.generate_chat(messages)
+        active_thinking = False if method_name == "Direct" else None
+        raw_output, token_count = llm.generate_chat(messages, enable_thinking=active_thinking)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
@@ -490,7 +491,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
-                raw_output, token_count = llm.generate_chat(messages)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -630,7 +631,7 @@ def evaluate_symplanner(
         # TURN 1: EXTRACT PHASE
         # -------------------------------------------------------------
         extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
+        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192, enable_thinking=False)
         extraction_note = clean_planner_note(raw_extract)
         total_tokens += extract_tokens
         raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
@@ -639,7 +640,7 @@ def evaluate_symplanner(
         # TURN 2: PLAN PHASE
         # -------------------------------------------------------------
         planner_messages = build_planner_messages(question, extraction_note)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
+        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192, enable_thinking=False)
         planner_note = clean_planner_note(raw_plan)
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
@@ -720,8 +721,7 @@ def evaluate_symplanner(
                     prev_plan=planner_note,
                     failure_feedback=str(verif_feedback or exec_res.get("traceback") or "The previous plan failed execution or mathematical verification.")
                 )
-                raw_replan, replan_tokens = llm.generate_chat(replan_messages, max_new_tokens_override=192)
-                planner_note = clean_planner_note(raw_replan)
+                raw_replan, replan_tokens = llm.generate_chat(replan_messages, max_new_tokens_override=192, enable_thinking=False)
                 total_tokens += replan_tokens
                 symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# REVISED PLAN\n{planner_note}".strip()
                 raw_outputs.append(f"### Turn 2.x (Re-Plan Retry {attempt}):\n{raw_replan}")

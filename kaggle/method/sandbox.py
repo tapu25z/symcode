@@ -371,7 +371,7 @@ def _run_code_with_process_timeout(code: str, mode: str, timeout: float) -> Dict
         return {
             "status": "timeout",
             "stdout": "",
-            "traceback": f"Lỗi quá thời gian thực thi (vượt quá {timeout} giây).",
+            "traceback": f"Execution Timeout: Code execution exceeded {timeout} seconds.",
             "extracted_answer": None
         }
     
@@ -394,7 +394,7 @@ def _run_code_with_process_timeout(code: str, mode: str, timeout: float) -> Dict
     return {
         "status": "error",
         "stdout": "",
-        "traceback": "Lỗi: Tiến trình con kết thúc đột ngột không phản hồi.",
+        "traceback": "Execution Error: Worker process terminated unexpectedly without response.",
         "extracted_answer": None
     }
 
@@ -419,7 +419,7 @@ def execute_code_safely(code: str, mode: str = "symcode", timeout: int = 15) -> 
         return {
             "status": "error",
             "stdout": "",
-            "traceback": "Lỗi: Không tìm thấy đoạn mã Python hợp lệ để thực thi.",
+            "traceback": "Execution Error: No valid executable Python code block found.",
             "extracted_answer": None
         }
 

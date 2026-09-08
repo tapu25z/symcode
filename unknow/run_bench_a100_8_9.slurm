@@ -178,6 +178,7 @@ python kaggle/run_benchmark.py \
     --num-samples 50 \
     --model-id Qwen/Qwen3-4B \
     --load-in-4bit \
+    --disable-thinking \
     --methods Direct CoT SymCode SymPlanner \
     --run-order by-problem \
     --output-file "$OUTPUT_RESULT" \
