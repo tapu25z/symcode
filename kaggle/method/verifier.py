@@ -224,12 +224,14 @@ def verify_candidate_answer(
         "output", "val", "value", "perimeter_hexagon", "num_divisors", "count",
         "total", "speed", "max_speed", "min_val", "max_val", "target", "candidates"
     }
-    cleaned_cand = cand_str.replace("\\", "").replace("{", "").replace("}", "").strip()
-    if cleaned_cand in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4 and not cleaned_cand.isalpha()):
-        return (
-            "fail",
-            "Verification Error: Candidate answer '" + cand_str + "' is an unevaluated Python variable name. Actionable Fix: Compute the actual value of the variable first, then pass the evaluated variable to print(f'\\boxed{sp.latex(var)}')."
-        )
+    cand_trimmed = cand_str.strip()
+    if not cand_trimmed.startswith("\\") and not any(op in cand_trimmed for op in ("/", "+", "-", "*", "^", "=", "(", ")")):
+        cleaned_cand = cand_trimmed.replace("{", "").replace("}", "").strip()
+        if cleaned_cand.lower() in common_code_vars or (re.match(raw_var_pattern, cleaned_cand) and len(cleaned_cand) > 4 and not cleaned_cand.isalpha()):
+            return (
+                "fail",
+                f"Verification Error: Candidate answer '{cand_str}' is an unevaluated Python variable name. Actionable Fix: Compute the actual value of the variable first, then pass the evaluated variable to print(f'\\boxed{{sp.latex(var)}}')."
+            )
 
     # 4. Kiểm tra miền giá trị và kiểu dữ liệu biểu tượng qua SymPy
     try:
@@ -242,28 +244,28 @@ def verify_candidate_answer(
         expr_str = expr_str.replace("$", "").replace("%", "").strip()
 
         # Kiểm tra tọa độ dạng tuple (x, y)
-        if expr_str.startswith("(") and expr_str.endswith(")"):
+        if expr_str.startswith("(") and expr_str.endswith(")") and "," in expr_str:
             inner = expr_str[1:-1]
             tuple_parts = [p.strip() for p in inner.split(",") if p.strip()]
             if not tuple_parts:
                 return ("fail", "Verification Error: Empty coordinate tuple.")
-            
-            # Kiểm tra ràng buộc tọa độ cực (polar coordinates)
-            if any(t in question.lower() for t in ["polar coordinate", "polar coordinates", "polar form"]) and len(tuple_parts) == 2:
-                try:
-                    r_val = sympify(tuple_parts[0])
-                    theta_val = sympify(tuple_parts[1])
-                    if r_val.is_number and float(r_val) <= 0:
-                        return ("fail", f"Verification Error: The polar radius r must be positive (r > 0), but got r = {r_val}.")
-                    if theta_val.is_number:
-                        two_pi = float(sympy.pi * 2)
-                        th_f = float(theta_val)
-                        if th_f < 0 or th_f >= two_pi:
-                            return ("fail", f"Verification Error: The polar angle theta must satisfy 0 <= theta < 2*pi, but got theta = {theta_val}.")
-                    return ("unknown", "Verification Unknown: candidate satisfies polar-coordinate bounds, but no relation proves the requested pair.")
-                except Exception:
-                    pass
-            return ("unknown", "Candidate coordinate tuple is well-formed.")
+            if len(tuple_parts) >= 2:
+                # Kiểm tra ràng buộc tọa độ cực (polar coordinates)
+                if any(t in question.lower() for t in ["polar coordinate", "polar coordinates", "polar form"]) and len(tuple_parts) == 2:
+                    try:
+                        r_val = sympify(tuple_parts[0])
+                        theta_val = sympify(tuple_parts[1])
+                        if r_val.is_number and float(r_val) <= 0:
+                            return ("fail", f"Verification Error: The polar radius r must be positive (r > 0), but got r = {r_val}.")
+                        if theta_val.is_number:
+                            two_pi = float(sympy.pi * 2)
+                            th_f = float(theta_val)
+                            if th_f < 0 or th_f >= two_pi:
+                                return ("fail", f"Verification Error: The polar angle theta must satisfy 0 <= theta < 2*pi, but got theta = {theta_val}.")
+                        return ("unknown", "Verification Unknown: candidate satisfies polar-coordinate bounds, but no relation proves the requested pair.")
+                    except Exception:
+                        pass
+                return ("unknown", "Candidate coordinate tuple is well-formed.")
 
         # Parse biểu thức toán học
 
