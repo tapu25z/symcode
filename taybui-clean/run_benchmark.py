@@ -18,6 +18,9 @@ from method import (
 )
 from method.direct import evaluate as evaluate_direct
 from method.cot import evaluate as evaluate_cot
+from method.pal import evaluate as evaluate_pal
+from method.pot import evaluate as evaluate_pot
+from method.plancode import evaluate as evaluate_plancode
 from method.symcode import evaluate as evaluate_symcode
 from method.symplanner import evaluate as evaluate_symplanner
 
@@ -31,6 +34,26 @@ SYMPLANNER_ABLATION_METHODS = {
 
 
 MODEL_PRESETS = {
+    "qwen2.5-coder-3b": {
+        "model_id": "Qwen/Qwen2.5-Coder-3B-Instruct",
+        "default_enable_thinking": None,
+    },
+    "qwen3-1.7b": {
+        "model_id": "Qwen/Qwen3-1.7B",
+        "default_enable_thinking": False,
+    },
+    "qwen3-0.6b": {
+        "model_id": "Qwen/Qwen3-0.6B",
+        "default_enable_thinking": False,
+    },
+    "qwen3-4b-instruct": {
+        "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+        "default_enable_thinking": False,
+    },
+    "qwen3-4b": {
+        "model_id": "Qwen/Qwen3-4B",
+        "default_enable_thinking": False,
+    },
     "qwen2.5-coder-7b": {
         "model_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
         "default_enable_thinking": None,
@@ -66,10 +89,13 @@ def parse_args():
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=["Direct", "CoT", "SymCode", "SymPlanner"],
+        default=["PaL", "PoT", "PlanCode", "SymCode", "SymPlanner"],
         choices=[
             "Direct",
             "CoT",
+            "PaL",
+            "PoT",
+            "PlanCode",
             "SymCode",
             "SymPlanner",
             "SymPlannerExtractOnly",
@@ -125,7 +151,7 @@ def parse_args():
     parser.add_argument(
         "--max-input-tokens",
         type=int,
-        default=2560,
+        default=8192,
         help="So token toi da cua prompt dau vao sau khi ap chat template."
     )
     parser.add_argument(
@@ -138,7 +164,13 @@ def parse_args():
         "--max-retries",
         type=int,
         default=2,
-        help="So lan thu lai toi da cho vong lap tu sua loi SymCode."
+        help="So lan thu lai toi da cho vong lap tu sua loi SymCode va SymPlanner."
+    )
+    parser.add_argument(
+        "--baseline-retries",
+        type=int,
+        default=0,
+        help="So lan thu lai cho cac baseline 1-pass (PaL, PoT, PlanCode). Mac dinh la 0."
     )
     parser.add_argument(
         "--timeout",
@@ -191,7 +223,13 @@ def parse_args():
         action="store_false",
         help="Tat thinking trong chat template neu model/tokenizer ho tro."
     )
-    return parser.parse_args()
+    parser.add_argument("--extract-max-tokens", type=int, default=384)
+    parser.add_argument("--plan-max-tokens", type=int, default=768)
+    args = parser.parse_args()
+    for key in ("extract_max_tokens", "plan_max_tokens", "max_new_tokens", "max_input_tokens"):
+        if getattr(args, key) <= 0:
+            parser.error(f"--{key.replace('_', '-')} must be positive")
+    return args
 
 
 def _write_json_atomic(data: Dict[str, Any], filepath: str) -> None:
@@ -209,10 +247,17 @@ def _load_benchmark_data(output_file: str, config: Dict[str, Any]) -> Dict[str, 
         try:
             with open(output_file, "r", encoding="utf-8") as f:
                 benchmark_data = json.load(f)
-        except Exception:
-            benchmark_data = {}
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Cannot read checkpoint {output_file}; use a new output file.") from exc
     else:
         benchmark_data = {}
+
+    if any(benchmark_data.get("results", {}).values()):
+        previous = benchmark_data.get("config", {})
+        ignored = {"output_file", "save_every", "run_order", "methods_to_run"}
+        mismatches = [key for key in config if key not in ignored and previous.get(key) != config[key]]
+        if mismatches:
+            raise ValueError("Checkpoint configuration mismatch: " + ", ".join(mismatches) + ". Use a new --output-file.")
 
     benchmark_data.setdefault("timestamp", time.strftime("%Y-%m-%d %H:%M:%S"))
     benchmark_data["config"] = config
@@ -347,6 +392,21 @@ def _run_single_method(
         return evaluate_cot(
             [item], llm, checkpoint_file=output_file, save_every=1, verbose=False
         )
+    if method == "PaL":
+        return evaluate_pal(
+            [item], llm, timeout=args.timeout, max_retries=args.baseline_retries,
+            checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    if method == "PoT":
+        return evaluate_pot(
+            [item], llm, timeout=args.timeout, max_retries=args.baseline_retries,
+            checkpoint_file=output_file, save_every=1, verbose=False
+        )
+    if method == "PlanCode":
+        return evaluate_plancode(
+            [item], llm, timeout=args.timeout, max_retries=args.baseline_retries,
+            checkpoint_file=output_file, save_every=1, verbose=False
+        )
     if method == "SymCode":
         return evaluate_symcode(
             [item], llm, timeout=args.timeout, max_retries=args.max_retries,
@@ -432,6 +492,9 @@ def main():
         output_file = os.path.join("results", f"{args.dataset}{lvl_str}{tail_str}_results.json")
 
     config = {
+        "pipeline_version": "symplan-v3-output",
+        "extract_max_tokens": args.extract_max_tokens,
+        "plan_max_tokens": args.plan_max_tokens,
         "model_id": args.model_id,
         "load_in_4bit": args.load_in_4bit,
         "max_new_tokens": args.max_new_tokens,
@@ -447,6 +510,7 @@ def main():
         "methods_to_run": args.methods,
         "code_exec_timeout": args.timeout,
         "max_symcode_retries": args.max_retries,
+        "baseline_retries": args.baseline_retries,
         "output_file": output_file,
         "save_every": args.save_every,
         "run_order": args.run_order
@@ -479,6 +543,9 @@ def main():
         print("[ERROR] Khong tim thay du lieu de danh gia. Kiem tra lai duong dan file.")
         sys.exit(1)
 
+    # Validate before expensive model loading, for both execution orders.
+    _load_benchmark_data(output_file, config)
+
     # Khoi tao mo hinh
     if LLMRunner is None:
         print("[ERROR] Khong import duoc LLMRunner. Hay cai dat dependencies: pip install -r requirements.txt")
@@ -490,7 +557,9 @@ def main():
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         max_input_tokens=args.max_input_tokens,
-        default_enable_thinking=args.default_enable_thinking
+        default_enable_thinking=args.default_enable_thinking,
+        extract_max_tokens=args.extract_max_tokens,
+        plan_max_tokens=args.plan_max_tokens,
     )
 
     if args.run_order == "by-problem":
@@ -506,6 +575,18 @@ def main():
             elif method == "CoT":
                 benchmark_data["results"]["CoT"] = evaluate_cot(
                     dataset, llm, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "PaL":
+                benchmark_data["results"]["PaL"] = evaluate_pal(
+                    dataset, llm, timeout=args.timeout, max_retries=args.baseline_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "PoT":
+                benchmark_data["results"]["PoT"] = evaluate_pot(
+                    dataset, llm, timeout=args.timeout, max_retries=args.baseline_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "PlanCode":
+                benchmark_data["results"]["PlanCode"] = evaluate_plancode(
+                    dataset, llm, timeout=args.timeout, max_retries=args.baseline_retries, checkpoint_file=output_file, save_every=args.save_every
                 )
             elif method == "SymCode":
                 benchmark_data["results"]["SymCode"] = evaluate_symcode(

@@ -452,40 +452,42 @@ def evaluate_direct_or_cot(
     return results
 
 
-def evaluate_symcode(
+def evaluate_program_aided(
+    method_name: str,
     dataset: List[Dict[str, Any]],
     llm: LLMRunner,
     timeout: int = 15,
-    max_retries: int = 2,
+    max_retries: int = 0,
     checkpoint_file: Optional[str] = None,
     save_every: int = 5,
-    verbose: bool = True
+    verbose: bool = True,
+    mode: str = "pal",
 ) -> List[Dict[str, Any]]:
     """
-    Thực thi đánh giá phương pháp SymCode (Neurosymbolic Equation Solving với SymPy & Vòng lặp Verifier).
-    Cung cấp phản hồi lỗi thực thi (Traceback) và chẩn đoán toán học độc lập (Verifier Diagnosis).
-    Bộ kiểm chứng hoạt động độc lập 100%, không sử dụng ground truth.
+    Thực thi đánh giá cho các phương pháp Program-Aided (PaL, PoT, PlanCode, SymCode).
+    Hỗ trợ cả 1-pass (max_retries=0) và multi-turn repair (max_retries > 0).
     """
-    ckpt = _load_existing_checkpoint(checkpoint_file, "SymCode")
+    ckpt = _load_existing_checkpoint(checkpoint_file, method_name)
     results = ckpt["method_results"]
     completed_problems = {r["problem"] for r in results}
     dataset_questions = {item["question"] for item in dataset}
     completed_in_dataset = len(completed_problems & dataset_questions)
-    
+
     if verbose and completed_in_dataset:
-        print(f"[INFO] Tiep tuc phuong phap SymCode: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
+        print(f"[INFO] Tiep tuc phuong phap {method_name}: da hoan thanh {completed_in_dataset}/{len(dataset)} mau.")
 
     if verbose:
-        print(f"\n==================== Bat dau danh gia Phuong phap: SymCode (So lan retry toi da: {max_retries}) ====================")
-    
+        retries_desc = f", Retries: {max_retries}" if max_retries > 0 else " (1-pass)"
+        print(f"\n==================== Bat dau danh gia Phuong phap: {method_name}{retries_desc} ====================")
+
     new_evaluated = 0
-    for item in tqdm(dataset, desc="Danh gia SymCode", disable=not verbose):
+    for item in tqdm(dataset, desc=f"Danh gia {method_name}", disable=not verbose):
         question = item["question"]
         if question in completed_problems:
             continue
-            
+
         gt = extract_ground_truth(item.get("raw") or item["answer"])
-        
+
         total_tokens = 0
         attempt = 0
         prev_code = ""
@@ -496,11 +498,11 @@ def evaluate_symcode(
         exec_res = {}
         raw_outputs = []
         attempt_history = []
-        
+
         while attempt <= max_retries:
             attempt += 1
             if attempt == 1:
-                messages = build_prompt_messages("SymCode", question)
+                messages = build_prompt_messages(method_name, question)
                 raw_output, token_count = llm.generate_chat(messages)
             else:
                 messages = build_retry_prompt_messages(
@@ -510,21 +512,21 @@ def evaluate_symcode(
                     error_tb=error_tb,
                     candidate_answer=candidate_ans,
                     verification_status=verif_status,
-                    verification_feedback=verif_feedback
+                    verification_feedback=verif_feedback,
                 )
                 raw_output, token_count = llm.generate_chat(messages, enable_thinking=False)
-            
+
             total_tokens += token_count
             raw_outputs.append(raw_output)
-            
+
             extracted_code = extract_python_code(raw_output)
-            exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
+            exec_res = execute_code_safely(extracted_code, mode=mode, timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
-            
+
             if candidate_ans is not None and str(candidate_ans).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
                 candidate_ans = None
 
-            # Kiểm chứng độc lập không dùng ground truth
+            # Kiem chung doc lap khong dung ground truth
             if exec_res["status"] == "success" and candidate_ans is not None:
                 verif_status, verif_feedback = verify_candidate_answer(
                     question, candidate_ans, extracted_code, exec_res.get("stdout")
@@ -532,7 +534,7 @@ def evaluate_symcode(
             else:
                 verif_status = "fail"
                 verif_feedback = exec_res.get("traceback") or "Code did not print a \\boxed{} result."
-                
+
             attempt_record = {
                 "attempt": attempt,
                 "code": extracted_code,
@@ -542,14 +544,15 @@ def evaluate_symcode(
                 "verification_status": verif_status,
                 "verification_feedback": verif_feedback,
                 "stdout": exec_res.get("stdout", ""),
-                "traceback": exec_res.get("traceback")
+                "output_source": exec_res.get("output_source"),
+                "traceback": exec_res.get("traceback"),
             }
             attempt_history.append(attempt_record)
-            
-            # Dừng nếu code chạy thành công VÀ vượt qua kiểm chứng (không bị fail)
+
+            # Dung neu code chay thanh cong VA vuot qua kiem chung (khong bi fail)
             if exec_res["status"] == "success" and candidate_ans is not None and verif_status != "fail":
                 break
-                
+
             prev_code = extracted_code
             error_tb = exec_res.get("traceback")
 
@@ -577,26 +580,118 @@ def evaluate_symcode(
             "verification_status": verif_status,
             "verification_feedback": verif_feedback,
             "stdout": exec_res.get("stdout", ""),
+            "output_source": exec_res.get("output_source"),
             "traceback": exec_res.get("traceback"),
             "extracted_code": extracted_code,
             "raw_output": raw_outputs[-1] if raw_outputs else "",
             "raw_outputs": raw_outputs,
-            "attempt_history": attempt_history
+            "attempt_history": attempt_history,
         })
         completed_problems.add(question)
         new_evaluated += 1
-        
+
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
-            
+
         if checkpoint_file and (new_evaluated % save_every == 0):
             gc.collect()
-            _save_intermediate_checkpoint(checkpoint_file, "SymCode", results)
+            _save_intermediate_checkpoint(checkpoint_file, method_name, results)
 
     if checkpoint_file:
-        _save_intermediate_checkpoint(checkpoint_file, "SymCode", results)
-        
+        _save_intermediate_checkpoint(checkpoint_file, method_name, results)
+
     return results
+
+
+def evaluate_pal(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 0,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5,
+    verbose: bool = True,
+) -> List[Dict[str, Any]]:
+    return evaluate_program_aided(
+        "PaL",
+        dataset,
+        llm,
+        timeout=timeout,
+        max_retries=max_retries,
+        checkpoint_file=checkpoint_file,
+        save_every=save_every,
+        verbose=verbose,
+        mode="pal",
+    )
+
+
+def evaluate_pot(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 0,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5,
+    verbose: bool = True,
+) -> List[Dict[str, Any]]:
+    return evaluate_program_aided(
+        "PoT",
+        dataset,
+        llm,
+        timeout=timeout,
+        max_retries=max_retries,
+        checkpoint_file=checkpoint_file,
+        save_every=save_every,
+        verbose=verbose,
+        mode="pot",
+    )
+
+
+def evaluate_plancode(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 0,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5,
+    verbose: bool = True,
+) -> List[Dict[str, Any]]:
+    return evaluate_program_aided(
+        "PlanCode",
+        dataset,
+        llm,
+        timeout=timeout,
+        max_retries=max_retries,
+        checkpoint_file=checkpoint_file,
+        save_every=save_every,
+        verbose=verbose,
+        mode="plancode",
+    )
+
+
+def evaluate_symcode(
+    dataset: List[Dict[str, Any]],
+    llm: LLMRunner,
+    timeout: int = 15,
+    max_retries: int = 2,
+    checkpoint_file: Optional[str] = None,
+    save_every: int = 5,
+    verbose: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Thực thi đánh giá phương pháp SymCode (Neurosymbolic Equation Solving với SymPy & Vòng lặp Verifier).
+    """
+    return evaluate_program_aided(
+        "SymCode",
+        dataset,
+        llm,
+        timeout=timeout,
+        max_retries=max_retries,
+        checkpoint_file=checkpoint_file,
+        save_every=save_every,
+        verbose=verbose,
+        mode="symcode",
+    )
 
 
 def evaluate_symplanner(
@@ -663,10 +758,11 @@ def evaluate_symplanner(
         planner_meta = {}
         planner_errors = []
         context_blocks = []
+        extract_tokens = plan_tokens = 0
 
         if use_extract:
             extract_messages = build_prompt_messages("SymPlanner", question)
-            raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
+            raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=getattr(llm, "extract_max_tokens", 384), enable_thinking=False)
             extraction_note = clean_planner_note(raw_extract)
             total_tokens += extract_tokens
             raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
@@ -674,7 +770,7 @@ def evaluate_symplanner(
 
         if use_plan:
             planner_messages = build_planner_messages(question, extraction_note)
-            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
+            raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=getattr(llm, "plan_max_tokens", 768), enable_thinking=False)
             planner_note = clean_planner_note(raw_plan)
             total_tokens += plan_tokens
             raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
@@ -730,6 +826,7 @@ def evaluate_symplanner(
             "verification_feedback": verif_feedback,
             "static_lint": lint_sympy_code(extracted_code),
             "stdout": exec_res.get("stdout", ""),
+                "output_source": exec_res.get("output_source"),
             "traceback": exec_res.get("traceback")
         }
         attempt_history.append(attempt_record)
@@ -790,6 +887,7 @@ def evaluate_symplanner(
                 "verification_feedback": verif_feedback,
                 "static_lint": lint_sympy_code(extracted_code),
                 "stdout": exec_res.get("stdout", ""),
+                "output_source": exec_res.get("output_source"),
                 "traceback": exec_res.get("traceback")
             }
             attempt_history.append(retry_record)
@@ -851,6 +949,10 @@ def evaluate_symplanner(
             "extraction_note": extraction_note,
             "planner_note": planner_note,
             "symplanner_context": symplanner_context,
+            "extract_tokens": extract_tokens,
+            "plan_tokens": plan_tokens,
+            "extract_budget_reached": use_extract and extract_tokens >= getattr(llm, "extract_max_tokens", 384),
+            "plan_budget_reached": use_plan and plan_tokens >= getattr(llm, "plan_max_tokens", 768),
             "planner_contract": planner_meta,
             "planner_errors": planner_errors,
             "symplanner_ablation": ablation,

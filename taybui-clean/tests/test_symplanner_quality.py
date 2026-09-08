@@ -15,6 +15,9 @@ from method.verifier import verify_candidate_answer
 from method.evaluator import evaluate_symplanner
 from method.direct import build_messages as build_direct_messages
 from method.cot import build_messages as build_cot_messages
+from method.pal import build_messages as build_pal_messages
+from method.pot import build_messages as build_pot_messages
+from method.plancode import build_messages as build_plancode_messages
 from method.symcode import build_messages as build_symcode_messages
 from method.symplanner import build_extract_messages as build_symplanner_folder_extract_messages, build_codegen_messages as build_symplanner_folder_codegen_messages
 
@@ -22,21 +25,79 @@ from method.symplanner import build_extract_messages as build_symplanner_folder_
 class FakeAblationLLM:
     def __init__(self):
         self.calls = []
+        self.options = []
 
     def generate_chat(self, messages, **kwargs):
         self.calls.append(messages)
+        self.options.append(kwargs)
         prompt = messages[-1]["content"]
         if "Write the plan only" in prompt:
             return "1. Add the two numbers.\n2. Print the sum.", 5
-        if "Return executable Python code" in prompt:
+        if any(marker in prompt for marker in ["Return executable Python code", "Write Python code", "structured Python", "step-by-step plan in comments"]):
             return '```python\nprint("\\\\boxed{4}")\n```', 7
         return "# Target: the sum\n# Given: 2 and 2\n# Constraints: none", 3
 
 
 class SymPlannerQualityTests(unittest.TestCase):
+    def test_notebook_output_is_evaluated_once_and_logged(self):
+        result = execute_code_safely("values = []\ndef answer():\n    values.append(1)\n    return len(values)\nanswer()")
+        self.assertEqual(result["extracted_answer"], "1")
+        self.assertEqual(result["output_source"], "final_expression")
+        result = execute_code_safely("import sympy as sp\nsp.Rational(14, 3)")
+        self.assertTrue(check_exact_match(result["extracted_answer"], "14/3"))
+
+    def test_notebook_output_does_not_guess_or_override_stdout(self):
+        self.assertIsNone(execute_code_safely("answer = 9")["extracted_answer"])
+        self.assertIsNone(execute_code_safely('"a docstring"')["extracted_answer"])
+        self.assertEqual(execute_code_safely("print(7)\n9")["extracted_answer"], "7")
+        self.assertEqual(execute_code_safely("print(7)")["extracted_answer"], "7")
+        self.assertEqual(execute_code_safely("1/0")["status"], "error")
+
+    def test_long_plan_preserves_final_constraint(self):
+        from method.prompts import clean_planner_note
+        raw = "1. Define variables.\n" + "2. Preserve the original relation.\n" * 70 + "3. Reject negative roots."
+        note, _, errors = parse_planner_contract(clean_planner_note(raw), "Find x.")
+        self.assertFalse(errors)
+        self.assertTrue(note.endswith("Reject negative roots."))
+
+    def test_full_pipeline_uses_configured_stage_budgets(self):
+        llm = FakeAblationLLM()
+        llm.extract_max_tokens = 320
+        llm.plan_max_tokens = 640
+        result = evaluate_symplanner(
+            [{"question": "What is 2 + 2?", "answer": "#### 4"}],
+            llm, max_retries=0, verbose=False,
+        )[0]
+        self.assertTrue(result["is_correct"])
+        self.assertEqual(llm.options[0], {"max_new_tokens_override": 320, "enable_thinking": False})
+        self.assertEqual(llm.options[1], {"max_new_tokens_override": 640, "enable_thinking": False})
+        self.assertEqual(result["extract_tokens"], 3)
+        self.assertEqual(result["plan_tokens"], 5)
+        self.assertFalse(result["plan_budget_reached"])
+
+    def test_checkpoint_rejects_changed_model_and_legacy_pipeline(self):
+        import json
+        import tempfile
+        from run_benchmark import _load_benchmark_data
+        config = {"model_id": "model-a", "pipeline_version": "symplan-v2"}
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "result.json")
+            Path(path).write_text(json.dumps({"config": config, "results": {"CoT": [{"problem": "x"}]}}))
+            self.assertEqual(_load_benchmark_data(path, config)["config"], config)
+            with self.assertRaisesRegex(ValueError, "model_id"):
+                _load_benchmark_data(path, dict(config, model_id="model-b"))
+            with self.assertRaisesRegex(ValueError, "pipeline_version"):
+                _load_benchmark_data(path, dict(config, pipeline_version="next"))
+            Path(path).write_text("{")
+            with self.assertRaisesRegex(ValueError, "Cannot read checkpoint"):
+                _load_benchmark_data(path, config)
+
     def test_method_folder_imports_are_available(self):
         self.assertIn("Solve the following math problem directly", build_direct_messages("1+1")[0]["content"])
         self.assertIn("step-by-step", build_cot_messages("1+1")[0]["content"])
+        self.assertIn("computes the solution", build_pal_messages("1+1")[0]["content"])
+        self.assertIn("def solve():", build_pot_messages("1+1")[0]["content"])
+        self.assertIn("Plan:", build_plancode_messages("1+1")[0]["content"])
         self.assertIn("executable Python code", build_symcode_messages("1+1")[0]["content"])
         self.assertIn("extract the mathematical state", build_symplanner_folder_extract_messages("1+1")[0]["content"])
         self.assertIn("OUTPUT REQUIREMENT", build_symplanner_folder_codegen_messages("1+1", "{}")[-1]["content"])
@@ -304,3 +365,26 @@ class SymPlannerQualityTests(unittest.TestCase):
             "quotient, remainder = sp.div(g, f)\nprint((1, 0, 0))",
         )
         self.assertEqual(status, "fail")
+
+    def test_program_aided_evaluators_run_cleanly(self):
+        from method.pal import evaluate as evaluate_pal
+        from method.pot import evaluate as evaluate_pot
+        from method.plancode import evaluate as evaluate_plancode
+        sample_dataset = [{"question": "What is 2 + 2?", "answer": "4"}]
+        llm = FakeAblationLLM()
+
+        pal_results = evaluate_pal(sample_dataset, llm, verbose=False)
+        self.assertEqual(len(pal_results), 1)
+        self.assertTrue(pal_results[0]["is_correct"])
+        self.assertEqual(pal_results[0]["predicted"], "4")
+
+        pot_results = evaluate_pot(sample_dataset, llm, verbose=False)
+        self.assertEqual(len(pot_results), 1)
+        self.assertTrue(pot_results[0]["is_correct"])
+        self.assertEqual(pot_results[0]["predicted"], "4")
+
+        plancode_results = evaluate_plancode(sample_dataset, llm, verbose=False)
+        self.assertEqual(len(plancode_results), 1)
+        self.assertTrue(plancode_results[0]["is_correct"])
+        self.assertEqual(plancode_results[0]["predicted"], "4")
+

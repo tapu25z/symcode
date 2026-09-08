@@ -194,7 +194,7 @@ def parse_planner_contract(raw_plan: str, question: str = "") -> tuple[str, dict
     for key in ("given_constants", "variables", "relations", "constraints", "steps", "pitfalls"):
         if key in parsed and not isinstance(parsed[key], list):
             errors.append(f"planner {key} must be a list")
-    return candidate[:1500].strip(), parsed, list(dict.fromkeys(errors))
+    return candidate.strip(), parsed, list(dict.fromkeys(errors))
 
 
 def target_contract_feedback(question: str, candidate_answer: Any, planner_note: str = "") -> tuple[str, str] | None:

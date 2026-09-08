@@ -34,6 +34,11 @@ Return ONLY numbered plan steps.
 Rules:
 - Do not calculate or reveal the final numeric answer.
 - Do not write Python code.
+- Treat the original problem as authoritative; correct omissions or contradictions in the extracted state.
+- Derive the equations or recurrence explicitly and define each variable, rather than merely naming a solver.
+- Choose one practical algorithm and give finite bounds for enumeration.
+- Leave arithmetic, factorization and equation solving to Python/SymPy. Plan the operations rather than guessing their computed results.
+- State how to check candidates against the original relations and domains.
 - Restate the requested target when the problem asks for an input, multiplier, quotient, coefficient, vector, or tuple; do not plan to print a downstream computed value instead.
 - Include candidate filtering or constraint checks when needed.
 - Keep the plan short."""
@@ -49,16 +54,15 @@ SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and
 Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
 Rules:
-1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
-2. Solve the requested target, not an intermediate value. Use the extraction and plan.
+1. Import sympy as sp. Always use exact arithmetic for fractions via sp.Rational(p, q) (e.g., sp.Rational(2, 3), never float division like 2/3); use floats only when explicitly requested. Never check integrality with .is_integer on SymPy Floats or division results (use sp.Rational exact arithmetic, or check val == int(val) / round(val)).
+2. Solve the requested target, not an intermediate value. Use the extraction and plan as fallible guidance; correct contradictions against the original problem.
    Examples: if asked "by what number should A be multiplied", print the multiplier, not A times that multiplier; if asked for a quotient, print the quotient polynomial, not the remainder or value at a point.
 3. If using sp.solve or another fragile solver, handle failure or an empty result. Use a simple bounded fallback only when practical.
 4. Use finite loops only. Never use an unbounded while loop.
 5. Add a cheap substitution or direct check when it is natural. Do not add a second algorithm just for show.
-6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
+6. Never print None, Invalid, NaN, "No valid solution found", error messages, undefined variables, debug text, or intermediate values. Always compute and print the numerical or symbolic result.
 7. Any reasoning comment must start with "# Step <number>:".
-8. At the end, print ONLY the final answer in LaTeX boxed format:
-   print(f"\\boxed{{{final_answer}}}")"""
+8. Store the requested result in final_answer and print ONLY it with print(final_answer)."""
 
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -94,7 +98,18 @@ Rules:
 - Any reasoning comment must start with "# Step <number>:".
 - Print only the required final result."""
 
-SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
+SYMPLANNER_DEBUG_SYSTEM_PROMPT = r"""You are repairing Python/SymPy code for a math problem.
+
+Return ONLY corrected executable Python code in one ```python ... ``` block.
+Fix the reported issue and keep correct code. Do not explain or output <think> tags.
+
+Rules:
+- Recompute the target; do not hard-code an answer.
+- Use exact arithmetic where possible (e.g., sp.Rational for fractions) and handle fragile solver failures.
+- Never print error strings like "No valid solution found", None, or NaN. Always output the computed target.
+- Use finite loops only; never use an unbounded while loop.
+- Any reasoning comment must start with "# Step <number>:".
+- Print only the required final result."""
 
 # ==============================================================================
 # 4. BASELINE PROMPTS (Direct & CoT)
@@ -106,11 +121,18 @@ At the end of your reasoning, write your final answer strictly formatted in \\bo
 DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
 Do not provide long explanations. Put only the final answer inside \\boxed{answer}."""
 
+from .pal.prompt import PAL_SYSTEM_PROMPT, build_messages as build_pal_messages
+from .pot.prompt import POT_SYSTEM_PROMPT, build_messages as build_pot_messages
+from .plancode.prompt import PLANCODE_SYSTEM_PROMPT, build_messages as build_plancode_messages
+
 SYSTEM_PROMPTS = {
     "Direct": DIRECT_SYSTEM_PROMPT,
     "CoT": COT_SYSTEM_PROMPT,
     "SymCode": SYMCODE_SYSTEM_PROMPT,
     "SymPlanner": SYMPLANNER_CODEGEN_SYSTEM_PROMPT,
+    "PaL": PAL_SYSTEM_PROMPT,
+    "PoT": POT_SYSTEM_PROMPT,
+    "PlanCode": PLANCODE_SYSTEM_PROMPT,
 }
 
 
@@ -133,7 +155,7 @@ def clean_planner_note(raw_plan: str) -> str:
     """
     Làm sạch kết quả kế hoạch từ Turn 1:
     - Loại bỏ thẻ thinking.
-    - Trích xuất khối JSON hoặc văn bản kế hoạch có giới hạn độ dài để không làm phình context codegen.
+    - Giữ nguyên nội dung kế hoạch; ngân sách token được giới hạn tại bước sinh.
     """
     if not raw_plan or not raw_plan.strip():
         return ""
@@ -141,7 +163,7 @@ def clean_planner_note(raw_plan: str) -> str:
     match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
     if match:
         text = match.group(1).strip()
-    return text[:1500].strip()
+    return text.strip()
 
 
 def build_extract_messages(question: str) -> List[Dict[str, str]]:
@@ -258,7 +280,12 @@ def build_symplanner_codegen_messages(question: str, planner_note: str = "", sub
 
 {target_block}
 
-Return executable Python code only enclosed in ```python ... ```. Do not write explanations."""
+Return executable Python code only enclosed in ```python ... ```.
+Check the proposed plan against the original problem before implementing it.
+Compute quantities from the givens with Python/SymPy; do not copy unverified arithmetic from the plan.
+Represent all fractions with sp.Rational(p, q) (never float division).
+Assign the requested result to final_answer and end the script with print(final_answer).
+A bare expression is not the requested script format. Do not write explanations."""
     return [
         {"role": "system", "content": SYMPLANNER_CODEGEN_SYSTEM_PROMPT},
         {"role": "user", "content": user_content}
@@ -312,13 +339,13 @@ def build_symplanner_debug_messages(
 
 # PREVIOUS CODE
 ```python
-{str(bad_code).strip()[:1200]}
+{str(bad_code).strip()}
 ```
 
 # DIAGNOSIS
 {feedback_text}
 
-Fix the issue and return corrected executable Python code only enclosed in ```python ... ```."""
+Fix the diagnosed issue, checking the original problem if the plan is wrong. End the script with print(final_answer), where final_answer is the computed requested result. Return corrected executable Python code only enclosed in ```python ... ```."""
 
     return [
         {"role": "system", "content": SYMPLANNER_DEBUG_SYSTEM_PROMPT if structured_output else DEBUG_SYSTEM_PROMPT},
@@ -345,6 +372,12 @@ def build_prompt_messages(method: str, question: str) -> List[Dict[str, str]]:
             {"role": "system", "content": DIRECT_SYSTEM_PROMPT},
             {"role": "user", "content": f"Problem:\n{question}"}
         ]
+    elif method == "PaL":
+        return build_pal_messages(question)
+    elif method == "PoT":
+        return build_pot_messages(question)
+    elif method == "PlanCode":
+        return build_plancode_messages(question)
     else:
         return [
             {"role": "system", "content": DIRECT_SYSTEM_PROMPT},

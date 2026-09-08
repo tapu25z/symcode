@@ -1,11 +1,13 @@
 # Math Reasoning Benchmark
 
-Repo benchmark cac phuong phap giai toan tren MATH-500 va GSM8K:
+Repo benchmark cac phuong phap giai toan theo truong phai Program-Aided Reasoning tren MATH-500 va GSM8K:
 
-- `Direct`: tra loi truc tiep.
-- `CoT`: giai thich tung buoc bang ngon ngu tu nhien.
-- `SymCode`: sinh mot chuong trinh Python/SymPy de giai bai.
+- `PaL`: Program-aided Language models (sinh ma Python thuan, chay 1-pass).
+- `PoT`: Program-of-Thought (sinh ham solve() phan tach suy luan va tinh toan).
+- `PlanCode`: Plan-and-Code (lap ke hoach tung buoc trong comment truoc khi viet code).
+- `SymCode`: sinh mot chuong trinh Python/SymPy truc tiep de giai bai.
 - `SymPlanner`: tach bai toan thanh extract + plan + codegen, roi chay code va retry khi loi.
+- `Direct` / `CoT`: baseline ngon ngu tu nhien (tham chieu).
 
 ## Cau Truc Thu Muc
 
@@ -17,6 +19,9 @@ Repo benchmark cac phuong phap giai toan tren MATH-500 va GSM8K:
 |-- method/
 |   |-- direct/          # baseline Direct
 |   |-- cot/             # baseline Chain-of-Thought
+|   |-- pal/             # baseline Program-aided Language models
+|   |-- pot/             # baseline Program-of-Thought
+|   |-- plancode/        # baseline Plan-and-Code
 |   |-- symcode/         # sinh code SymPy mot luot
 |   |-- symplanner/      # wrapper prompt cho SymPlanner
 |   |-- evaluator.py     # vong lap benchmark, checkpoint, metrics
@@ -61,14 +66,14 @@ python3 run_benchmark.py --no-4bit ...
 
 ## Cach Chay Nhanh
 
-Smoke test 5 cau MATH-500 voi 4 method chinh:
+Smoke test 5 cau MATH-500 voi cac method Program-Aided:
 
 ```bash
 python3 run_benchmark.py \
   --dataset math500 \
   --num-samples 5 \
   --model-preset qwen2.5-coder-7b \
-  --methods Direct CoT SymCode SymPlanner \
+  --methods PaL PoT PlanCode SymCode SymPlanner \
   --output-file results/results_smoke_math500.json
 ```
 
@@ -79,7 +84,7 @@ python3 run_benchmark.py \
   --dataset gsm8k \
   --num-samples 5 \
   --model-preset qwen2.5-coder-7b \
-  --methods Direct CoT SymCode SymPlanner \
+  --methods PaL PoT PlanCode SymCode SymPlanner \
   --output-file results/results_smoke_gsm8k.json
 ```
 
@@ -406,4 +411,38 @@ Chay test nhanh cho logic SymPlanner:
 
 ```bash
 pytest tests/test_symplanner_quality.py
+```
+
+## SymPlan v2: thu nghiem 4B
+
+Review paper, rui ro thuc nghiem va ly do sua: [REVIEW.md](REVIEW.md).
+Hai preset moi: `qwen3-4b-instruct` (Qwen3-4B-Instruct-2507, uu tien) va
+`qwen3-4b` (Qwen3-4B, non-thinking). Day la model 4B tham so; khac voi luong tu hoa 4-bit.
+
+```bash
+python3 run_benchmark.py \
+  --dataset math500 --num-samples 5 \
+  --model-preset qwen3-4b-instruct --no-4bit \
+  --max-new-tokens 2048 --max-input-tokens 8192 \
+  --extract-max-tokens 384 --plan-max-tokens 768 \
+  --methods Direct CoT SymCode SymPlanner \
+  --output-file results/math500_qwen3_4b_instruct_v2_smoke.json
+```
+
+Bo `--num-samples 5` va dung output file moi de chay full. Lap lai voi
+`--dataset gsm8k`. Chua co ket qua accuracy 4B duoc xac nhan trong thay doi nay.
+Co the dung `--extract-max-tokens 192 --plan-max-tokens 192` de ablate budget;
+day khong tai tao prompt/model runner cua pipeline cu.
+
+V2 giu nguyen toan bo note, khong cat prompt am tham; vuot context se bao loi.
+Extract/plan luon tat native thinking; `--enable-thinking` van tac dong den
+baseline, nen chi dung nhu mot dieu kien thi nghiem rieng tren model ho tro.
+Checkpoint khac config (ke ca legacy chua co pipeline_version) can output file moi.
+Prompt trong `method/prompts.py` la nguon chinh xac cho v2; cac prompt minh hoa
+va gioi han cu phia tren mo ta pipeline ban dau.
+
+Test khong can tai model:
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
