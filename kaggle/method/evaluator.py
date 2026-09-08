@@ -626,7 +626,7 @@ def evaluate_symplanner(
         # TURN 1: EXTRACT PHASE
         # -------------------------------------------------------------
         extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192)
+        raw_extract, extract_tokens = llm.generate_chat(extract_messages, enable_thinking=False, max_new_tokens_override=192)
         extraction_note = clean_planner_note(raw_extract)
         total_tokens += extract_tokens
         raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
@@ -635,7 +635,7 @@ def evaluate_symplanner(
         # TURN 2: PLAN PHASE
         # -------------------------------------------------------------
         planner_messages = build_planner_messages(question, extraction_note)
-        raw_plan, plan_tokens = llm.generate_chat(planner_messages, max_new_tokens_override=192)
+        raw_plan, plan_tokens = llm.generate_chat(planner_messages, enable_thinking=False, max_new_tokens_override=192)
         planner_note = clean_planner_note(raw_plan)
         total_tokens += plan_tokens
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
