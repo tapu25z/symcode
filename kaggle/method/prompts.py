@@ -7,7 +7,6 @@ import re
 from typing import Dict, List, Optional, Any
 
 from .target_contract import infer_target_spec
-from .problem_hints import build_problem_hints
 
 # ==============================================================================
 # 1. SYMPLANNER PROMPTS (Extract -> Plan -> SymCode)
@@ -37,7 +36,6 @@ Rules:
 - Include candidate filtering or constraint checks when needed.
 - Keep the plan short."""
 
-PLANNER_REVIEW_SYSTEM_PROMPT = PLANNER_SYSTEM_PROMPT
 
 # ==============================================================================
 # 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
@@ -159,24 +157,6 @@ def build_planner_messages(question: str, extraction: str = "") -> List[Dict[str
     ]
 
 
-def build_planner_review_messages(question: str, raw_plan: str, rules: list[str]) -> List[Dict[str, str]]:
-    """Xây dựng thông điệp cho Turn 1.5: Review và tinh chỉnh Plan dựa trên các quy tắc toán học."""
-    rules_text = "\n".join(f"- {r}" for r in rules)
-    user_content = f"""# PROBLEM
-{question}
-
-# INITIAL PLAN
-{raw_plan}
-
-# MATHEMATICAL RULES TO INTEGRATE
-{rules_text}
-
-Review the initial plan steps. If any rule is relevant to the steps, rewrite the plan to explicitly incorporate it. Return only the refined plan using the same labeled format (# Subject:, # Target:, # Variables:, # Relations:, # Constraints:, # Step 1:, etc.)."""
-    return [
-        {"role": "system", "content": PLANNER_REVIEW_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content}
-    ]
-
 
 def format_output_requirement(target_spec: Dict[str, Any]) -> str:
     """Render the output contract as short natural-language lines for small models."""
@@ -189,57 +169,6 @@ def format_output_requirement(target_spec: Dict[str, Any]) -> str:
         f"- Diagram relations required: {diagram}",
     ])
 
-
-def format_problem_hints(question: str, max_hints: int = 5, max_chars: int = 2400) -> str:
-    """Render bounded, answer-free algorithmic hints for the current problem."""
-    hints = build_problem_hints(question)[:max_hints]
-    if not hints:
-        return ""
-    lines = ["# PROBLEM-SPECIFIC ALGORITHM HINTS"]
-    for hint in hints:
-        lines.append(f"- {hint}")
-    return "\n".join(lines)[:max_chars].rstrip()
-
-
-def get_subject_specific_rules(subject: str, question: str) -> list[str]:
-    sub = str(subject or "").strip().lower()
-    q_lower = str(question or "").lower()
-    
-    rules = []
-    
-    # 1. Geometry / Precalculus / Coordinate-related rules
-    is_geom_subject = "geometry" in sub or "precalculus" in sub
-    is_geom_keywords = any(kw in q_lower for kw in ["triangle", "polygon", "circle", "quadrilateral", "parallelogram", "heptagon", "hexagon", "angle", "line equation", "centroid", "median", "rotation", "rotate"])
-    is_graph_speed_time = any(kw in q_lower for kw in ["speed", "average speed", "training run", "cross-country"])
-    
-    if (is_geom_subject or is_geom_keywords) and not is_graph_speed_time:
-        # Check if coordinates are already given in the question (matching a pattern like (3, 4) or (-5, 6))
-        has_given_coordinates = bool(re.search(r"\(\s*-?\d+\s*,\s*-?\d+\s*\)", question))
-        
-        if not has_given_coordinates:
-            rules.append("GEOMETRIC COORDINATIZATION RULE: For abstract triangle/polygon geometry problems involving ratios, areas, or coordinates of special points (like centroids, orthocenters, midpoints, or parallel lines) where no concrete coordinates are given, assign concrete coordinates to the vertices (e.g., placing one vertex at (0,0) and aligning others with axes) and use SymPy to analytically calculate the coordinates of all points and solve for areas/lengths using coordinate geometry formulas.")
-        else:
-            rules.append("GEOMETRIC COORDINATIZATION RULE: Since coordinates are already given in the problem, use the given coordinates directly instead of translating or re-assigning them to (0,0) to avoid transcription and mapping errors.")
-            
-        rules.append("For coordinate geometries and 3D line equations (e.g., symmetric equations like 2x = 3y = -z), do not compute direction vectors manually. Write SymPy code to solve the equations for two distinct coordinate points (e.g., setting x=0 and x=1) and subtract them to get the direction vector.")
-        rules.append("If the problem contains an [asy] block, read the coordinates of points (e.g., A = (x, y)) directly from the Asymptote code and use standard distance/geometric formulas in Python to solve or verify the answer.")
-        
-    # 2. Algebra / Intermediate Algebra - solver limits & numerical roots
-    if "algebra" in sub or "equation" in q_lower or "polynomial" in q_lower:
-        rules.append("Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear equations, multivariate systems of high degree, or high-degree polynomials (degree >= 3) to prevent hangs. Instead, use numerical solvers (e.g., sp.Poly(eq, x).nroots(), scipy if available, or fsolve).")
-        rules.append("Never call heavy symbolic solvers (like sp.solve, solveset) inside a large loop (e.g., >10 iterations) to avoid execution timeouts; solve symbolically first or use analytical filters.")
-        rules.append("For double summations or series of the form sum_{j=1..oo} sum_{k=1..oo} f(j+k), simplify it into a single sum by letting n = j+k and counting the number of pairs (j,k) that sum to n (which is n-1 for positive integers). Then evaluate the single sum.")
-
-    # 3. Counting & Probability
-    if "counting" in sub or "probability" in sub or "ways" in q_lower or "permutation" in q_lower or "combination" in q_lower:
-        rules.append("For seating N people around a round table (circular permutations): 1) Total unrestricted arrangements is (N-1)!. Do NOT divide by N again if you already used (N-1)!. 2) If a block of K people must sit together, treat the block as 1 unit; the number of circular arrangements of the N-K+1 units is (N-K)!, and multiply by K! for internal permutations of the block. 3) If K people must NOT sit next to each other, first arrange the other N-K people in a circle in (N-K-1)! ways, creating N-K spaces; then choose K spaces to place them in binom(N-K, K) * K! ways.")
-        rules.append("For selecting subsets or combinations, use sympy.binomial(n, k) or math.comb(n, k). For small spaces, you can use itertools.permutations or combinations to brute-force and count.")
-
-    # 4. Number Theory / Prealgebra
-    if "number theory" in sub or "prealgebra" in sub or "prime" in q_lower or "divisible" in q_lower:
-        rules.append("Pay close attention to word-based constraints on parameters (e.g., 'positive constants', 'integers', 'real numbers'). Always enforce these domain constraints using SymPy assumptions or by filtering candidate values before printing the final answer.")
-
-    return rules
 
 
 def build_symplanner_codegen_messages(question: str, planner_note: str = "", subject: str = "") -> List[Dict[str, str]]:
@@ -374,22 +303,3 @@ def build_retry_prompt_messages(
     )
 
 
-def build_symplanner_retry_prompt_messages(
-    question: str,
-    prev_code: str,
-    execution_status: str = "error",
-    error_tb: Optional[str] = None,
-    candidate_answer: Optional[str] = None,
-    verification_status: str = "fail",
-    verification_feedback: Optional[str] = None
-) -> List[Dict[str, str]]:
-    return build_symplanner_debug_messages(
-        question=question,
-        bad_code=prev_code,
-        execution_status=execution_status,
-        error_tb=error_tb,
-        candidate_answer=candidate_answer,
-        verification_status=verification_status,
-        verification_feedback=verification_feedback,
-        structured_output=True
-    )

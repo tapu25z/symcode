@@ -6,8 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
 from method.extractor import check_exact_match
-from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages, format_problem_hints
-from method.problem_hints import build_problem_hints
+from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
 from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
 from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
@@ -131,24 +130,6 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("OUTPUT REQUIREMENT", messages[-1]["content"])
         self.assertNotIn('"answer_type":', messages[-1]["content"])
 
-    def test_problem_hints_are_not_injected_into_simple_symplanner(self):
-        question = "In total, how many values can be obtained by inserting parentheses?"
-        self.assertIn("dynamic programming", format_problem_hints(question))
-        messages = build_symplanner_codegen_messages(question, "{}", subject="Counting & Probability")
-        self.assertNotIn("PROBLEM-SPECIFIC ALGORITHM HINTS", messages[-1]["content"])
-        debug_messages = build_symplanner_debug_messages(question, "print(121)", subject="Counting & Probability")
-        self.assertNotIn("PROBLEM-SPECIFIC ALGORITHM HINTS", debug_messages[-1]["content"])
-
-
-    def test_problem_hints_are_answer_free_but_algorithmic(self):
-        hints = build_problem_hints("In total, how many values can be obtained by inserting parentheses?")
-        self.assertTrue(any("dynamic programming" in hint for hint in hints))
-        hints = build_problem_hints("Solve -4 < 2(x - 1) < 8.")
-        self.assertTrue(any("chained inequalities" in hint for hint in hints))
-        hints = build_problem_hints("Find a double sum in terms of p and q.")
-        self.assertTrue(any("group terms" in hint for hint in hints))
-        self.assertFalse(any("p - q" in hint for hint in hints))
-
 
     def test_static_lint_catches_known_sympy_hazards(self):
         findings = lint_sympy_code("sol = sp.solve(eq, x)[0]\nvalue = x.evalf()\nprint('{\"answer\": {}}'.format(value))")
@@ -229,3 +210,6 @@ class SymPlannerQualityTests(unittest.TestCase):
             "equation = sp.Eq(A, P * (1 + r)**n)",
         )
         self.assertEqual(status, "fail")
+
+if __name__ == "__main__":
+    unittest.main()

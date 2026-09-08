@@ -14,13 +14,10 @@ from .prompts import (
     build_prompt_messages,
     build_extract_messages,
     build_planner_messages,
-    build_planner_review_messages,
     clean_planner_note,
-    format_problem_hints,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages,
     build_retry_prompt_messages,
-    build_symplanner_retry_prompt_messages
 )
 from .extractor import (
     extract_boxed_content,
@@ -40,7 +37,6 @@ from .verifier import (
 )
 from .target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
 from .static_lint import lint_sympy_code
-from .problem_hints import build_problem_hints
 try:
     from .model import LLMRunner
 except ImportError:
@@ -81,13 +77,10 @@ __all__ = [
     "build_prompt_messages",
     "build_extract_messages",
     "build_planner_messages",
-    "build_planner_review_messages",
     "clean_planner_note",
-    "format_problem_hints",
     "build_symplanner_codegen_messages",
     "build_symplanner_debug_messages",
     "build_retry_prompt_messages",
-    "build_symplanner_retry_prompt_messages",
     "extract_boxed_content",
     "extract_answer_fallback",
     "extract_python_code",
@@ -102,7 +95,6 @@ __all__ = [
     "parse_planner_contract",
     "format_answer_for_contract",
     "lint_sympy_code",
-    "build_problem_hints",
     "LLMRunner",
     "load_dataset_file",
     "evaluate_direct_or_cot",
