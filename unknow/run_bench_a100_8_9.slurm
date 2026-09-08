@@ -179,10 +179,11 @@ python kaggle/run_benchmark.py \
     --model-id Qwen/Qwen3-4B \
     --load-in-4bit \
     --methods Direct CoT SymCode SymPlanner \
+    --run-order by-problem \
     --output-file "$OUTPUT_RESULT" \
     --timeout 15 \
     --max-retries 2 \
-    --save-every 2
+    --save-every 1
 
 echo "=========================================================================="
 echo "🎉 [$(date '+%H:%M:%S')] Hoàn tất Benchmark trên 50 mẫu MATH-500!"

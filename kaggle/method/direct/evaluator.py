@@ -8,7 +8,8 @@ def evaluate(
     llm: Any,
     checkpoint_file: Optional[str] = None,
     save_every: int = 5,
+    verbose: bool = True,
 ) -> List[Dict[str, Any]]:
     from ..evaluator import evaluate_direct_or_cot
 
-    return evaluate_direct_or_cot("Direct", dataset, llm, checkpoint_file=checkpoint_file, save_every=save_every)
+    return evaluate_direct_or_cot("Direct", dataset, llm, checkpoint_file=checkpoint_file, save_every=save_every, verbose=verbose)

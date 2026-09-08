@@ -10,6 +10,7 @@ def evaluate(
     max_retries: int = 2,
     checkpoint_file: Optional[str] = None,
     save_every: int = 5,
+    verbose: bool = True,
 ) -> List[Dict[str, Any]]:
     from ..evaluator import evaluate_symplanner
 
@@ -20,4 +21,5 @@ def evaluate(
         max_retries=max_retries,
         checkpoint_file=checkpoint_file,
         save_every=save_every,
+        verbose=verbose,
     )

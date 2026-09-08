@@ -47,6 +47,13 @@ def parse_args():
         help="Danh sach cac phuong phap can danh gia."
     )
     parser.add_argument(
+        "--run-order",
+        type=str,
+        default="by-problem",
+        choices=["by-problem", "by-method"],
+        help="Thu tu chay: 'by-problem' = moi cau chay lan luot ca 4 method roi in ti le dung; 'by-method' = chay het dataset cho tung method."
+    )
+    parser.add_argument(
         "--num-samples",
         type=int,
         default=None,
@@ -166,7 +173,8 @@ def main():
         "code_exec_timeout": args.timeout,
         "max_symcode_retries": args.max_retries,
         "output_file": output_file,
-        "save_every": args.save_every
+        "save_every": args.save_every,
+        "run_order": args.run_order
     }
 
     print("=" * 75)
@@ -177,8 +185,8 @@ def main():
     print(f"[INFO] Lat nguoc lay tu cuoi (tail): {config['tail']}")
     print(f"[INFO] So mau danh gia: {config['num_samples'] if config['num_samples'] is not None else 'TOAN BO'}")
     print(f"[INFO] Cac phuong phap: {config['methods_to_run']}")
+    print(f"[INFO] Thu tu chay: {config['run_order']}")
     print(f"[INFO] File ket qua: {config['output_file']}")
-    print("=" * 75)
 
     # Nap dataset
     dataset = load_dataset_file(
@@ -213,25 +221,89 @@ def main():
     else:
         benchmark_data = {"config": config, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"), "results": {}, "summary": {}}
 
-    # Thuc thi tung phuong phap
-    for method in args.methods:
-        if method == "Direct":
-            benchmark_data["results"]["Direct"] = evaluate_direct(
-                dataset, llm, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "CoT":
-            benchmark_data["results"]["CoT"] = evaluate_cot(
-                dataset, llm, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "SymCode":
-            benchmark_data["results"]["SymCode"] = evaluate_symcode(
-                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
-            )
-        elif method == "SymPlanner":
-            benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
-                dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
-            )
 
+    def _run_single_method_on_item(method_name: str, item_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if method_name == "Direct":
+            return evaluate_direct([item_dict], llm, checkpoint_file=output_file, save_every=1, verbose=False)
+        elif method_name == "CoT":
+            return evaluate_cot([item_dict], llm, checkpoint_file=output_file, save_every=1, verbose=False)
+        elif method_name == "SymCode":
+            return evaluate_symcode([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1, verbose=False)
+        elif method_name == "SymPlanner":
+            return evaluate_symplanner([item_dict], llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=1, verbose=False)
+        else:
+            raise ValueError(f"Phuong phap khong hop le: {method_name}")
+
+    if args.run_order == "by-problem":
+        total = len(dataset)
+        start_time = time.time()
+        print("\n" + "=" * 80)
+        print(f"🚀 BẮT ĐẦU BENCHMARK THEO TỪNG CÂU (RUN ORDER: BY-PROBLEM)")
+        print(f"   Tổng số câu: {total} | Các phương pháp: {args.methods}")
+        print("=" * 80, flush=True)
+
+        for idx, item in enumerate(dataset, start=1):
+            question = item["question"]
+            short_q = " ".join(question.split())[:100]
+            subject = item.get("subject", "N/A")
+            level = item.get("level", "N/A")
+
+            print(f"\n{'-' * 80}")
+            print(f"📌 [CÂU {idx}/{total}] (Level {level} - {subject}): {short_q}...")
+            print(f"{'-' * 80}", flush=True)
+
+            for method in args.methods:
+                method_results = benchmark_data.setdefault("results", {}).setdefault(method, [])
+                existing = next((r for r in method_results if r.get("problem") == question), None)
+
+                if existing is not None:
+                    verdict = "ĐÚNG" if existing.get("is_correct") else "SAI"
+                    print(f"  [SKIP] {method:<11}: đã chạy -> {verdict} | Pred: {existing.get('predicted')} | GT: {existing.get('ground_truth')}", flush=True)
+                else:
+                    print(f"  [RUN]  {method:<11}...", end="", flush=True)
+                    updated_results = _run_single_method_on_item(method, item)
+                    benchmark_data["results"][method] = updated_results
+                    cur = next((r for r in updated_results if r.get("problem") == question), None)
+                    if cur:
+                        verdict = "ĐÚNG" if cur.get("is_correct") else "SAI"
+                        print(f" -> {verdict} | Pred: {cur.get('predicted')} | GT: {cur.get('ground_truth')}", flush=True)
+                    else:
+                        print(" -> XONG", flush=True)
+
+            # Tính toán và in bảng tỉ lệ đúng trực tiếp (Live Accuracy) sau mỗi câu
+            print(f"\n📊 [TỈ LỆ ĐÚNG CÂU {idx}/{total}]:")
+            for method in args.methods:
+                m_results = benchmark_data["results"].get(method, [])
+                c_count = sum(1 for r in m_results if r.get("is_correct"))
+                t_count = len(m_results)
+                acc = (c_count / t_count * 100.0) if t_count else 0.0
+                print(f"   * {method:<11}: {acc:6.2f}% ({c_count}/{t_count})", flush=True)
+
+            elapsed = time.time() - start_time
+            rate = idx / elapsed if elapsed > 0 else 0.0
+            rem_secs = int((total - idx) / rate) if rate > 0 else 0
+            eta_str = time.strftime("%H:%M:%S", time.gmtime(rem_secs))
+            print(f"   ⏱️ [Tiến độ]: {idx}/{total} ({idx/total*100:.1f}%) | Elapsed: {int(elapsed)}s | ETA: {eta_str}", flush=True)
+            print(f"{'-' * 80}", flush=True)
+    else:
+        # Thuc thi tung phuong phap (by-method)
+        for method in args.methods:
+            if method == "Direct":
+                benchmark_data["results"]["Direct"] = evaluate_direct(
+                    dataset, llm, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "CoT":
+                benchmark_data["results"]["CoT"] = evaluate_cot(
+                    dataset, llm, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "SymCode":
+                benchmark_data["results"]["SymCode"] = evaluate_symcode(
+                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
+            elif method == "SymPlanner":
+                benchmark_data["results"]["SymPlanner"] = evaluate_symplanner(
+                    dataset, llm, timeout=args.timeout, max_retries=args.max_retries, checkpoint_file=output_file, save_every=args.save_every
+                )
     # Tong hop va xuat ket qua
     summary = compute_metrics_table(benchmark_data["results"])
     benchmark_data["summary"] = summary
