@@ -645,7 +645,7 @@ def evaluate_symplanner(
         # TURN 1: EXTRACT PHASE
         # -------------------------------------------------------------
         extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=192, enable_thinking=False)
+        raw_extract, extract_tokens = llm.generate_chat(extract_messages, max_new_tokens_override=64, enable_thinking=False)
         extraction_note = clean_planner_note(raw_extract)
         total_tokens += extract_tokens
         raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
@@ -661,7 +661,7 @@ def evaluate_symplanner(
 
         planner_meta = infer_target_spec(question, extraction_note)
         planner_errors = []
-        symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
+        symplanner_context = f"# TARGET & FORMAT\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
 
         # -------------------------------------------------------------
         # TURN 3: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
@@ -737,7 +737,7 @@ def evaluate_symplanner(
                 )
                 raw_replan, replan_tokens = llm.generate_chat(replan_messages, max_new_tokens_override=192, enable_thinking=False)
                 total_tokens += replan_tokens
-                symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# REVISED PLAN\n{planner_note}".strip()
+                symplanner_context = f"# TARGET & FORMAT\n{extraction_note}\n\n# REVISED PLAN\n{planner_note}".strip()
                 raw_outputs.append(f"### Turn 2.x (Re-Plan Retry {attempt}):\n{raw_replan}")
 
                 # Synthesize fresh code based on revised plan

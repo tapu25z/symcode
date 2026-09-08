@@ -12,32 +12,22 @@ from .target_contract import infer_target_spec
 # 1. SYMPLANNER PROMPTS (Extract -> Plan -> SymCode)
 # ==============================================================================
 
-EXTRACT_SYSTEM_PROMPT = r"""You extract the mathematical state of a problem for a later solver.
+EXTRACT_SYSTEM_PROMPT = r"""You identify ONLY the Target and Output format of a math problem in under 20 tokens.
+Do not copy, rewrite, or summarize the problem. Do not write equations or code.
 
-Return ONLY these 4 labeled lines with concrete facts from the problem (do NOT copy placeholder text):
-# Target: <the specific quantity, expression, or object requested>
-# Given: <the concrete equations, values, definitions, and facts given in the problem>
-# Constraints: <domain constraints such as integer, positive, real, or 'none'>
-# Output: <pick exactly one: number | symbolic | tuple | set | matrix | text | base_notation>
-
-Rules:
-- Do not solve the problem or write code.
-- State facts directly; do not repeat instructions or placeholder words.
+Return ONLY these two lines:
+# Target: <the exact quantity, entity, or expression to find>
+# Output: <pick exactly one: number | text | tuple | set | symbolic | base_notation>
 
 Example 1:
 Problem: If 2x + 5 = 15, find the value of x^2.
 # Target: x^2
-# Given: 2*x + 5 = 15
-# Constraints: none
 # Output: number
 
 Example 2:
 Problem: Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is a parabola, circle, ellipse, or hyperbola.
 # Target: conic section classification
-# Given: (x/2 - 3)^2 + y^2 = 10
-# Constraints: none
 # Output: text"""
-
 
 PLANNER_SYSTEM_PROMPT = r"""You write an operational, step-by-step solution plan for a Python/SymPy solver.
 You will receive the original problem and the extracted mathematical state.
@@ -53,11 +43,9 @@ Rules:
 Example:
 # PROBLEM
 Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is an ellipse, parabola, or hyperbola.
-# EXTRACTED STATE
+# TARGET & FORMAT
 # Target: conic section classification
-# Given: (x/2 - 3)^2 + y^2 = 10
 # Output: text
-
 1. Expand the equation into general conic form Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0 and extract coefficients A, B, C.
 2. Compute the discriminant B^2 - 4*A*C.
 3. If discriminant < 0 and A != C, conclude ellipse; otherwise determine conic type accordingly."""
@@ -180,22 +168,20 @@ def clean_planner_note(raw_plan: str) -> str:
 
 
 def build_extract_messages(question: str) -> List[Dict[str, str]]:
-    """Build Turn 1 messages: extract the mathematical state."""
+    """Build Turn 1 messages: identify the Target and Output format only."""
     return [
         {"role": "system", "content": EXTRACT_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\nExtract the mathematical state only."}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\nIdentify the Target and Output format only in two lines."}
     ]
 
 
 def build_planner_messages(question: str, extraction: str = "") -> List[Dict[str, str]]:
-    """Build Turn 2 messages: write a plan from the problem and extraction."""
-    extraction_block = extraction.strip() or "No extraction available."
+    """Build Turn 2 messages: write an operational plan given the problem and target."""
+    extraction_block = extraction.strip() or "No target/format available."
     return [
         {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-        {"role": "user", "content": f"# PROBLEM\n{question}\n\n# EXTRACTED STATE\n{extraction_block}\n\nWrite the plan only."}
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\n# TARGET & FORMAT\n{extraction_block}\n\nWrite the operational plan only."}
     ]
-
-
 def build_replan_messages(
     question: str,
     extraction: str = "",

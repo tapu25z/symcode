@@ -22,7 +22,7 @@ class SymPlannerQualityTests(unittest.TestCase):
         self.assertIn("Solve the following math problem directly", build_direct_messages("1+1")[0]["content"])
         self.assertIn("step-by-step", build_cot_messages("1+1")[0]["content"])
         self.assertIn("executable Python code", build_symcode_messages("1+1")[0]["content"])
-        self.assertIn("extract the mathematical state", build_symplanner_folder_extract_messages("1+1")[0]["content"])
+        self.assertIn("Target and Output format", build_symplanner_folder_extract_messages("1+1")[0]["content"])
         self.assertIn("OUTPUT REQUIREMENT", build_symplanner_folder_codegen_messages("1+1", "{}")[-1]["content"])
 
     def test_common_math_format_variants_are_equivalent(self):
@@ -80,10 +80,10 @@ class SymPlannerQualityTests(unittest.TestCase):
 
     def test_simple_symplanner_prompt_chain(self):
         extract_messages = build_extract_messages("Triangle problem")
-        self.assertIn("Extract the mathematical state", extract_messages[-1]["content"])
+        self.assertIn("Target and Output format", extract_messages[-1]["content"])
         messages = build_planner_messages("Triangle problem", "# Target: area")
         self.assertEqual(len(messages), 2)
-        self.assertIn("# EXTRACTED STATE", messages[-1]["content"])
+        self.assertIn("# TARGET & FORMAT", messages[-1]["content"])
         self.assertIn("# Target: area", messages[-1]["content"])
 
 
