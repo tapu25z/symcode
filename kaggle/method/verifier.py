@@ -204,7 +204,8 @@ def verify_candidate_answer(
     if target_spec.get("answer_type") == "number":
         if cand_str in {"[]", "{}", "()"}:
             return ("fail", "Verification Error: numeric target cannot be an empty collection.")
-        if re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", cand_str):
+        known_text_answers = {"parabola", "circle", "ellipse", "hyperbola", "point", "line", "two lines", "empty", "true", "false", "even", "odd", "neither"}
+        if cand_str.lower() not in known_text_answers and re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", cand_str):
             return ("fail", "Verification Error: numeric target cannot be an unresolved symbol or placeholder variable.")
         if re.search(r"\\(?:sin|cos|tan|cot|sec|csc|log|ln)\b", cand_str):
             return (
@@ -349,6 +350,7 @@ def verify_candidate_answer(
         # against ground truth.
         if sym_obj.is_number:
             return ("unknown", f"Verification Unknown: candidate '{cand_str}' is numeric, but no independent relation proves the target value.")
+        return ("unknown", f"Candidate answer '{cand_str}' is a syntactically valid symbolic expression.")
 
     except Exception:
         # Nếu SymPy không parse được
@@ -361,3 +363,5 @@ def verify_candidate_answer(
             )
         if len(cand_str) > 0 and not any(ch in cand_str for ch in ["\n", "\r", "\t"]):
             return ("unknown", f"Candidate answer is a valid text entity ('{cand_str}').")
+
+    return ("unknown", f"Candidate answer '{cand_str}' is syntactically well-formed.")

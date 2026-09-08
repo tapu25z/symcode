@@ -22,9 +22,9 @@ PLANNER_TYPE_ALIASES = {
 
 def _explicit_planner_answer_type(planner_note: str) -> str | None:
     text = str(planner_note or "")
-    match = re.search(r'["\']answer_type["\']\s*:\s*["\']([^"\']+)["\']', text)
+    match = re.search(r'["\'](?:answer_type|output)["\']\s*:\s*["\']([^"\']+)["\']', text)
     if not match:
-        match = re.search(r"^\s*#\s*Answer\s+type\s*:\s*([^\r\n]+)", text, flags=re.IGNORECASE | re.MULTILINE)
+        match = re.search(r"^\s*#\s*(?:Answer\s+type|Output)\s*:\s*([^\r\n]+)", text, flags=re.IGNORECASE | re.MULTILINE)
     if not match:
         return None
     answer_type = match.group(1).strip().lower().replace("-", "_")
@@ -44,12 +44,14 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
     }
     asks_numeric_value = bool(re.search(r"\b(?:find|what is|compute|determine)\b[^?.]*\b(?:value|sum|product|difference|minimum|maximum|smallest|largest)\b", text))
     asks_text_entity = bool(re.search(
-        r"\bwho\b|\bname of\b|\bwhich\s+(?:student|person|team|city|country|runner|contestant|player)\b",
+        r"\bwho\b|\bname of\b|\bwhich\s+(?:student|person|team|city|country|runner|contestant|player|conic|shape|graph|equation)\b",
         text,
     ))
-    if asks_text_entity and not re.search(r"\bfor which\b", text):
+    if planner_answer_type is not None:
+        spec["answer_type"] = planner_answer_type
+    elif asks_text_entity and not re.search(r"\bfor which\b", text):
         spec["answer_type"] = "text"
-    elif re.search(r"\b(even|odd|neither)\b", text) or "true or false" in text:
+    elif re.search(r"\b(even|odd|neither|parabola|circle|ellipse|hyperbola|conic|two lines)\b", text) or "true or false" in text or "determine if the graph" in text:
         spec["answer_type"] = "text"
     elif re.search(r"\bin terms of\b|\bexpress .* using\b|\bpolynomial in\b|\bfunction .* of\b", text):
         spec["answer_type"] = "symbolic"
@@ -66,8 +68,6 @@ def infer_target_spec(question: str, planner_note: str = "") -> dict[str, Any]:
         spec["answer_type"] = "tuple"
     elif re.search(r"\b(base|binary|octal|hexadecimal|base-\d+)\b", text) and re.search(r"\b(write|express|convert|in base)\b", text):
         spec["answer_type"] = "base_notation"
-    elif planner_answer_type is not None:
-        spec["answer_type"] = planner_answer_type
     if re.search(r"\bpercent(age)?\b|\bprobability\b", text):
         spec["unit"] = "%" if "percent" in text or "percentage" in text else None
     return spec

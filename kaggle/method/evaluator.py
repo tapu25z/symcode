@@ -405,7 +405,10 @@ def evaluate_direct_or_cot(
         gt = extract_ground_truth(item.get("raw") or item["answer"])
         messages = build_prompt_messages(method_name, question)
         
-        raw_output, token_count = llm.generate_chat(messages)
+        if method_name == "Direct":
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
+        else:
+            raw_output, token_count = llm.generate_chat(messages, max_new_tokens_override=2048)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
