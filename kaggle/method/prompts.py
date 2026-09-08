@@ -70,12 +70,17 @@ Return ONLY executable Python code in a single ```python ... ``` block. Do NOT w
 
 Rules:
 1. Import sympy as sp (and math if needed). Use exact symbolic arithmetic.
-2. sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q.
-3. Keep answers in exact symbolic/fractional form by default. Do NOT call .evalf() unless decimal places are explicitly requested.
-4. FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
-5. Guard fragile sp.solve calls with simple try-except fallback or bounded numerical fallback.
-6. Use finite loops only. Never use an unbounded while loop.
-7. At the end, print ONLY the final answer in LaTeX boxed format:
+2. IMPORTANT SYMPY & CODE RULES:
+   - sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q (e.g. 5 / sp.sqrt(80)). Never pass non-integers to sp.Rational.
+   - Keep answers in exact symbolic/fractional form by default (e.g. 2, 3/2). Do NOT call .evalf() unless decimal places are explicitly requested.
+   - Use sp.together(expr) or sp.cancel(expr) to combine fraction terms into a single fraction before printing.
+   - Do NOT filter out negative solutions (sol > 0) unless the problem strictly restricts the domain (e.g. length, count, probability).
+   - FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
+   - FOR PARAMETERIZED LINES (x, y) = (x0, y0) + t*(vx, vy) -> y = mx + b: Define t, x = sp.symbols('t x'), eliminate t via t_sol = sp.solve(x - (x0 + t*vx), t)[0], substitute into y equation to get y(x), compute m = sp.diff(y(x), x) and b = y(x).subs(x, 0), and print (m, b).
+3. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
+4. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
+5. Use finite loops only. Never use an unbounded while loop.
+6. At the end, print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")"""
 
 # ==============================================================================
@@ -105,12 +110,11 @@ SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 # 4. BASELINE PROMPTS (Direct & CoT)
 # ==============================================================================
 
-COT_SYSTEM_PROMPT = """You are a mathematician. Solve the problem in at most 2-3 brief steps.
-Do not write long scratchpads or detailed derivations.
-At the end, write your final answer strictly formatted in \\boxed{answer}."""
+COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear and concise logical reasoning.
+At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
 
-DIRECT_SYSTEM_PROMPT = """State only the final answer directly without any steps or explanations.
-Write your final answer strictly inside \\boxed{answer}."""
+DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
+Do not provide long explanations. Put only the final answer inside \\boxed{answer}."""
 
 SYSTEM_PROMPTS = {
     "Direct": DIRECT_SYSTEM_PROMPT,

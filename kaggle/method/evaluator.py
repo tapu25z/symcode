@@ -408,7 +408,7 @@ def evaluate_direct_or_cot(
         if method_name == "Direct":
             raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
         else:  # CoT
-            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
@@ -488,7 +488,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -499,7 +499,7 @@ def evaluate_symcode(
                     verification_status=verif_status,
                     verification_feedback=verif_feedback
                 )
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=256)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
             total_tokens += token_count
             raw_outputs.append(raw_output)
             
@@ -650,7 +650,7 @@ def evaluate_symplanner(
             symplanner_context,
             subject=item.get("subject", "")
         )
-        raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False)
+        raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False, max_new_tokens_override=512)
         total_tokens += code_tokens
         raw_outputs.append(f"### Turn 3 (Codegen Initial):\n{raw_code_output}")
         
@@ -715,7 +715,7 @@ def evaluate_symplanner(
                     subject=item.get("subject", "")
                 )
                 retry_phase = "debug_repair"
-            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False)
+            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False, max_new_tokens_override=512)
             total_tokens += dbg_tokens
             raw_outputs.append(f"### Turn 3 ({retry_phase} Attempt {attempt}):\n{raw_debug_output}")
             extracted_code = extract_symplanner_code(raw_debug_output)
