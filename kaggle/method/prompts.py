@@ -52,11 +52,12 @@ Return ONLY executable Python code in one ```python ... ``` block. Do not explai
 Rules:
 1. Import sympy as sp. Use exact symbolic arithmetic.
 2. IMPORTANT SYMPY & CODE RULES:
-   - sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q (e.g. 5 / sp.sqrt(80)).
+   - sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q (e.g. 5 / sp.sqrt(80)). Never pass non-integers to sp.Rational.
    - Keep answers in exact symbolic/fractional form by default (e.g. 2, 3/2). Do NOT call .evalf() unless decimal places are explicitly requested.
    - Use sp.together(expr) or sp.cancel(expr) to combine fraction terms into a single fraction before printing.
    - Do NOT filter out negative solutions (sol > 0) unless the problem strictly restricts the domain (e.g. length, count, probability).
    - FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
+   - FOR PARAMETERIZED LINES (x, y) = (x0, y0) + t*(vx, vy) -> y = mx + b: Define t, x = sp.symbols('t x'), eliminate t via t_sol = sp.solve(x - (x0 + t*vx), t)[0], substitute into y equation to get y(x), compute m = sp.diff(y(x), x) and b = y(x).subs(x, 0), and print (m, b).
 3. Implement the plan as clean, linear Python code.
 4. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
 5. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
@@ -90,6 +91,8 @@ Rules:
 - Recompute the target; do not hard-code an answer.
 - sp.Rational(p, q) accepts ONLY integers p and q. For expressions/sqrts, use p / q or sp.S(p) / q.
 - Do NOT call .evalf() unless decimal places are requested. Keep exact symbolic expressions.
+- FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get A, B, C and disc = B**2 - 4*A*C to determine shape.
+- FOR PARAMETERIZED LINES: Eliminate parameter t from x equation, substitute into y equation to find y(x) = m*x + b, extract m and b, print (m, b).
 - Use sp.together(expr) or sp.cancel(expr) to combine fraction terms.
 - Do NOT filter out negative solutions unless the problem domain strictly requires it.
 - Use finite loops only; never use an unbounded while loop.
