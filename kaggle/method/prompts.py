@@ -64,21 +64,16 @@ Rules:
    print(f"\\boxed{{{final_answer}}}")"""
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
-Solve the problem by returning ONLY executable Python code enclosed in a single ```python ... ``` block.
-Do NOT write explanations. Do NOT output <think> tags.
+Return ONLY executable Python code in a single ```python ... ``` block. Do NOT write explanations or <think> tags.
 
-The code MUST:
-1. import sympy as sp (and math, fractions if helpful).
-2. Write the solver with two independent paths (Path A: Symbolic/Analytical, Path B: Empirical/Simulation/Search loop) to cross-verify the answer whenever possible.
-3. Guard symbolic solving calls (e.g., sp.solve) with try-except blocks. If SymPy fails, automatically fallback to a bounded search loop or numerical optimization.
-4. Define all given quantities and formulate equations accurately.
-5. Solve for the target quantity symbolically or numerically.
-6. Never call `.evalf()` on standard Python int/float.
-7. Avoid using sp.solve() or sp.nonlinsolve() on complex nonlinear or multivariate systems of high degree (e.g. degree >= 3 with multiple variables, or equations containing non-rational exponent powers like **(1/3)), as it causes SymPy to hang indefinitely. Use numerical optimization (e.g., scipy.optimize.minimize or fsolve) instead.
-8. Never write infinite loops or unbounded while loops (e.g., custom prime generators). Always use finite for loops (e.g., for i in range(10000)) or specify a maximum iteration count to guarantee termination.
-9. Print ONLY the final answer in LaTeX boxed format at the end:
-   print(f"\\boxed{{{final_answer}}}")
-"""
+Rules:
+1. Import sympy as sp (and math if needed). Use exact symbolic arithmetic.
+2. sp.Rational(p, q) accepts ONLY integer arguments. For expressions or square roots, use division (p / q) or sp.S(p) / q.
+3. Keep answers in exact symbolic/fractional form by default. Do NOT call .evalf() unless decimal places are explicitly requested.
+4. Guard fragile sp.solve calls with simple try-except fallback or bounded numerical fallback.
+5. Use finite loops only. Never use an unbounded while loop.
+6. At the end, print ONLY the final answer in LaTeX boxed format:
+   print(f"\\boxed{{{final_answer}}}")"""
 
 # ==============================================================================
 # 3. DEBUG / REPAIR PROMPTS (Turn 3: Sửa lỗi mã nguồn có chủ đích)
@@ -105,9 +100,9 @@ SYMPLANNER_DEBUG_SYSTEM_PROMPT = DEBUG_SYSTEM_PROMPT
 # 4. BASELINE PROMPTS (Direct & CoT)
 # ==============================================================================
 
-COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem step-by-step with clear, concise, and direct logical reasoning.
-Avoid repeating calculations or writing excessive narrative text. Keep your reasoning focused and concise.
-At the end of your reasoning, write your final answer strictly formatted in \\boxed{answer}."""
+COT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the problem step-by-step with brief, direct logical reasoning (under 4-5 short lines).
+Do NOT write long narrative explanations or output <think> tags.
+At the end, write your final answer strictly formatted in \\boxed{answer}."""
 
 DIRECT_SYSTEM_PROMPT = """You are an expert mathematician. Solve the following math problem directly.
 Do not provide long explanations. Put only the final answer inside \\boxed{answer}."""

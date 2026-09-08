@@ -406,9 +406,9 @@ def evaluate_direct_or_cot(
         messages = build_prompt_messages(method_name, question)
         
         if method_name == "Direct":
+            raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
+        else:  # CoT
             raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=512)
-        else:
-            raw_output, token_count = llm.generate_chat(messages, max_new_tokens_override=2048)
         predicted_ans = extract_answer_fallback(raw_output)
         is_correct = check_exact_match(predicted_ans, gt)
 
@@ -488,7 +488,7 @@ def evaluate_symcode(
             attempt += 1
             if attempt == 1:
                 messages = build_prompt_messages("SymCode", question)
-                raw_output, token_count = llm.generate_chat(messages)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
             else:
                 messages = build_retry_prompt_messages(
                     question=question,
@@ -499,7 +499,7 @@ def evaluate_symcode(
                     verification_status=verif_status,
                     verification_feedback=verif_feedback
                 )
-                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False)
+                raw_output, token_count = llm.generate_chat(messages, enable_thinking=False, max_new_tokens_override=384)
             
             total_tokens += token_count
             raw_outputs.append(raw_output)
