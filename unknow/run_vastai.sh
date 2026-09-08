@@ -61,7 +61,7 @@ DEFAULT_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 DEFAULT_DATASET="math500"
 DEFAULT_METHODS="Direct CoT SymCode SymPlanner"
 SAMPLE_FILE="kaggle/data/math500/test_50_stratified.jsonl"
-OUTPUT_RESULT="results/results_vastai_qwen2_5_coder_7b_4bit.json"
+OUTPUT_RESULT="results/results_vastai_qwen2_5_coder_7b_4bit_2.json"
 
 echo "======================================================================"
 echo " Executing Benchmark Evaluation"

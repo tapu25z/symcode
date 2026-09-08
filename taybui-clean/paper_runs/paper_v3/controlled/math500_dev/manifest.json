@@ -1,0 +1,97 @@
+{
+  "config": {
+    "dataset": "math500",
+    "phase": "dev",
+    "precision": "bf16",
+    "input_limit": 8192,
+    "total_tokens": 3072,
+    "extract_tokens": 256,
+    "plan_tokens": 384,
+    "code_tokens": 1536,
+    "max_retries": 1,
+    "exec_timeout": 15,
+    "seed": 42,
+    "methods": [
+      "PaL",
+      "PoT",
+      "SymCode",
+      "SymPlan"
+    ],
+    "prompt_profile": "controlled",
+    "symplan_variant": "full",
+    "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "n": 96,
+    "dataset_hash": "77cbdfa840ad62770aa740a5f7b06ad5099f25481de868889da792df09a8de15",
+    "source_hash": "fa856f3ecdc2dff599cf8160c90a546fbbe483b3211447a499e5ecf272e5645f",
+    "data_manifest_hash": "697f4c99b48a52252a10f527cc5ec568b47d3d96dc188f590667c7df2976e7d9",
+    "executor": "process",
+    "executor_image": "symplan-executor:v1",
+    "executor_image_id": "process-seccomp-v1",
+    "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "versions": {
+      "torch": "2.6.0+cu124",
+      "transformers": "4.57.6",
+      "accelerate": "1.14.0",
+      "math-verify": "0.8.0",
+      "sympy": "1.13.1",
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "datasets": "4.8.5",
+      "tokenizers": "0.22.2",
+      "huggingface-hub": "0.36.2",
+      "latex2sympy2-extended": "1.10.2",
+      "antlr4-python3-runtime": "4.13.2",
+      "pyseccomp": "0.1.2"
+    },
+    "python": "3.11.10",
+    "cuda": "12.4",
+    "gpu": "NVIDIA GeForce RTX 3090"
+  },
+  "created_at": 1788879653.315027,
+  "data_manifest": {
+    "seed": 42,
+    "dev_size": 96,
+    "files": {
+      "math500_test.jsonl": {
+        "repo": "HuggingFaceH4/MATH-500",
+        "revision": "6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be",
+        "config": "default",
+        "source_split": "test",
+        "source_count": 500,
+        "count": 500,
+        "invalid_train_references_excluded": 0,
+        "sha256": "fe98bac57937e2134d8ff18eb875b99c594b5dc9011af3059a732dfd121044fa"
+      },
+      "math500_dev.jsonl": {
+        "repo": "DigitalLearningGmbH/MATH-lighteval",
+        "revision": "0530c78699ea5e8eb5530600900e1f328b48acad",
+        "config": "default",
+        "source_split": "train",
+        "source_count": 7500,
+        "count": 96,
+        "invalid_train_references_excluded": 4,
+        "sha256": "77cbdfa840ad62770aa740a5f7b06ad5099f25481de868889da792df09a8de15"
+      },
+      "gsm8k_test.jsonl": {
+        "repo": "openai/gsm8k",
+        "revision": "740312add88f781978c0658806c59bc2815b9866",
+        "config": "main",
+        "source_split": "test",
+        "source_count": 1319,
+        "count": 1319,
+        "invalid_train_references_excluded": 0,
+        "sha256": "1a68645321b69ab51486038b8784c72734e492f79b2463442ed3b30e2c453594"
+      },
+      "gsm8k_dev.jsonl": {
+        "repo": "openai/gsm8k",
+        "revision": "740312add88f781978c0658806c59bc2815b9866",
+        "config": "main",
+        "source_split": "train",
+        "source_count": 7473,
+        "count": 96,
+        "invalid_train_references_excluded": 0,
+        "sha256": "81ad84400fb1ea8981f6af47fd2e05bdf79e71b2c2224de29b311447f461e4ac"
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "state": "development",
+  "model": "qwen3-4b",
+  "updated_at": 1788879651.3634775,
+  "suite": "controlled",
+  "dataset": "math500"
+}

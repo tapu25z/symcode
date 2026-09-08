@@ -1,0 +1,74 @@
+{
+  "results": {
+    "Direct": [
+      {
+        "problem": "In right triangle $ABC$ with $\\angle B = 90^\\circ$, we have $\\sin A = 2\\cos A$.  What is $\\tan A$?",
+        "subject": "Geometry",
+        "level": 3,
+        "level_label": "Level 3",
+        "ground_truth": "2",
+        "predicted": "\\frac{1}{2}",
+        "is_correct": false,
+        "generated_tokens": 10,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "verification_status": "not_applicable",
+        "verification_feedback": null,
+        "raw_output": "\\boxed{\\frac{1}{2}}"
+      }
+    ],
+    "CoT": [
+      {
+        "problem": "In right triangle $ABC$ with $\\angle B = 90^\\circ$, we have $\\sin A = 2\\cos A$.  What is $\\tan A$?",
+        "subject": "Geometry",
+        "level": 3,
+        "level_label": "Level 3",
+        "ground_truth": "2",
+        "predicted": null,
+        "is_correct": false,
+        "generated_tokens": 256,
+        "attempts": 1,
+        "execution_status": "not_applicable",
+        "verification_status": "not_applicable",
+        "verification_feedback": null,
+        "raw_output": "Given that \\(\\sin A = 2 \\cos A\\) in a right triangle \\(ABC\\) with \\(\\angle B = 90^\\circ\\), we need to find \\(\\tan A\\).\n\nFirst, recall the definitions of sine and cosine in terms of the sides of the triangle:\n\\[\n\\sin A = \\frac{\\text{opposite}}{\\text{hypotenuse}}, \\quad \\cos A = \\frac{\\text{adjacent}}{\\text{hypotenuse}}\n\\]\nSince \\(\\sin A = 2 \\cos A\\), we can substitute these expressions:\n\\[\n\\frac{\\text{opposite}}{\\text{hypotenuse}} = 2 \\cdot \\frac{\\text{adjacent}}{\\text{hypotenuse}}\n\\]\nThe hypotenuse cancels out from both sides:\n\\[\n\\text{opposite} = 2 \\cdot \\text{adjacent}\n\\]\n\nNext, recall the definition of tangent:\n\\[\n\\tan A = \\frac{\\text{opposite}}{\\text{adjacent}}\n\\]\nSubstitute \\(\\text{opposite} = 2 \\cdot \\text{adjacent}\\) into the tangent formula:\n\\[\n\\tan A"
+      }
+    ],
+    "SymCode": [
+      {
+        "problem": "In right triangle $ABC$ with $\\angle B = 90^\\circ$, we have $\\sin A = 2\\cos A$.  What is $\\tan A$?",
+        "subject": "Geometry",
+        "level": 3,
+        "level_label": "Level 3",
+        "ground_truth": "2",
+        "predicted": "2",
+        "is_correct": true,
+        "generated_tokens": 106,
+        "attempts": 1,
+        "execution_status": "success",
+        "verification_status": "unknown",
+        "verification_feedback": "Verification Unknown: candidate '2' is numeric, but no independent relation proves the target value.",
+        "stdout": "\\boxed{2}\n",
+        "traceback": null,
+        "extracted_code": "import sympy as sp\n\n# Define the variable\nA = sp.symbols('A')\n\n# Given sin(A) = 2*cos(A)\neq = sp.sin(A) - 2*sp.cos(A)\n\n# Solve for tan(A)\nsolution = sp.solve(eq, A)\n\n# Since tan(A) = sin(A) / cos(A), we can directly find tan(A) from the solution\ntan_A = sp.tan(solution[0])\n\nprint(f\"\\\\boxed{{{tan_A}}}\")",
+        "raw_output": "```python\nimport sympy as sp\n\n# Define the variable\nA = sp.symbols('A')\n\n# Given sin(A) = 2*cos(A)\neq = sp.sin(A) - 2*sp.cos(A)\n\n# Solve for tan(A)\nsolution = sp.solve(eq, A)\n\n# Since tan(A) = sin(A) / cos(A), we can directly find tan(A) from the solution\ntan_A = sp.tan(solution[0])\n\nprint(f\"\\\\boxed{{{tan_A}}}\")\n```",
+        "raw_outputs": [
+          "```python\nimport sympy as sp\n\n# Define the variable\nA = sp.symbols('A')\n\n# Given sin(A) = 2*cos(A)\neq = sp.sin(A) - 2*sp.cos(A)\n\n# Solve for tan(A)\nsolution = sp.solve(eq, A)\n\n# Since tan(A) = sin(A) / cos(A), we can directly find tan(A) from the solution\ntan_A = sp.tan(solution[0])\n\nprint(f\"\\\\boxed{{{tan_A}}}\")\n```"
+        ],
+        "attempt_history": [
+          {
+            "attempt": 1,
+            "code": "import sympy as sp\n\n# Define the variable\nA = sp.symbols('A')\n\n# Given sin(A) = 2*cos(A)\neq = sp.sin(A) - 2*sp.cos(A)\n\n# Solve for tan(A)\nsolution = sp.solve(eq, A)\n\n# Since tan(A) = sin(A) / cos(A), we can directly find tan(A) from the solution\ntan_A = sp.tan(solution[0])\n\nprint(f\"\\\\boxed{{{tan_A}}}\")",
+            "generated_tokens": 106,
+            "execution_status": "success",
+            "candidate_answer": "2",
+            "verification_status": "unknown",
+            "verification_feedback": "Verification Unknown: candidate '2' is numeric, but no independent relation proves the target value.",
+            "stdout": "\\boxed{2}\n",
+            "traceback": null
+          }
+        ]
+      }
+    ]
+  }
+}

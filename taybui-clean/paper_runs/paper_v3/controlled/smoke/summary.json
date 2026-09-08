@@ -1,0 +1,315 @@
+{
+  "expected": 8,
+  "common_n": 8,
+  "completed": true,
+  "available": {
+    "PaL": 8,
+    "PoT": 8,
+    "SymCode": 8,
+    "SymPlan": 8
+  },
+  "methods": {
+    "PaL": {
+      "correct": 8,
+      "n": 8,
+      "accuracy": 100.0,
+      "first_attempt_accuracy": 100.0,
+      "esr": 100.0,
+      "first_attempt_esr": 100.0,
+      "avg_output_tokens": 245.375,
+      "avg_input_tokens": 304.75,
+      "avg_calls": 1.0,
+      "avg_solve_seconds": 13.618847222533077,
+      "truncated_call_count": 0,
+      "grading_statuses": {
+        "graded": 8
+      },
+      "by_level": {
+        "Level 1": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Level 2": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Level 3": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Level 4": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        }
+      },
+      "by_subject": {
+        "Algebra": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Counting & Probability": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Intermediate Algebra": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Prealgebra": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Precalculus": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        }
+      }
+    },
+    "PoT": {
+      "correct": 8,
+      "n": 8,
+      "accuracy": 100.0,
+      "first_attempt_accuracy": 100.0,
+      "esr": 100.0,
+      "first_attempt_esr": 100.0,
+      "avg_output_tokens": 354.5,
+      "avg_input_tokens": 326.75,
+      "avg_calls": 1.0,
+      "avg_solve_seconds": 19.508134250470903,
+      "truncated_call_count": 0,
+      "grading_statuses": {
+        "graded": 8
+      },
+      "by_level": {
+        "Level 1": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Level 2": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Level 3": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Level 4": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        }
+      },
+      "by_subject": {
+        "Algebra": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Counting & Probability": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Intermediate Algebra": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Prealgebra": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Precalculus": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        }
+      }
+    },
+    "SymCode": {
+      "correct": 8,
+      "n": 8,
+      "accuracy": 100.0,
+      "first_attempt_accuracy": 100.0,
+      "esr": 100.0,
+      "first_attempt_esr": 100.0,
+      "avg_output_tokens": 367.125,
+      "avg_input_tokens": 324.75,
+      "avg_calls": 1.0,
+      "avg_solve_seconds": 20.260492690256797,
+      "truncated_call_count": 0,
+      "grading_statuses": {
+        "graded": 8
+      },
+      "by_level": {
+        "Level 1": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Level 2": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Level 3": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Level 4": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        }
+      },
+      "by_subject": {
+        "Algebra": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Counting & Probability": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Intermediate Algebra": {
+          "n": 3,
+          "correct": 3,
+          "accuracy": 100.0
+        },
+        "Prealgebra": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Precalculus": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        }
+      }
+    },
+    "SymPlan": {
+      "correct": 7,
+      "n": 8,
+      "accuracy": 87.5,
+      "first_attempt_accuracy": 87.5,
+      "esr": 87.5,
+      "first_attempt_esr": 87.5,
+      "avg_output_tokens": 845.75,
+      "avg_input_tokens": 1758.625,
+      "avg_calls": 3.125,
+      "avg_solve_seconds": 46.187414891523076,
+      "truncated_call_count": 8,
+      "grading_statuses": {
+        "graded": 7,
+        "missing_prediction": 1
+      },
+      "by_level": {
+        "Level 1": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Level 2": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Level 3": {
+          "n": 3,
+          "correct": 2,
+          "accuracy": 66.66666666666667
+        },
+        "Level 4": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        }
+      },
+      "by_subject": {
+        "Algebra": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Counting & Probability": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        },
+        "Intermediate Algebra": {
+          "n": 3,
+          "correct": 2,
+          "accuracy": 66.66666666666667
+        },
+        "Prealgebra": {
+          "n": 2,
+          "correct": 2,
+          "accuracy": 100.0
+        },
+        "Precalculus": {
+          "n": 1,
+          "correct": 1,
+          "accuracy": 100.0
+        }
+      }
+    }
+  },
+  "paired": {
+    "PaL": {
+      "n": 8,
+      "wins": 0,
+      "losses": 1,
+      "delta_pp": -12.5,
+      "mcnemar_exact_p": 1.0,
+      "paired_bootstrap_95ci_pp": [
+        -37.5,
+        0.0
+      ],
+      "holm_adjusted_p": 1.0
+    },
+    "PoT": {
+      "n": 8,
+      "wins": 0,
+      "losses": 1,
+      "delta_pp": -12.5,
+      "mcnemar_exact_p": 1.0,
+      "paired_bootstrap_95ci_pp": [
+        -37.5,
+        0.0
+      ],
+      "holm_adjusted_p": 1.0
+    },
+    "SymCode": {
+      "n": 8,
+      "wins": 0,
+      "losses": 1,
+      "delta_pp": -12.5,
+      "mcnemar_exact_p": 1.0,
+      "paired_bootstrap_95ci_pp": [
+        -37.5,
+        0.0
+      ],
+      "holm_adjusted_p": 1.0
+    }
+  },
+  "phase": "smoke",
+  "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+  "dataset": "math500"
+}

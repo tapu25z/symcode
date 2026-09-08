@@ -1,0 +1,15 @@
+{
+  "settings": {
+    "model": "qwen3-4b",
+    "executor": "process",
+    "suites": [
+      "controlled",
+      "source",
+      "no-extract",
+      "no-plan",
+      "code-only"
+    ],
+    "source_hash": "fa856f3ecdc2dff599cf8160c90a546fbbe483b3211447a499e5ecf272e5645f"
+  },
+  "revision": "cdbee75f17c01a7cc42f958dc650907174af0554"
+}
