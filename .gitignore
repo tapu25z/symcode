@@ -34,3 +34,5 @@ venv.bak/
 
 # Local benchmark outputs
 math500_symplanner_ir_ablation_n50.json
+.hf_token
+*.token

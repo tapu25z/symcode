@@ -9,6 +9,7 @@
 #SBATCH --gres=mps:a100:2              # Sử dụng 2 slot MPS trên GPU A100
 #SBATCH --mem=32G                      # 32GB RAM hệ thống
 #SBATCH --time=12:00:00                # Giới hạn thời gian chạy (12 giờ)
+#SBATCH --export=ALL                  # Đảm bảo Slurm nhận toàn bộ biến môi trường từ terminal
 
 # ==============================================================================
 # Script Slurm Benchmark: Llama-3.1-8B-Instruct trên 50 mẫu MATH-500
@@ -16,24 +17,38 @@
 # Tập dữ liệu: MATH-500 (50 mẫu ngẫu nhiên: 35 câu L1-3, 15 câu L4-5)
 # Model: meta-llama/Llama-3.1-8B-Instruct (4-bit NF4 Quantization)
 # ==============================================================================
-# Cách chạy:
-#   export HF_TOKEN="hf_..."
-#   sbatch unknow/run_bench_llama3_1_8b.slurm
-#   hoặc: sbatch unknow/run_bench_llama3_1_8b.slurm "hf_..."
+# Cách chạy (chọn 1 trong 3 cách):
+#   Cách 1 (Khuyên dùng): export HF_TOKEN="hf_..." && sbatch unknow/run_bench_llama3_1_8b.slurm
+#   Cách 2: sbatch unknow/run_bench_llama3_1_8b.slurm "hf_..."
+#   Cách 3: huggingface-cli login --token "hf_..." (chỉ cần chạy 1 lần trên terminal)
 # ==============================================================================
 
 export PYTHONUNBUFFERED=1
 
-# Lấy HF_TOKEN từ môi trường hoặc tham số truyền vào $1
-HF_TOKEN="${HF_TOKEN:-$1}"
-if [ -z "$HF_TOKEN" ]; then
-    echo "⚠️ LỖI: Cần cung cấp HF_TOKEN để tải mô hình meta-llama/Llama-3.1-8B-Instruct."
-    echo "   Vui lòng chạy: export HF_TOKEN=\"your_hf_token\" && sbatch unknow/run_bench_llama3_1_8b.slurm"
+# Tự động tìm token từ: tham số $1, biến HF_TOKEN, file .hf_token, hoặc cache của huggingface-cli
+TOKEN_CANDIDATE="${1:-$HF_TOKEN}"
+
+if [ -z "$TOKEN_CANDIDATE" ]; then
+    if [ -f "$HOME/.cache/huggingface/token" ]; then
+        TOKEN_CANDIDATE=$(cat "$HOME/.cache/huggingface/token" 2>/dev/null | tr -d '\r\n')
+    elif [ -f ".hf_token" ]; then
+        TOKEN_CANDIDATE=$(cat ".hf_token" 2>/dev/null | tr -d '\r\n')
+    elif [ -f "$HOME/.hf_token" ]; then
+        TOKEN_CANDIDATE=$(cat "$HOME/.hf_token" 2>/dev/null | tr -d '\r\n')
+    fi
+fi
+
+if [ -z "$TOKEN_CANDIDATE" ]; then
+    echo "⚠️ LỖI: Không tìm thấy HuggingFace Token để tải mô hình meta-llama/Llama-3.1-8B-Instruct."
+    echo "   Vui lòng thực hiện một trong các cách sau:"
+    echo "   1) export HF_TOKEN=\"hf_...\" && sbatch unknow/run_bench_llama3_1_8b.slurm"
+    echo "   2) sbatch unknow/run_bench_llama3_1_8b.slurm \"hf_...\""
+    echo "   3) echo \"hf_...\" > .hf_token && sbatch unknow/run_bench_llama3_1_8b.slurm"
     exit 1
 fi
 
-export HUGGING_FACE_HUB_TOKEN="$HF_TOKEN"
-
+export HF_TOKEN="$TOKEN_CANDIDATE"
+export HUGGING_FACE_HUB_TOKEN="$TOKEN_CANDIDATE"
 mkdir -p logs
 mkdir -p results
 
