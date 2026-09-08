@@ -636,8 +636,8 @@ def evaluate_symplanner(
         planner_messages = build_planner_messages(question, extraction_note)
         raw_plan, plan_tokens = llm.generate_chat(planner_messages, enable_thinking=False, max_new_tokens_override=256)
         total_tokens += plan_tokens
+        planner_note = clean_planner_note(raw_plan)
         raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
-
         planner_meta = infer_target_spec(question, extraction_note)
         planner_errors = []
         symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
