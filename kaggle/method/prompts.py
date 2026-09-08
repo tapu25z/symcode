@@ -14,39 +14,64 @@ from .target_contract import infer_target_spec
 
 EXTRACT_SYSTEM_PROMPT = r"""You extract the mathematical state of a problem for a later solver.
 
-Return ONLY these labeled lines:
-# Target: quantity/expression/object the problem asks for
-# Given: facts, numbers, definitions, equations, and relations
-# Constraints: domains, integer/positive/nonzero/range/order conditions
-# Output: number|symbolic|tuple|set|matrix|text|base_notation
+Return ONLY these 4 labeled lines with concrete facts from the problem (do NOT copy placeholder text):
+# Target: <the specific quantity, expression, or object requested>
+# Given: <the concrete equations, values, definitions, and facts given in the problem>
+# Constraints: <domain constraints such as integer, positive, real, or 'none'>
+# Output: <pick exactly one: number | symbolic | tuple | set | matrix | text | base_notation>
 
 Rules:
-- Do not solve the problem.
-- Do not write code.
-- Keep each line short and factual."""
+- Do not solve the problem or write code.
+- State facts directly; do not repeat instructions or placeholder words.
 
-PLANNER_SYSTEM_PROMPT = r"""You write a short solution plan for a Python/SymPy solver.
+Example 1:
+Problem: If 2x + 5 = 15, find the value of x^2.
+# Target: x^2
+# Given: 2*x + 5 = 15
+# Constraints: none
+# Output: number
 
-You will receive the original problem and an extracted mathematical state.
+Example 2:
+Problem: Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is a parabola, circle, ellipse, or hyperbola.
+# Target: conic section classification
+# Given: (x/2 - 3)^2 + y^2 = 10
+# Constraints: none
+# Output: text"""
+
+
+PLANNER_SYSTEM_PROMPT = r"""You write an operational, step-by-step solution plan for a Python/SymPy solver.
+You will receive the original problem and the extracted mathematical state.
 Return ONLY numbered plan steps.
 
 Rules:
-- Do not calculate or reveal the final numeric answer.
-- Do not write Python code.
-- Include candidate filtering or constraint checks when needed.
-- Keep the plan short."""
+1. Operational blueprint: Name the exact mathematical theorem, formula, or SymPy technique to use (e.g., equate coefficients, compute discriminant, use Vieta's formulas, solve system).
+2. Minimalist & direct: Focus strictly on answering the requested target. Do NOT plan exploratory branches, extra case analyses, or degenerate checks unless the problem explicitly asks for them.
+3. Do not calculate or reveal final numbers.
+4. Do not write Python code.
+5. Keep the plan to 2-4 short, concrete steps.
+
+Example:
+# PROBLEM
+Determine if the graph of (x/2 - 3)^2 + y^2 = 10 is an ellipse, parabola, or hyperbola.
+# EXTRACTED STATE
+# Target: conic section classification
+# Given: (x/2 - 3)^2 + y^2 = 10
+# Output: text
+
+1. Expand the equation into general conic form Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0 and extract coefficients A, B, C.
+2. Compute the discriminant B^2 - 4*A*C.
+3. If discriminant < 0 and A != C, conclude ellipse; otherwise determine conic type accordingly."""
+
 
 REPLAN_SYSTEM_PROMPT = r"""You are revising an unsuccessful solution plan for a mathematical problem.
-You will receive the original problem, the extracted mathematical state, the previous plan that failed, and the diagnosis/feedback from execution.
-
+Review the problem, extracted state, previous failed plan, and diagnosis.
 Return ONLY revised numbered plan steps.
 
 Rules:
-- Do not repeat the previous failed strategy.
-- Propose an alternative mathematical approach (e.g., switch from pure symbolic solving to bounded search or Vieta's formulas, re-formulate coordinate axes, or change variable substitution).
-- Do not calculate or reveal the final numeric answer.
-- Do not write Python code.
-- Keep the plan short and concrete."""
+1. Propose an alternative, simpler mathematical formulation that directly avoids the reported failure.
+2. Keep the plan short (2-3 steps) and operational.
+3. Do not repeat the failed approach.
+4. Do not write code or reveal final numeric values."""
 
 
 # ==============================================================================
@@ -58,16 +83,14 @@ SYMPLANNER_CODEGEN_SYSTEM_PROMPT = r"""You are an expert mathematical solver and
 Return ONLY executable Python code in one ```python ... ``` block. Do not explain.
 
 Rules:
-1. Import sympy as sp. Use exact arithmetic, especially sp.Rational; use floats only when requested.
-2. Solve the requested target, not an intermediate value. Use the extraction and plan.
-3. If using sp.solve, handle empty solutions safely. You can also use safe_solve(eqs, vars, positive=True/False, real=True) available in globals.
-4. Use finite loops only. Never use an unbounded while loop.
-5. Solve directly and cleanly. Do not write duplicate algorithms or complicated try-except simulation blocks unless analytical solving fails.
-6. Never print None, Invalid, NaN, undefined variables, debug text, or intermediate values.
-7. Any reasoning comment must start with "# Step <number>:".
-8. At the end, print ONLY the final answer in LaTeX boxed format using sp.latex() for mathematical/symbolic expressions:
-   print(f"\\boxed{{{sp.latex(final_answer)}}}")"""
-
+1. 1:1 Plan realization: Implement the plan directly. Each main step in code must start with "# Step <number>:" corresponding to the plan.
+2. Direct execution: Do not add extra exploratory checks, duplicate branching, or unprompted edge-case handlers outside the plan.
+3. Import sympy as sp. Use exact arithmetic (sp.Rational, sp.Integer); use floats only when explicitly requested.
+4. If using sp.solve, handle results safely (safe_solve is available in globals).
+5. Use finite loops only. Never use unbounded while loops.
+6. At the end, ALWAYS print the final answer enclosed in LaTeX boxed format:
+   - For symbolic/mathematical expressions: print(f"\\boxed{{{sp.latex(final_answer)}}}")
+   - For text answers: print(f"\\boxed{{{final_answer}}}")"""
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
 Solve the problem by returning ONLY executable Python code enclosed in a single ```python ... ``` block.

@@ -249,5 +249,25 @@ class SymPlannerQualityTests(unittest.TestCase):
         status, _ = verify_candidate_answer("Which student has the greatest average speed?", "14/3")
         self.assertEqual(status, "fail")
 
+    def test_prompts_have_in_context_anchors_and_operational_blueprints(self):
+        from method.prompts import EXTRACT_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT, SYMPLANNER_CODEGEN_SYSTEM_PROMPT
+        self.assertIn("Example 1:", EXTRACT_SYSTEM_PROMPT)
+        self.assertIn("Example 2:", EXTRACT_SYSTEM_PROMPT)
+        self.assertIn("Operational blueprint", PLANNER_SYSTEM_PROMPT)
+        self.assertIn("1:1 Plan realization", SYMPLANNER_CODEGEN_SYSTEM_PROMPT)
+
+    def test_target_contract_parses_turn1_output_label(self):
+        from method.target_contract import infer_target_spec
+        t1_note = "# Target: conic classification\n# Given: (x/2 - 3)^2 + y^2 = 10\n# Output: text"
+        spec = infer_target_spec("Some problem", t1_note)
+        self.assertEqual(spec["answer_type"], "text")
+
+    def test_safe_coeff_auto_expands_unexpanded_expression(self):
+        import sympy as sp
+        x, y = sp.symbols('x y')
+        eq = (sp.Rational(1, 2)*x - 3)**2 + y**2 - 10
+        self.assertEqual(sp.coeff(eq, x**2), sp.Rational(1, 4))
+        self.assertEqual(sp.coeff(eq, y**2), 1)
+
 if __name__ == "__main__":
     unittest.main()

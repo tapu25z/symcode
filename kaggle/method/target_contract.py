@@ -24,7 +24,7 @@ def _explicit_planner_answer_type(planner_note: str) -> str | None:
     text = str(planner_note or "")
     match = re.search(r'["\']answer_type["\']\s*:\s*["\']([^"\']+)["\']', text)
     if not match:
-        match = re.search(r"^\s*#\s*Answer\s+type\s*:\s*([^\r\n]+)", text, flags=re.IGNORECASE | re.MULTILINE)
+        match = re.search(r"^\s*#\s*(?:Answer\s+type|Output)\s*:\s*([^\r\n]+)", text, flags=re.IGNORECASE | re.MULTILINE)
     if not match:
         return None
     answer_type = match.group(1).strip().lower().replace("-", "_")
