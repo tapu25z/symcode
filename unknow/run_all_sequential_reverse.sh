@@ -132,6 +132,8 @@ for idx in "${!MODELS[@]}"; do
     echo "   - Model ID    : $MODEL_ID"
     echo "   - Output File : $OUTPUT_RESULT"
     echo "   - Thoi gian   : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "💾 Dung luong o dia truoc khi chay:"
+    df -h / | awk 'NR==1 || NR==2'
     echo "##############################################################################"
 
     # Kiem tra neu model da hoan thanh du 500 mau thi bo qua
@@ -172,9 +174,33 @@ except Exception:
             echo "❌ [ERROR] Model $DISPLAY_NAME gap loi khi chay! Ghi nhan loi va chuyen sang model tiep theo."
         }
 
-    # Giai phong bo nho GPU truoc khi load model tiep theo
+    # ---------------------------------------------------------
+    # GIAI PHONG VRAM GPU
+    # ---------------------------------------------------------
     echo "🧹 [$(date '+%H:%M:%S')] Don dep VRAM GPU truoc khi sang model tiep theo..."
     python3 -c "import torch, gc; gc.collect(); torch.cuda.empty_cache() if torch.cuda.is_available() else None" 2>/dev/null || true
+
+    # ---------------------------------------------------------
+    # XOA CACHE WEIGHTS CUA MODEL DE TIET KIEM DUNG LUONG (DISK <= 50GB)
+    # ---------------------------------------------------------
+    HF_HUB_DIR="${HF_HOME:-$HOME/.cache/huggingface}/hub"
+    MODEL_DIR_NAME="models--$(echo "$MODEL_ID" | sed 's/\//--/g')"
+    TARGET_CACHE="$HF_HUB_DIR/$MODEL_DIR_NAME"
+
+    if [ -d "$TARGET_CACHE" ]; then
+        SIZE_FREED=$(du -sh "$TARGET_CACHE" 2>/dev/null | cut -f1 || echo "N/A")
+        echo "🗑️ [$(date '+%H:%M:%S')] Dang xoa cache weights cua $MODEL_ID (giai phong ~$SIZE_FREED disk)..."
+        rm -rf "$TARGET_CACHE"
+        echo "✅ Da xoa thanh cong cache cua $MODEL_ID!"
+    fi
+
+    # Don dep them cac file lock va temp cua transformers/huggingface
+    rm -rf "$HF_HUB_DIR/.locks" 2>/dev/null || true
+    rm -rf /tmp/transformers* /tmp/huggingface* 2>/dev/null || true
+
+    # Hien thi dung luong o dia con lai tren instance sau khi xoa
+    echo "💾 [$(date '+%H:%M:%S')] Dung luong o dia con lai tren instance sau khi don dep:"
+    df -h / | awk 'NR==1 || NR==2'
     sleep 3
 
     echo "✅ [HOAN TAT $STEP/$TOTAL_MODELS] $DISPLAY_NAME"
