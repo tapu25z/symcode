@@ -5,8 +5,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "kaggle"))
 
-from method.extractor import check_exact_match
-from method.prompts import build_extract_messages, build_planner_messages, build_symplanner_codegen_messages, build_symplanner_debug_messages
+from method.extractor import check_exact_match, extract_boxed_content
+from method.prompts import (
+    build_extract_messages,
+    build_planner_messages,
+    build_fused_planner_messages,
+    build_symplanner_codegen_messages,
+    build_symplanner_debug_messages,
+)
+from method.evaluator import _should_retry_symplanner, _symplanner_record_rank
 from method.static_lint import lint_sympy_code
 from method.sandbox import execute_code_safely
 from method.target_contract import infer_target_spec, parse_planner_contract, format_answer_for_contract
@@ -218,6 +225,53 @@ class SymPlannerQualityTests(unittest.TestCase):
 
         status_ok, _ = verify_candidate_answer(q, "2", "print(2)")
         self.assertIn(status_ok, ["unknown", "pass"])
+
+    def test_fused_planner_prompt_and_codegen_guidance(self):
+        fused = build_fused_planner_messages("Find x.")
+        self.assertEqual(len(fused), 2)
+        self.assertIn("computational plan", fused[0]["content"].lower())
+        self.assertIn("# Target:", fused[0]["content"])
+
+        codegen = build_symplanner_codegen_messages("How many integers satisfy x > 0?", "{}")
+        codegen_content = codegen[0]["content"]
+        self.assertIn("strategic guide", codegen_content.lower())
+        self.assertIn("count", codegen_content.lower())
+
+    def test_extract_boxed_content_supports_unbraced_variants(self):
+        self.assertEqual(extract_boxed_content(r"\boxed{42}"), "42")
+        self.assertEqual(extract_boxed_content(r"\boxed 42"), "42")
+        self.assertEqual(extract_boxed_content(r"\boxed2"), "2")
+        self.assertEqual(extract_boxed_content("The largest value of a is oxed2"), "2")
+        self.assertEqual(extract_boxed_content(r"\boxed 14/3"), "14/3")
+
+    def test_format_answer_for_contract_does_not_corrupt_base10_conversions(self):
+        q = "What's the largest eight-digit base 2 integer? Express your answer in base 10."
+        formatted = format_answer_for_contract(q, "255")
+        self.assertEqual(formatted, "255")
+
+        q_base8 = "Express 42 in base 8."
+        formatted_base8 = format_answer_for_contract(q_base8, "52")
+        self.assertEqual(formatted_base8, "52_8")
+
+    def test_anti_regression_ranking_prefers_initial_valid_attempt_over_drift(self):
+        rec1 = {"attempt": 1, "execution_status": "success", "verification_status": "unknown", "candidate_answer": "3"}
+        rec2 = {"attempt": 2, "execution_status": "success", "verification_status": "unknown", "candidate_answer": "0.666"}
+        best = max([rec1, rec2], key=_symplanner_record_rank)
+        self.assertEqual(best["attempt"], 1)
+        self.assertEqual(best["candidate_answer"], "3")
+
+        # However, a proven pass in attempt 2 should beat an unknown in attempt 1
+        rec3_pass = {"attempt": 2, "execution_status": "success", "verification_status": "pass", "candidate_answer": "3"}
+        best_pass = max([rec1, rec3_pass], key=_symplanner_record_rank)
+        self.assertEqual(best_pass["attempt"], 2)
+
+    def test_should_retry_symplanner_retries_on_any_verification_failure(self):
+        # Generic verification failure must retry regardless of hardcoded token list
+        self.assertTrue(_should_retry_symplanner("success", "bad_var", "fail", "Unevaluated python variable"))
+        self.assertTrue(_should_retry_symplanner("success", "None", "unknown", "No answer printed"))
+        self.assertTrue(_should_retry_symplanner("error", None, "fail", "Traceback syntax error"))
+        # Successful with unknown verification and no contract issue does not burn unnecessary retries
+        self.assertFalse(_should_retry_symplanner("success", "42", "unknown", "Candidate is syntactically valid"))
 
 if __name__ == "__main__":
     unittest.main()

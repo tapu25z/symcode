@@ -25,6 +25,7 @@ from .prompts import (
     build_prompt_messages,
     build_retry_prompt_messages,
     build_planner_messages,
+    build_fused_planner_messages,
     clean_planner_note,
     build_symplanner_codegen_messages,
     build_symplanner_debug_messages,
@@ -55,42 +56,14 @@ def _verification_rank(status: str) -> int:
 def _should_retry_symplanner(execution_status: str, candidate: Any, verification_status: str, feedback: Any) -> bool:
     if execution_status != "success" or candidate is None:
         return True
-    feedback_text = str(feedback or "").lower()
-    actionable_tokens = (
-        "invalid token",
-        "unresolved free symbol",
-        "target requires",
-        "target must remain symbolic",
-        "base notation",
-        "coordinate tuple",
-        "non-negative count",
-        "integer count",
-        "probability must",
-        "undefined or infinite",
-        "empty candidate",
-        "did not print",
-        "no candidate",
-        "placeholder variable",
-        "no-adjacency",
-        "selectable groups",
-        "three for",
-        "spectral norm",
-        "log product rules",
-        "functional equation",
-        "special-function sum",
-        "smallest qualifying cube",
-        "complex rotation",
-        "end-of-year deposits",
-        "modular remainder",
-        "trig power identity",
-        "reassigned",
-        "explicit coordinates",
-    )
+    if str(candidate).strip().lower() in {"", "none", "null", "invalid", "undefined", "nan"}:
+        return True
     if verification_status == "fail":
-        return any(token in feedback_text for token in actionable_tokens)
+        return True
     # Generic unknown means the verifier cannot prove the answer without ground
     # truth. Retrying those cases usually burns tokens and can damage a good
     # candidate, so retry only concrete output-contract issues.
+    feedback_text = str(feedback or "").lower()
     return verification_status == "unknown" and any(token in feedback_text for token in ("target requires", "base notation", "coordinate tuple"))
 
 
@@ -108,12 +81,14 @@ def _candidate_is_present(value: Any) -> bool:
     return str(value).strip().lower() not in {"", "none", "null", "invalid", "undefined", "nan"}
 
 
-def _symplanner_record_rank(record: Dict[str, Any]) -> tuple[int, int, int, int]:
+def _symplanner_record_rank(record: Dict[str, Any]) -> tuple[int, int, int, int, int]:
+    lint_count = len(record.get("static_lint") or [])
     return (
         _verification_rank(record.get("verification_status")),
         int(record.get("execution_status") == "success"),
         int(_candidate_is_present(record.get("candidate_answer"))),
-        int(record.get("attempt", 0)),
+        -lint_count,
+        -int(record.get("attempt", 999)),
     )
 
 
@@ -622,26 +597,20 @@ def evaluate_symplanner(
         raw_outputs = []
         
         # -------------------------------------------------------------
-        # TURN 1: EXTRACT PHASE
+        # TURN 1: FUSED EXTRACT & PLAN PHASE (1 LLM call thay vi 2 turns)
         # -------------------------------------------------------------
-        extract_messages = build_prompt_messages("SymPlanner", question)
-        raw_extract, extract_tokens = llm.generate_chat(extract_messages, enable_thinking=False, max_new_tokens_override=192)
-        extraction_note = clean_planner_note(raw_extract)
-        total_tokens += extract_tokens
-        raw_outputs.append(f"### Turn 1 (Extract):\n{raw_extract}")
-
-        # -------------------------------------------------------------
-        # TURN 2: PLAN PHASE
-        # -------------------------------------------------------------
-        planner_messages = build_planner_messages(question, extraction_note)
+        planner_messages = build_fused_planner_messages(question)
         raw_plan, plan_tokens = llm.generate_chat(planner_messages, enable_thinking=False, max_new_tokens_override=256)
         total_tokens += plan_tokens
         planner_note = clean_planner_note(raw_plan)
-        raw_outputs.append(f"### Turn 2 (Plan):\n{raw_plan}")
-        planner_meta = infer_target_spec(question, extraction_note)
-        planner_errors = []
-        symplanner_context = f"# EXTRACTED STATE\n{extraction_note}\n\n# PLAN\n{planner_note}".strip()
+        raw_outputs.append(f"### Turn 1 (Plan):\n{raw_plan}")
 
+        # Tach extraction_note tu cac dong # Target: va # Output: neu co
+        extract_lines = [line for line in planner_note.splitlines() if line.strip().startswith(("# Target:", "# Output:"))]
+        extraction_note = "\n".join(extract_lines) if extract_lines else planner_note
+        planner_meta = infer_target_spec(question, planner_note)
+        planner_errors = []
+        symplanner_context = planner_note
         # -------------------------------------------------------------
         # TURN 3: PURE CODEGEN PHASE (Sinh 100% Python/SymPy code)
         # -------------------------------------------------------------
@@ -650,9 +619,9 @@ def evaluate_symplanner(
             symplanner_context,
             subject=item.get("subject", "")
         )
-        raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False, max_new_tokens_override=512)
+        raw_code_output, code_tokens = llm.generate_chat(codegen_messages, enable_thinking=False, max_new_tokens_override=768)
         total_tokens += code_tokens
-        raw_outputs.append(f"### Turn 3 (Codegen Initial):\n{raw_code_output}")
+        raw_outputs.append(f"### Turn 2 (Codegen Initial):\n{raw_code_output}")
         
         extracted_code = extract_symplanner_code(raw_code_output)
         exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
@@ -715,9 +684,9 @@ def evaluate_symplanner(
                     subject=item.get("subject", "")
                 )
                 retry_phase = "debug_repair"
-            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False, max_new_tokens_override=512)
+            raw_debug_output, dbg_tokens = llm.generate_chat(debug_messages, enable_thinking=False, max_new_tokens_override=768)
             total_tokens += dbg_tokens
-            raw_outputs.append(f"### Turn 3 ({retry_phase} Attempt {attempt}):\n{raw_debug_output}")
+            raw_outputs.append(f"### Turn 2 ({retry_phase} Attempt {attempt}):\n{raw_debug_output}")
             extracted_code = extract_symplanner_code(raw_debug_output)
             exec_res = execute_code_safely(extracted_code, mode="symcode", timeout=timeout)
             candidate_ans = exec_res.get("extracted_answer")
@@ -782,10 +751,24 @@ def evaluate_symplanner(
         final_answer_type = best_record.get("answer_type")
         final_unit = best_record.get("unit")
         if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
-            # Fallback an toàn: trích xuất từ planner note nếu có
-            box_match = extract_boxed_content(planner_note)
-            if box_match:
-                final_predicted = box_match
+            # 1. Fallback 1: Quet nguoc raw_outputs giong SymCode
+            for out in reversed(raw_outputs):
+                b = extract_boxed_content(out)
+                if b is not None and b.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                    final_predicted = b
+                    break
+            # 2. Fallback 2: Thu extract_answer_fallback neu chua tim thay \boxed{}
+            if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+                for out in reversed(raw_outputs):
+                    fb = extract_answer_fallback(out)
+                    if fb is not None and fb.strip().lower() not in ["none", "null", "invalid", "undefined", "nan"]:
+                        final_predicted = fb
+                        break
+            # 3. Fallback 3: Kiem tra planner_note
+            if final_predicted is None or str(final_predicted).strip().lower() in ["none", "null", "invalid", "undefined", "nan"]:
+                box_match = extract_boxed_content(planner_note)
+                if box_match:
+                    final_predicted = box_match
         final_predicted = format_answer_for_contract(question, final_predicted, final_answer_type)
 
         is_correct = check_exact_match(final_predicted, gt)

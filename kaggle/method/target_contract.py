@@ -232,8 +232,17 @@ def format_answer_for_contract(question: str, answer: Any, answer_type: str | No
         total = sum(numeric_list)
         return str(int(total)) if total.is_integer() else str(total)
     if inferred_type == "base_notation" and answer_text and not re.search(r"[_\\]", answer_text):
-        base_match = re.search(r"\bbase\s*\$?(\d+)\$?|\bin\s+base\s*\$?(\d+)\$?", str(question or ""), flags=re.IGNORECASE)
-        if base_match:
-            base = next(group for group in base_match.groups() if group)
-            return f"{answer_text}_{base}"
+        # Neu yeu cau tra ve he thap phan (base 10 / decimal) thi khong can gan suffix co so
+        if re.search(r"\b(?:in|to)\s+base\s*\$?10\$?|\b(?:in|to)\s+decimal\b", str(question or ""), flags=re.IGNORECASE):
+            return answer
+        # Tim dich danh co so muc tieu (sau cac tu khoa in/to/express in base X)
+        target_base_match = re.search(
+            r"\b(?:in|to|express(?:ed)?\s+in|write(?:n)?\s+in)\s+base\s*\$?(\d+)\$?",
+            str(question or ""),
+            flags=re.IGNORECASE
+        )
+        if target_base_match:
+            base = target_base_match.group(1)
+            if base != "10":
+                return f"{answer_text}_{base}"
     return answer

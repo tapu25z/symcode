@@ -41,6 +41,28 @@ Rules:
 - Do NOT write Python code.
 - Keep the plan short and focused on SymPy operations."""
 
+FUSED_PLANNER_SYSTEM_PROMPT = r"""You extract the target and outline a concise SymPy computational plan for a math solver.
+
+Return ONLY the following concise sections:
+# Target: <target variable/quantity asked for>
+# Output: <number | text | tuple | set | symbolic>
+# Plan:
+1. Define symbols (sp.symbols).
+2. Formulate equations (sp.Eq) or direct formulas.
+3. Solve (sp.solve) and compute the target value.
+
+Output type rules:
+- number: any numerical answer, ratio, trig value, length, area, angle, fraction.
+- text: names, true/false, conic classification.
+- tuple: coordinates (x, y) or ordered pair/triple.
+- set: solution set or set of values.
+- symbolic: ONLY when problem explicitly states "in terms of" or "polynomial in".
+
+Rules:
+- Do NOT calculate or reveal the numeric final answer in the plan.
+- Do NOT write Python code in this turn.
+- If asked "how many" or "count", note that the target is the integer count (len of solutions), NOT the elements themselves.
+- Keep the response short and focused on SymPy operations."""
 # ==============================================================================
 # 2. CODEGEN PROMPTS (Turn 2: Sinh mã nguồn Python/SymPy thuần túy 100%)
 # ==============================================================================
@@ -58,11 +80,16 @@ Rules:
    - Do NOT filter out negative solutions (sol > 0) unless the problem strictly restricts the domain (e.g. length, count, probability).
    - FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get coefficients A = poly.coeff_monomial(x**2), B = poly.coeff_monomial(x*y), C = poly.coeff_monomial(y**2). Calculate disc = B**2 - 4*A*C. If disc < 0: output 'circle' if A == C and B == 0 else 'ellipse'. If disc == 0: output 'parabola'. If disc > 0: output 'hyperbola'.
    - FOR PARAMETERIZED LINES (x, y) = (x0, y0) + t*(vx, vy) -> y = mx + b: Define t, x = sp.symbols('t x'), eliminate t via t_sol = sp.solve(x - (x0 + t*vx), t)[0], substitute into y equation to get y(x), compute m = sp.diff(y(x), x) and b = y(x).subs(x, 0), and print (m, b).
-3. Implement the plan as clean, linear Python code.
-4. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
-5. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
-6. Use finite loops only. Never use an unbounded while loop.
-7. At the end, print ONLY the final answer in LaTeX boxed format:
+3. PLAN GUIDANCE & SYMPY CAPABILITY:
+   - Use the extracted plan as a strategic guide. If the plan is incomplete, suboptimal, or SymPy provides a direct built-in solver (e.g. sp.solve, sp.diophantine, sp.gcd, sp.factorint), prioritize exact, robust SymPy methods.
+4. CRITICAL FOR COUNT & "HOW MANY" PROBLEMS:
+   - If the problem asks "how many", "number of", or "find the count", calculate and print the integer count (e.g. len(valid_solutions) or count), NEVER print the raw list or set of elements.
+5. DOMAIN CONSTRAINTS & FILTERING:
+   - When solving for roots or values, check domain constraints from the problem (e.g. integers, positive reals, valid angles 0 <= theta < 2*pi, non-zero denominators) and discard extraneous solutions.
+6. CRITICAL FOR RATIOS / TRIG FUNCTIONS: When computing a ratio or trig function (e.g. tan A = sin A / cos A), solve for the values and compute the ratio directly using arithmetic division (sin_val / cos_val). Never output unevaluated functions like sp.tan(A).
+7. Guard fragile sp.solve calls with try-except fallback or bounded numerical/search fallback.
+8. Use finite loops only. Never use an unbounded while loop.
+9. At the end, print ONLY the final answer in LaTeX boxed format:
    print(f"\\boxed{{{final_answer}}}")"""
 SYMCODE_SYSTEM_PROMPT = r"""You are an expert mathematical solver and deterministic Python/SymPy code generator.
 
@@ -94,6 +121,9 @@ Fix the reported issue and keep correct code. Do not explain or output <think> t
 
 Rules:
 - Recompute the target; do not hard-code an answer.
+- Use the plan as a strategic guide; if needed, use direct SymPy methods (sp.solve, sp.gcd, etc.).
+- If the problem asks "how many" or "count", output the integer count (len of results), never the raw list or set of elements.
+- Check domain constraints (positive reals, integers, valid intervals) and discard extraneous solutions.
 - sp.Rational(p, q) accepts ONLY integers p and q. For expressions/sqrts, use p / q or sp.S(p) / q.
 - Do NOT call .evalf() unless decimal places are requested. Keep exact symbolic expressions.
 - FOR CONIC CLASSIFICATION: Use poly = sp.Poly(eq, x, y) to get A, B, C and disc = B**2 - 4*A*C to determine shape.
@@ -176,12 +206,21 @@ def format_output_requirement(target_spec: Dict[str, Any]) -> str:
     """Render the output contract as short natural-language lines for small models."""
     unit = target_spec.get("unit") if target_spec.get("unit") is not None else "None"
     diagram = "yes" if target_spec.get("diagram_required") else "no"
+    unit_note = f"{unit} (output pure numerical value; do not declare unit names as SymPy symbols)" if unit != "None" else "None"
     return "\n".join([
         "# OUTPUT REQUIREMENT",
         f"- Answer type: {target_spec.get('answer_type', 'number')}",
-        f"- Unit: {unit}",
+        f"- Unit: {unit_note}",
         f"- Diagram relations required: {diagram}",
     ])
+
+
+def build_fused_planner_messages(question: str) -> List[Dict[str, str]]:
+    """Build Turn 1 messages: extract target and outline computational plan in one turn."""
+    return [
+        {"role": "system", "content": FUSED_PLANNER_SYSTEM_PROMPT},
+        {"role": "user", "content": f"# PROBLEM\n{question}\n\nExtract target, output type format, and computational plan."}
+    ]
 
 
 
@@ -272,7 +311,7 @@ Fix the issue and return corrected executable Python code only enclosed in ```py
 def build_prompt_messages(method: str, question: str) -> List[Dict[str, str]]:
     """Xây dựng thông điệp ChatML chuẩn cho Direct, CoT, SymCode và SymPlanner."""
     if method == "SymPlanner":
-        return build_extract_messages(question)
+        return build_fused_planner_messages(question)
     elif method == "SymCode":
         return [
             {"role": "system", "content": SYMCODE_SYSTEM_PROMPT},

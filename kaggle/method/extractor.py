@@ -31,8 +31,12 @@ def extract_boxed_content(text: str) -> Optional[str]:
             matches.append(m.end())
             
     if not matches:
+        # Fallback: ho tro cac bien the boxed khong ngoac nhu \boxed 2, \boxed2, oxed2
+        unbraced_pattern = r"(?:\\boxed|\x08oxed|(?<![a-zA-Z0-9_\\])boxed|(?<![a-zA-Z0-9_])oxed)\s*([0-9a-zA-Z\.\-]+(?:\/[0-9a-zA-Z\.\-]+)?)"
+        unbraced_matches = list(re.finditer(unbraced_pattern, text))
+        if unbraced_matches:
+            return unbraced_matches[-1].group(1).strip()
         return None
-
     matches.sort()
     start = matches[-1]
 
