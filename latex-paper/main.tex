@@ -451,51 +451,20 @@ To measure the individual and compounding contributions of our architectural des
 
 As shown in Fig.~\ref{fig:ablation}, both components independently enhance mathematical reasoning over monolithic SymCode, with algorithmic planning providing the stronger individual benefit ($+2.40\%$ to $+3.80\%$). Crucially, combining fused target contracts with algorithmic planning and anti-regression ranking consistently yields the highest accuracy across every single model ($+3.60\%$ to $+5.20\%$). The target contract prevents type and cardinality mismatch, while the plan structures symbolic transformation.
 
-\subsection{Error Analysis and Qualitative Examples}
+\subsection{Error Analysis and Qualitative Diagnostics}
+\label{sec:error_analysis}
 
-The paired Level-5 logs provide direct evidence for the central hypothesis of this work. On the same 134 MATH-500 problems, CoT answers 56 correctly (41.79\%), whereas SymCode answers 48 correctly (35.82\%). SymCode nevertheless executes successfully on 110 problems, corresponding to an ESR of 82.09\%. Among these successful executions, 62 (56.36\%) still produce an incorrect answer, and 21 incorrect outputs are even accepted by the lightweight verifier. Thus, execution success primarily measures program validity, not whether the generated program represents the intended mathematics.
+A central empirical observation across all six evaluated backbones is the significant divergence between Execution Success Rate (ESR) and mathematical correctness. As detailed in Table~\ref{tab:mainresults} and Fig.~\ref{fig:chart}, monolithic SymCode achieves an average ESR of $83.83\%$, yet delivers an average accuracy of only $50.37\%$. This indicates that over $33\%$ of the generated programs execute cleanly to termination without raising exceptions or tracebacks, yet still output mathematically incorrect answers. For compact language models, program execution alone acts as a certificate of syntactic validity rather than semantic truth.
 
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[
-    node distance=0.22cm,
-    font=\sffamily\scriptsize,
-    casebox/.style={draw=black!40, fill=boxgray, rounded corners=3pt,
-                    text width=0.92\columnwidth, inner sep=4pt}
-]
+Through detailed examination of the failed execution traces across our benchmark logs, we identify three predominant failure modes in monolithic generation that SymPlan's architecture directly mitigates:
 
-\node[casebox] (prob) {
-    \textbf{Problem:} How many distinct values can be obtained by inserting parentheses into $2\cdot3\cdot4\cdot5+1$, without rearranging terms?
-};
+\textbf{1. Domain Constraint Omission and Extraneous Roots.} In multi-step algebraic problems (such as radical simplification or geometric coordinate derivations), compact models generating unguided code frequently omit implicit domain restrictions ($x \ge 0$, real-valued bounds, or non-zero denominators). When invoking \texttt{sp.solve}, the solver returns multiple symbolic roots (e.g., negative and positive branches), and unconstrained models routinely select the first returned element without verification. SymPlan's contract-guided generation explicitly carries extracted domain invariants into the Python script, forcing candidate filtering before formatting the final result.
 
-\node[casebox, below=of prob, draw=crossred!55, fill=red!5] (symcode) {
-    \textbf{Observed SymCode Execution:}\\
-    $\bullet$ Attempt 1 calls \texttt{evalf()} on a Python integer and raises an API error.\\
-    $\bullet$ The traceback-guided retry evaluates only the original expression: $2\cdot3\cdot4\cdot5+1=121$.\\
-    $\bullet$ The script executes and passes verification, but never enumerates alternative parenthesizations.\\
-    $\bullet$ \textbf{Verdict:} \textcolor{crossred}{\textbf{INCORRECT}} (output: $121$; gold: $4$).
-};
+\textbf{2. Target Type and Cardinality Mismatches.} A frequent source of evaluation failure in monolithic code synthesis involves target contract misalignment. In combinatorial counting problems asking ``how many'' configurations exist, unconstrained models often return the raw list or set of candidate instances rather than the integer cardinality $\operatorname{card}(S)$. By establishing the strict categorical contract $\Omega \in \{\texttt{number}, \texttt{text}, \texttt{tuple}, \texttt{set}, \texttt{symbolic}\}$ during the fused planning turn, SymPlan eliminates this discrepancy by strictly enforcing cardinality computation (\texttt{len(solutions)}) prior to boxed answer emission.
 
-\node[casebox, below=of symcode, draw=checkgreen!55, fill=green!5] (symplan) {
-    \textbf{SymPlan Reconstruction:}\\
-    $\bullet$ \textit{Representation:} Preserve operand order, fixed operators, and the target ``number of distinct values.''\\
-    $\bullet$ \textit{Planning:} Enumerate all valid binary parenthesizations and collect unique results.\\
-    $\bullet$ \textit{Execution:} Obtain $\{121,122,126,144\}$ and return its cardinality.\\
-    $\bullet$ \textbf{Verdict:} \textcolor{checkgreen}{\textbf{CORRECT}} (illustrative output: $\mathbf{4}$).
-};
+\textbf{3. Silent Semantic Regressions during Self-Repair.} In standard traceback-guided debugging loops, when a model attempts to fix an execution error, the revision prompt often causes compact models to abandon their initial algebraic plan in favor of an oversimplified, trivialized script (e.g., hardcoding a constant or printing intermediate variables). While such scripts execute with zero runtime errors (status: \texttt{success}), they silently degrade a previously viable solution path. SymPlan's anti-regression ranking metric $\operatorname{Rank}(r)$ neutralizes this vulnerability by evaluating the entire episodic attempt history $\mathcal{H}$, guaranteeing that speculative later revisions cannot overwrite valid earlier attempts.
 
-\end{tikzpicture}
-\caption{A successful execution does not imply a correct mathematical formulation. The SymCode behavior is taken from the Level-5 log; the SymPlan path is a qualitative reconstruction.}
-\label{fig:parenthesization_case}
-\end{figure}
-
-\textbf{Repairing execution without repairing meaning.} Fig.~\ref{fig:parenthesization_case} shows that traceback feedback repairs the API failure but leaves the semantic error untouched. The retry produces executable code by simplifying the task into direct evaluation, whereas representation and planning preserve the combinatorial target before code synthesis.
-
-\textbf{Preserving structural conditions.} For the degree-5 interpolation problem with $p(n)=n/(n^2-1)$ for $n=2,\ldots,7$, SymCode produces an executable but unrelated polynomial construction and returns 39690 instead of $3/56$. The error is not numerical; the code fails to preserve the six interpolation constraints and the degree condition. A structured representation exposes these six exact point constraints, after which the plan can apply Lagrange interpolation or symbolic interpolation with rational arithmetic before evaluating $p(8)$.
-
-\textbf{Maintaining variable semantics and domains.} For the number of real $x$ such that $\sqrt{120-\sqrt{x}}$ is an integer, SymCode runs successfully, returns 0, and passes verification because the verifier only checks that the output is a nonnegative integer. SymPlan instead introduces $n=\sqrt{120-\sqrt{x}}\in\mathbb{Z}_{\ge0}$, derives $\sqrt{x}=120-n^2\ge0$, and obtains $n\in\{0,\ldots,10\}$. This yields 11 valid values of $x$, while making the domain conditions explicit before code generation.
-
-These cases explain why CoT can outperform monolithic SymCode on compact models despite SymCode's high ESR. Traceback-guided repair is effective for syntax, API, and type failures, but it cannot reliably detect a runnable program that encodes the wrong target, transformation, or constraint. The reconstructed SymPlan examples illustrate the core mechanism: target contracts stabilize the mathematical state, planning selects a valid transformation sequence, and symbolic execution is strictly anchored to these explicit contracts.
+\textbf{Failure Boundaries and Level-5 Limitations.} On the most challenging Level-5 problems, where mathematical solutions require deep non-constructive deductions, complex geometric auxiliary constructions, or non-standard number-theoretic identities, code-based computation alone reaches intrinsic boundaries. In these settings, compact language models struggle both in formulating symbolic plans and in structuring procedural searches. Integrating planning-guided neurosymbolic frameworks with interactive formal theorem provers (such as Lean) represents a vital direction for extending reasoning capability on advanced competition mathematics.
 
 \FloatBarrier
 
