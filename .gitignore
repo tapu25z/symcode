@@ -30,8 +30,10 @@ venv.bak/
 
 # Temporary & Log files
 *.log
+!logs/**/*.log
+!logs/*.log
 *.tmp
-
+*.zip
 # Local benchmark outputs
 math500_symplanner_ir_ablation_n50.json
 .hf_token
