@@ -27,6 +27,13 @@
 \definecolor{accentblue}{HTML}{1565C0}
 \definecolor{boxgray}{HTML}{F8F9FA}
 
+% Modern publication palette for charts
+\definecolor{color_symcode}{HTML}{3867D6}       % Royal Slate Blue
+\definecolor{color_symplan}{HTML}{10AC84}       % Vibrant Emerald Green
+\definecolor{color_plan}{HTML}{FA8231}          % Warm Sunset Coral
+\definecolor{color_contract}{HTML}{8854D0}      % Deep Wisteria Purple
+\definecolor{chart_grid}{HTML}{E2E8F0}          % Soft Slate for Grid
+\definecolor{chart_text}{HTML}{2D3748}          % Charcoal for Text
 \newcommand{\cmark}{\textcolor{checkgreen}{\ding{51}}}
 \newcommand{\xmark}{\textcolor{crossred}{\ding{55}}}
 
@@ -288,32 +295,47 @@ Qwen3-8B & 8B & 36.20 & 45.00 & 59.80 & \textbf{63.80} \\
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    ybar,
-    bar width=5.5pt,
+    ybar=1.2pt,
+    bar width=6.8pt,
     width=0.98\columnwidth,
-    height=4.8cm,
-    ymin=70,
-    ymax=100,
-    ylabel={ESR (\%)},
+    height=5.0cm,
+    ymin=68,
+    ymax=103,
+    ytick={70, 75, 80, 85, 90, 95, 100},
+    ylabel={\scriptsize\textbf{ESR (\%) Small Models}},
     symbolic x coords={Q2.5-3B, Q3-4B, Q2.5-7B, Q2.5-Coder, L3.1-8B, Q3-8B},
     xtick=data,
+    enlarge x limits=0.14,
     nodes near coords,
-    nodes near coords style={font=\tiny},
-    legend style={at={(0.5,1.18)}, anchor=north, legend columns=-1, font=\scriptsize},
+    nodes near coords style={font=\fontsize{4.8pt}{5.5pt}\selectfont\bfseries, text=chart_text, yshift=0.5pt},
+    legend style={
+        at={(0.5,1.17)},
+        anchor=north,
+        legend columns=2,
+        font=\scriptsize,
+        draw=gray!30,
+        fill=boxgray,
+        rounded corners=2pt,
+        /tikz/every even column/.append style={column sep=10pt}
+    },
     grid=major,
-    grid style={dashed, gray!25},
-    x tick label style={font=\tiny, rotate=25, anchor=east}
+    grid style={draw=chart_grid, line width=0.5pt, dashed},
+    axis line style={draw=gray!50},
+    x tick label style={font=\scriptsize\sffamily, text=chart_text},
+    y tick label style={font=\scriptsize\sffamily, text=chart_text}
 ]
-\addplot[fill=accentblue!70, draw=accentblue!90] coordinates {
+\addplot[fill=color_symcode!85, draw=color_symcode!90!black, line width=0.5pt] coordinates {
     (Q2.5-3B, 80.20) (Q3-4B, 81.60) (Q2.5-7B, 88.40) (Q2.5-Coder, 89.40) (L3.1-8B, 76.60) (Q3-8B, 86.80)
 };
-\addplot[fill=checkgreen!70, draw=checkgreen!90] coordinates {
+\addplot[fill=color_symplan!90, draw=color_symplan!90!black, line width=0.5pt] coordinates {
     (Q2.5-3B, 87.20) (Q3-4B, 90.20) (Q2.5-7B, 93.80) (Q2.5-Coder, 92.40) (L3.1-8B, 84.60) (Q3-8B, 91.20)
 };
+\draw[dashed, color_symplan, line width=0.7pt] (axis cs:Q2.5-3B,89.90) -- (axis cs:Q3-8B,89.90) node[pos=0.03, above=1pt, font=\fontsize{5pt}{6pt}\selectfont\bfseries, text=color_symplan] {SymPlan Avg: 89.9\%};
+\draw[dotted, color_symcode, line width=0.7pt] (axis cs:Q2.5-3B,83.83) -- (axis cs:Q3-8B,83.83) node[pos=0.97, below=1pt, anchor=north east, font=\fontsize{5pt}{6pt}\selectfont, text=color_symcode] {SymCode Avg: 83.8\%};
 \legend{SymCode, SymPlan (Ours)}
 \end{axis}
 \end{tikzpicture}
-\caption{Execution Success Rate (ESR \%) comparison between SymCode and SymPlan across all six compact models on MATH-500.}
+\caption{Execution Success Rate (ESR \%) comparison between SymCode and SymPlan across all six compact models on MATH-500. Dashed lines indicate the cross-model averages ($89.90\%$ vs. $83.83\%$).}
 \label{fig:chart}
 \end{figure}
 
@@ -410,44 +432,49 @@ To measure the individual and compounding contributions of our architectural des
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-    ybar,
-    bar width=4.0pt,
+    ybar=0.8pt,
+    bar width=4.6pt,
     width=0.99\columnwidth,
-    height=4.7cm,
+    height=4.9cm,
     ymin=0,
-    ymax=7,
-    ylabel={Gain over SymCode (pp)},
+    ymax=6.6,
+    ytick={0, 1, 2, 3, 4, 5, 6},
+    ylabel={\scriptsize\textbf{Gain over SymCode (pp)}},
     symbolic x coords={Q2.5-3B, Q3-4B, Q2.5-7B, Q2.5-Coder, L3.1-8B, Q3-8B},
     xtick=data,
-    enlarge x limits=0.10,
+    enlarge x limits=0.14,
     grid=major,
-    grid style={dashed, gray!25},
-    x tick label style={font=\tiny, rotate=25, anchor=east},
-    y tick label style={font=\scriptsize},
-    label style={font=\scriptsize},
+    grid style={draw=chart_grid, line width=0.5pt, dashed},
+    axis line style={draw=gray!50},
+    x tick label style={font=\scriptsize\sffamily, text=chart_text},
+    y tick label style={font=\scriptsize\sffamily, text=chart_text},
     nodes near coords,
-    nodes near coords style={font=\tiny, rotate=90, anchor=west},
+    nodes near coords style={font=\fontsize{4.5pt}{5.0pt}\selectfont\bfseries, text=chart_text, yshift=0.5pt},
     legend style={
-        at={(0.5,1.18)},
+        at={(0.5,1.17)},
         anchor=north,
         legend columns=3,
-        font=\tiny,
-        column sep=3pt
+        font=\scriptsize,
+        draw=gray!30,
+        fill=boxgray,
+        rounded corners=2pt,
+        /tikz/every even column/.append style={column sep=8pt}
     }
 ]
-\addplot[fill=accentblue!55, draw=accentblue!80] coordinates {
+\addplot[fill=color_contract!85, draw=color_contract!90!black, line width=0.5pt] coordinates {
     (Q2.5-3B, 1.60) (Q3-4B, 2.40) (Q2.5-7B, 1.80) (Q2.5-Coder, 2.00) (L3.1-8B, 1.80) (Q3-8B, 1.60)
 };
-\addplot[fill=orange!70, draw=orange!90!black] coordinates {
+\addplot[fill=color_plan!85, draw=color_plan!90!black, line width=0.5pt] coordinates {
     (Q2.5-3B, 2.60) (Q3-4B, 3.80) (Q2.5-7B, 2.40) (Q2.5-Coder, 3.20) (L3.1-8B, 2.80) (Q3-8B, 2.60)
 };
-\addplot[fill=checkgreen!70, draw=checkgreen!90] coordinates {
+\addplot[fill=color_symplan!90, draw=color_symplan!90!black, line width=0.5pt] coordinates {
     (Q2.5-3B, 3.80) (Q3-4B, 5.20) (Q2.5-7B, 3.60) (Q2.5-Coder, 4.40) (L3.1-8B, 4.20) (Q3-8B, 4.00)
 };
+\draw[dashed, color_symplan, line width=0.7pt] (axis cs:Q2.5-3B,4.20) -- (axis cs:Q3-8B,4.20) node[pos=0.04, above=1pt, font=\fontsize{5pt}{6pt}\selectfont\bfseries, text=color_symplan] {Avg Full Gain: +4.20 pp};
 \legend{Contract Only, Plan Only, SymPlan Full}
 \end{axis}
 \end{tikzpicture}
-\caption{Accuracy gains over SymCode~\cite{nezhad2025symcode} (percentage points) in the component ablation across all six models on MATH-500.}
+\caption{Accuracy gains over SymCode~\cite{nezhad2025symcode} (percentage points) in the component ablation across all six models on MATH-500. Dashed line denotes the mean full-framework gain ($+4.20$ pp).}
 \label{fig:ablation}
 \end{figure}
 
