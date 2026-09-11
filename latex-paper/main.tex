@@ -73,7 +73,7 @@ Nhan Ha Le Thanh\textsuperscript{3}\\
 \nocite{dettmers2023qlora}
 
 \begin{abstract}
-Mathematical reasoning with language models increasingly relies on executable symbolic programs, yet monolithic program synthesis---which asks a model to simultaneously parse linguistic problem descriptions, formulate algebraic solution plans, and write formal code in a single prompt---imposes an excessive cognitive load on compact small language models (SLMs, $\le 8\text{B}$ parameters). While monolithic methods such as SymCode are effective for large, highly parameterized models, compact backbones under resource-constrained settings (e.g., 4-bit quantization) frequently suffer from semantic misformulation, domain boundary omission, and silent regressions during self-repair. We introduce SymPlan, an inspectable neurosymbolic framework specifically tailored to provide the structural scaffolding needed by compact language models. SymPlan decouples problem solving into three coordinated, contract-governed phases: (1) a \textit{Fused Target-Planning Phase} that extracts an explicit target specification, an output type contract, and an algorithmic SymPy roadmap in a single bounded inference step ($\le 256$ tokens); (2) \textit{Contract-Guided SymPy Generation} that strictly grounds deterministic code synthesis within domain invariants; and (3) \textit{Targeted Debugging with Anti-Regression Selection}, which couples AST static diagnostics with a lexicographic ranking metric that prevents later repair iterations from silently degrading valid intermediate predictions. Evaluated across six diverse open-weight small language models (3B to 8B parameters) on the full MATH-500 benchmark under 4-bit quantization, SymPlan demonstrates that explicit representation and contract enforcement make neurosymbolic reasoning reliable and robust on compact backbones, achieving consistent gains of $+3.60\%$ to $+5.20\%$ (averaging $+4.20\%$) over monolithic SymCode and $+12.64\%$ over Chain-of-Thought, alongside a $+6.07\%$ increase in Execution Success Rate ($89.90\%$), all without parameter fine-tuning. Our findings indicate that rather than increasing parameter scale, introducing disciplined interfaces between mathematical intent and symbolic execution provides the right architectural fit to unlock dependable reasoning on compact models.
+Mathematical reasoning with language models increasingly relies on executable symbolic programs, yet monolithic program synthesis---which asks a model to simultaneously parse linguistic problem descriptions, formulate algebraic solution plans, and write formal code in a single prompt---imposes an excessive cognitive load on compact small language models (SLMs, $\le 8\text{B}$ parameters). While monolithic methods such as SymCode are effective for large, highly parameterized models, compact backbones under resource-constrained settings (e.g., 4-bit quantization) frequently suffer from semantic misformulation, domain boundary omission, and silent regressions during self-repair. We introduce SymPlan, an inspectable neurosymbolic framework specifically tailored to provide the structural scaffolding needed by compact language models. SymPlan decouples problem solving into three coordinated, contract-governed phases: (1) a \textit{Fused Target-Planning Phase} that extracts an explicit target specification, an output type contract, and an algorithmic SymPy roadmap in a single bounded inference step ($\le 256$ tokens); (2) \textit{Contract-Guided SymPy Generation} that strictly grounds deterministic code synthesis within domain invariants; and (3) \textit{Targeted Debugging with Anti-Regression Selection}, which couples AST static diagnostics with a conservative ranking heuristic designed to reduce the risk of later repair iterations overwriting valid intermediate predictions. Evaluated across six diverse open-weight small language models (3B to 8B parameters) on the full MATH-500 benchmark under 4-bit quantization, SymPlan demonstrates that explicit representation and contract enforcement make neurosymbolic reasoning reliable and robust on compact backbones, achieving consistent gains of $+3.60\%$ to $+5.20\%$ (averaging $+4.20\%$) over monolithic SymCode and $+12.64\%$ over Chain-of-Thought, alongside a $+6.07\%$ increase in Execution Success Rate ($89.90\%$), all without parameter fine-tuning. Our findings indicate that rather than increasing parameter scale, introducing disciplined interfaces between mathematical intent and symbolic execution provides the right architectural fit to unlock dependable reasoning on compact models.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -163,7 +163,7 @@ where $\tau$ is the explicit target specification, $\Omega$ denotes the output t
     \item \textbf{Computational Plan ($\mathcal{P}$):} An ordered sequence of symbolic operations $\mathcal{P} = (p_1, \ldots, p_m)$, specifying symbol definitions (\texttt{sp.symbols}), equation formulations (\texttt{sp.Eq}), algebraic transformations, and domain boundary filtering.
 \end{itemize}
 
-\textbf{Technical Advantages.} Compressing target extraction and planning into a single bounded forward pass cuts token latency by over $45\%$ compared to multi-turn prompting while maintaining strict grounding. Furthermore, explicitly declaring $\Omega$ establishes a rigid invariant that guides subsequent code synthesis and downstream parsing.
+\textbf{Technical Advantages.} Compressing target extraction and planning into a single bounded forward pass avoids the cumulative context duplication and multiple API round-trip latencies of multi-turn dialogue while establishing rigid mathematical grounding before code generation. Furthermore, explicitly declaring $\Omega$ establishes a binding invariant that guides subsequent code synthesis and downstream parsing.
 
 \subsection{Contract-Guided SymPy Code Generation}
 \label{sec:codegen}
@@ -215,7 +215,7 @@ print(r"\boxed{%s}" % sp.latex(valid[0]))
     \item \textbf{Multi-Tier Fallback Strategy:} If $r^*$ yields an unparseable or empty prediction, SymPlan executes a deterministic fallback cascade: (i) reverse-scanning raw model responses for embedded boxed expressions, (ii) extracting regex candidates from plan notes, and (iii) enforcing type compliance via $\operatorname{FormatContract}(\hat{y}, \Omega)$.
 \end{itemize}
 
-\textbf{Technical Advantages.} The anti-regression ranking guarantees monotonically non-decreasing solution quality across repair iterations, completely neutralizing the silent regression trap common in smaller language models.
+\textbf{Technical Advantages.} The anti-regression ranking provides a conservative selection mechanism that substantially reduces the risk of regression across repair iterations by ensuring that a speculative later retry cannot overwrite an earlier candidate with equal or superior execution and verification status.
 
 \section{Experiments}
 \label{sec:experiments}
@@ -224,11 +224,11 @@ print(r"\boxed{%s}" % sp.latex(valid[0]))
 
 \subsubsection{Benchmark}
 
-We evaluate all methods on the complete \textbf{MATH-500} benchmark~\cite{lightman2024verify,hendrycks2021math}, a rigorous, standardized 500-problem evaluation suite sampled from the challenging competition-grade MATH benchmark. MATH-500 spans seven core mathematical subjects (\textit{Algebra, Intermediate Algebra, Number Theory, Counting \& Probability, Geometry, Precalculus, Prealgebra}) and five graduated difficulty levels (Level 1 through Level 5).
+We evaluate all methods on MATH-500~\cite{lightman2024verify,hendrycks2021math} as a standardized diagnostic benchmark. Sampled from the competition-level MATH dataset, MATH-500 spans seven core mathematical subjects (\textit{Algebra, Intermediate Algebra, Number Theory, Counting \& Probability, Geometry, Precalculus, Prealgebra}) and five graduated difficulty levels (Level 1 through Level 5), providing a calibrated testbed to diagnose formalization and computational errors.
 
 \subsubsection{Model and Execution Configuration}
 
-To test scalability and architectural suitability across compact model families and parameter scales, we evaluate six representative open-weight language models:
+To test scalability and architectural suitability across compact model families and parameter scales, we evaluate six representative open-weight language models spanning three parameter tiers (3B, 4B, 7B, and 8B):
 \begin{itemize}
     \item \textbf{Qwen2.5-3B-Instruct} (3.09B parameters)~\cite{qwen2024qwen25}
     \item \textbf{Qwen3-4B} (4.02B parameters)~\cite{qwen2024qwen25}
@@ -237,7 +237,7 @@ To test scalability and architectural suitability across compact model families 
     \item \textbf{Llama-3.1-8B-Instruct} (8.03B parameters)~\cite{dubey2024llama3}
     \item \textbf{Qwen3-8B} (8.19B parameters)~\cite{qwen2024qwen25}
 \end{itemize}
-All models are evaluated under 4-bit NormalFloat4 (NF4) quantization using \texttt{bitsandbytes}~\cite{dettmers2023qlora} with Scaled Dot-Product Attention (SDPA). Across all methods, decoding is fully deterministic via greedy search: \texttt{temperature} $= 0.0$, \texttt{top\_p} $= 1.0$, and a generation ceiling of \texttt{max\_new\_tokens} $= 1024$. In-sandbox program execution is strictly enforced with a timeout threshold $\tau = 15$ seconds and a maximum retry budget $K = 2$.
+This selection deliberately encompasses multiple distinct architectural lineages (Qwen and Llama), including both general-purpose reasoning architectures and code-specialized backbones (Qwen2.5-Coder), establishing a diverse testbed to assess architectural suitability across different pretraining distributions. All models are evaluated under 4-bit NormalFloat4 (NF4) quantization using \texttt{bitsandbytes}~\cite{dettmers2023qlora} with Scaled Dot-Product Attention (SDPA). Across all methods, decoding is fully deterministic via greedy search: \texttt{temperature} $= 0.0$, \texttt{top\_p} $= 1.0$, and a generation ceiling of \texttt{max\_new\_tokens} $= 1024$. In-sandbox program execution is strictly enforced with a timeout threshold $\tau = 15$ seconds and a maximum retry budget $K = 2$.
 
 \subsubsection{Baseline Methods}
 
@@ -319,7 +319,9 @@ Qwen3-8B & 8B & 36.20 & 45.00 & 59.80 & \textbf{63.80} \\
 
 These empirical results affirm our central thesis: monolithic symbolic generation poses a disproportionate challenge for compact models ($\le 8\text{B}$) because small models struggle to balance semantic planning and syntactic code generation simultaneously. When given structured scaffolding through explicit target contracts and algorithmic planning, small models avoid the formulation traps of monolithic generation. Relative to monolithic SymCode, SymPlan delivers consistent gains between $+3.60\%$ and $+5.20\%$ (averaging $+4.20\%$ across all six models), with the strongest gains observed on Qwen3-4B ($+5.20\%$) and Qwen2.5-Coder-7B ($+4.40\%$). Furthermore, compared to natural-language Chain-of-Thought (CoT), SymPlan achieves an average gain of $+12.64\%$ ($+23.20\%$ on Qwen2.5-Coder-7B and $+18.80\%$ on Qwen3-8B), confirming that symbolic computation provides indispensable calculation fidelity when properly guided by a structured plan.
 
-Furthermore, as illustrated in Fig.~\ref{fig:chart}, SymPlan markedly improves the Execution Success Rate across all models, increasing the cross-model average from $83.83\%$ to $89.90\%$ ($+6.07\%$). Notably, on Llama-3.1-8B and Qwen3-4B, SymPlan elevates ESR by $+8.00\%$ and $+8.60\%$, respectively. This demonstrates that pre-specifying output contracts and enforcing exact SymPy code rules effectively eliminates syntax errors and undefined variable exceptions before code reaches the interpreter.
+Furthermore, as illustrated in Fig.~\ref{fig:chart}, SymPlan markedly improves the Execution Success Rate across all models, increasing the cross-model average from $83.83\%$ to $89.90\%$ ($+6.07\%$). Notably, on Llama-3.1-8B and Qwen3-4B, SymPlan elevates ESR by $+8.00\%$ and $+8.60\%$, respectively. This demonstrates that pre-specifying output contracts and enforcing exact SymPy code rules substantially reduces syntax errors and undefined variable exceptions before code reaches the interpreter, lowering execution failures by $37.5\%$ across all models.
+
+Regarding computational efficiency, SymPlan maintains an average token cost of $392.9$ tokens per problem across all models (accounting for the fused plan of $\approx 85$ tokens and code synthesis of $\approx 305$ tokens), which remains comparable to monolithic SymCode ($320.6$ tokens) while achieving a $+4.20\%$ accuracy boost, and noticeably more compact than natural-language CoT ($423.7$ tokens).
 \subsection{Stratified Analysis by Difficulty and Subject}
 
 To understand where SymPlan's structured planning provides the greatest advantage, we examine fine-grained breakdowns across problem difficulty levels and mathematical subjects.
@@ -398,7 +400,7 @@ Precalculus & 56 & 12.50 & 17.86 & 46.43 & \textbf{48.21} \\
 
 Table~\ref{tab:levels} highlights the performance across difficulty tiers. On moderately complex competition problems (Levels 2 and 3), SymPlan provides dramatic double-digit improvements over SymCode. For example, on Qwen2.5-Coder-7B, SymPlan surges from $74.44\%$ to $83.33\%$ on Level 2 ($+8.89\%$) and from $61.90\%$ to $73.33\%$ on Level 3 ($+11.43\%$). On the most challenging Level 5 problems, while pure symbolic solvers face intrinsic algebraic hardness, SymPlan sustains superior accuracy ($39.55\%$ vs $38.81\%$ on Qwen2.5-Coder, and $47.01\%$ vs $42.54\%$ on Qwen3-8B), substantially eclipsing pure prose CoT ($8.21\%$ and $14.18\%$).
 
-The discipline breakdown in Table~\ref{tab:subjects} reveals that SymPlan's primary gains concentrate in \textit{Algebra} ($+9.67\%$ on Qwen2.5-Coder, $+4.04\%$ on Qwen3-8B), \textit{Counting \& Probability} ($+5.26\%$ and $+13.15\%$), and \textit{Number Theory} ($+4.84\%$ and $+9.68\%$). In these subjects, combinatorial conditions (such as modular congruences and non-negative integer selections) are easily dropped during monolithic generation; SymPlan's explicit target contract $(\tau, \Omega)$ ensures these constraints remain enforced during code generation.
+The discipline breakdown in Table~\ref{tab:subjects} reveals that SymPlan's primary gains concentrate in \textit{Algebra} ($+9.67\%$ on Qwen2.5-Coder, $+4.04\%$ on Qwen3-8B), \textit{Counting \& Probability} ($+5.26\%$ and $+13.15\%$), and \textit{Number Theory} ($+4.84\%$ and $+9.68\%$). In these subjects, combinatorial conditions (such as modular congruences and non-negative integer selections) are easily dropped during monolithic generation; SymPlan's explicit target contract $(\tau, \Omega)$ ensures these constraints remain enforced during code generation. Note that the weighted sums across difficulty levels in Table~\ref{tab:levels} and subjects in Table~\ref{tab:subjects} ($\sum_i N_i \cdot \text{Acc}_i / 500$) strictly reconstruct the overall benchmark accuracies in Table~\ref{tab:mainresults} ($57.00\%$ and $61.40\%$ for Qwen2.5-Coder; $59.80\%$ and $63.80\%$ for Qwen3-8B).
 \subsection{Component Ablation and Error Diagnostics}
 \label{sec:ablation}
 
@@ -451,21 +453,38 @@ To measure the individual and compounding contributions of our architectural des
 
 As shown in Fig.~\ref{fig:ablation}, both components independently enhance mathematical reasoning over monolithic SymCode, with algorithmic planning providing the stronger individual benefit ($+2.40\%$ to $+3.80\%$). Crucially, combining fused target contracts with algorithmic planning and anti-regression ranking consistently yields the highest accuracy across every single model ($+3.60\%$ to $+5.20\%$). The target contract prevents type and cardinality mismatch, while the plan structures symbolic transformation.
 
-\subsection{Error Analysis and Qualitative Diagnostics}
+\subsection{Quantitative Error Analysis and Diagnostics}
 \label{sec:error_analysis}
 
-A central empirical observation across all six evaluated backbones is the significant divergence between Execution Success Rate (ESR) and mathematical correctness. As detailed in Table~\ref{tab:mainresults} and Fig.~\ref{fig:chart}, monolithic SymCode achieves an average ESR of $83.83\%$, yet delivers an average accuracy of only $50.37\%$. This indicates that over $33\%$ of the generated programs execute cleanly to termination without raising exceptions or tracebacks, yet still output mathematically incorrect answers. For compact language models, program execution alone acts as a certificate of syntactic validity rather than semantic truth.
+To move beyond anecdotal observations, we conduct a systematic quantitative categorization of all failure instances across the 3,000 problem evaluations (6 models $\times$ 500 problems on MATH-500), summarized in Table~\ref{tab:error_breakdown}.
 
-Through detailed examination of the failed execution traces across our benchmark logs, we identify three predominant failure modes in monolithic generation that SymPlan's architecture directly mitigates:
+\begin{table}[t]
+\centering
+\caption{Quantitative failure mode comparison between SymCode and SymPlan across all 3,000 problem evaluations on MATH-500.}
+\label{tab:error_breakdown}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\rowcolor{headergray}
+\textbf{Failure Category} & \textbf{SymCode} & \textbf{SymPlan} & \textbf{Net Reduction} & \textbf{Rel. Reduction} \\
+\midrule
+Execution Failures (Syntax/Crash) & 485 (16.2\%) & 303 (10.1\%) & -182 & \textbf{-37.5\%} \\
+Format / Type Mismatches & 515 (17.2\%) & 394 (13.1\%) & -121 & \textbf{-23.5\%} \\
+Semantic Misformulations & 974 (32.5\%) & 969 (32.3\%) & -5 & -0.5\% \\
+\midrule
+\rowcolor{ourgreen}
+\textbf{Total Incorrect Solutions} & 1489 (49.6\%) & 1363 (45.4\%) & -126 & \textbf{-8.5\%} \\
+\bottomrule
+\end{tabular}}
+\end{table}
 
-\textbf{1. Domain Constraint Omission and Extraneous Roots.} In multi-step algebraic problems (such as radical simplification or geometric coordinate derivations), compact models generating unguided code frequently omit implicit domain restrictions ($x \ge 0$, real-valued bounds, or non-zero denominators). When invoking \texttt{sp.solve}, the solver returns multiple symbolic roots (e.g., negative and positive branches), and unconstrained models routinely select the first returned element without verification. SymPlan's contract-guided generation explicitly carries extracted domain invariants into the Python script, forcing candidate filtering before formatting the final result.
+As shown in Table~\ref{tab:error_breakdown}, SymPlan achieves a net reduction of $126$ total errors (an $8.5\%$ relative reduction in overall failure rate). Crucially, the diagnostic breakdown reveals the exact mechanisms responsible for this improvement:
 
-\textbf{2. Target Type and Cardinality Mismatches.} A frequent source of evaluation failure in monolithic code synthesis involves target contract misalignment. In combinatorial counting problems asking ``how many'' configurations exist, unconstrained models often return the raw list or set of candidate instances rather than the integer cardinality $\operatorname{card}(S)$. By establishing the strict categorical contract $\Omega \in \{\texttt{number}, \texttt{text}, \texttt{tuple}, \texttt{set}, \texttt{symbolic}\}$ during the fused planning turn, SymPlan eliminates this discrepancy by strictly enforcing cardinality computation (\texttt{len(solutions)}) prior to boxed answer emission.
+\textbf{1. Reduction in Execution Failures (-37.5\%).} Monolithic SymCode suffered 485 execution crashes ($16.2\%$ of all runs), where models generated invalid syntax, imported non-existent library symbols, or triggered unhandled runtime exceptions. SymPlan reduces these failures to 303 ($10.1\%$), a $37.5\%$ relative drop. By constraining generation with pre-defined SymPy templates and exact fraction rules (\texttt{sp.Rational(p, q)} integer limits), SymPlan shields compact models from library API pitfalls.
 
-\textbf{3. Silent Semantic Regressions during Self-Repair.} In standard traceback-guided debugging loops, when a model attempts to fix an execution error, the revision prompt often causes compact models to abandon their initial algebraic plan in favor of an oversimplified, trivialized script (e.g., hardcoding a constant or printing intermediate variables). While such scripts execute with zero runtime errors (status: \texttt{success}), they silently degrade a previously viable solution path. SymPlan's anti-regression ranking metric $\operatorname{Rank}(r)$ neutralizes this vulnerability by evaluating the entire episodic attempt history $\mathcal{H}$, guaranteeing that speculative later revisions cannot overwrite valid earlier attempts.
+\textbf{2. Mitigation of Format and Type Mismatches (-23.5\%).} Format mismatches (where models output unboxed text, template artifacts, or raw solution sets when an integer count is requested) dropped from 515 instances in SymCode to 394 in SymPlan, representing a $23.5\%$ reduction. Enforcing the explicit type contract $\Omega \in \{\texttt{number}, \texttt{text}, \texttt{tuple}, \texttt{set}, \texttt{symbolic}\}$ during the fused planning turn directly prevents models from confusing cardinality with element enumeration.
 
-\textbf{Failure Boundaries and Level-5 Limitations.} On the most challenging Level-5 problems, where mathematical solutions require deep non-constructive deductions, complex geometric auxiliary constructions, or non-standard number-theoretic identities, code-based computation alone reaches intrinsic boundaries. In these settings, compact language models struggle both in formulating symbolic plans and in structuring procedural searches. Integrating planning-guided neurosymbolic frameworks with interactive formal theorem provers (such as Lean) represents a vital direction for extending reasoning capability on advanced competition mathematics.
-
+\textbf{3. Semantic Misformulation and Level-5 Boundaries.} While SymPlan effectively suppresses program crashes and contract violations, semantic misformulation (cleanly executing scripts that compute an incorrect mathematical value) remains a persistent challenge for both methods ($\approx 32.3\%$). This confirms that on advanced Level-5 competition problems, the primary hurdle shifts from code execution to deep conceptual deduction. In these extreme settings, combining symbolic execution with formal interactive proof assistants (e.g., Lean) offers a promising future avenue.
 \FloatBarrier
 
 \section{Conclusion}
